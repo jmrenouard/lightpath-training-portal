@@ -1,0 +1,8 @@
+# LightPath Training Portal - Ignore Rules
+/vendor/
+/storage/data/*.lock
+/storage/tmp/
+.DS_Store
+Thumbs.db
+*.log
+.env

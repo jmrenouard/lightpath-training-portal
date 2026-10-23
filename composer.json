@@ -1,0 +1,26 @@
+{
+    "name": "lightpath/training-portal",
+    "description": "Plateforme LMS Multi-Formations Interactive (PHP 8.3) avec Orchestration de Labs Docker par Utilisateur, Téléchargements Multi-Formats et Conformité Qualiopi",
+    "type": "project",
+    "license": "Proprietary",
+    "authors": [
+        {
+            "name": "Jean-Marie Renouard",
+            "email": "contact@lightpath.fr",
+            "homepage": "https://www.lightpath.fr",
+            "role": "Expert Bases de Données & DataOps"
+        }
+    ],
+    "require": {
+        "php": ">=8.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "LightPath\\LMS\\": "src/"
+        }
+    },
+    "scripts": {
+        "test": "php tests/run_tests.php",
+        "serve": "php -S localhost:8080 -t public"
+    }
+}
