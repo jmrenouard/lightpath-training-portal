@@ -1,0 +1,38 @@
+<?php
+declare(strict_types=1);
+use LightPath\LMS\Core\Security;
+?>
+
+<div style="max-width: 680px; margin: 0 auto;">
+    <span class="badge-code">PARAMÈTRES DU COMPTE</span>
+    <h1 style="font-size: 1.65rem; margin: 0.4rem 0 1.25rem;">👤 Mon Profil Apprenant / Formateur</h1>
+
+    <div class="lms-card">
+        <form method="POST" action="index.php?page=profile&action=update_profile">
+            <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
+            <div class="form-group">
+                <label>Adresse Email (Identifiant unique)</label>
+                <input type="email" class="form-control" value="<?= Security::e($currentUser['email']) ?>" disabled/>
+            </div>
+            <div class="form-group">
+                <label>Rôle sur la plateforme</label>
+                <input type="text" class="form-control" value="<?= strtoupper(Security::e($currentUser['role'])) ?>" disabled/>
+            </div>
+            <div class="form-group">
+                <label>Nom & Prénom (affiché sur l'Attestation Qualiopi)</label>
+                <input type="text" name="name" class="form-control" value="<?= Security::e($currentUser['name']) ?>" required/>
+            </div>
+            <div class="form-group">
+                <label>Entreprise / Organisation</label>
+                <input type="text" name="company" class="form-control" value="<?= Security::e($currentUser['company'] ?? '') ?>"/>
+            </div>
+            <div class="form-group">
+                <label>Nouveau Mot de Passe (laisser vide pour ne pas modifier)</label>
+                <input type="password" name="new_password" class="form-control" minlength="6" placeholder="Minimum 6 caractères"/>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
+                💾 Enregistrer mes Modifications
+            </button>
+        </form>
+    </div>
+</div>
