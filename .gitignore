@@ -1,6 +1,11 @@
 # LightPath Training Portal - Ignore Rules
 /vendor/
+/storage/data/*.json
 /storage/data/*.lock
+/storage/data/*.tmp*
+/storage/courses/*
+!/storage/data/.gitkeep
+!/storage/courses/.gitkeep
 /storage/tmp/
 .DS_Store
 Thumbs.db
