@@ -7,10 +7,15 @@ class CourseRepository
 {
     private array $coursesConfig;
     private array $cache = [];
+    private string $cacheDir;
 
-    public function __construct(array $coursesConfig, array $customCourses = [])
+    public function __construct(array $coursesConfig, array $customCourses = [], ?string $cacheDir = null)
     {
         $this->coursesConfig = array_merge($coursesConfig, $customCourses);
+        $this->cacheDir = $cacheDir ?? (dirname(__DIR__, 2) . '/storage/data');
+        if (!is_dir($this->cacheDir)) {
+            @mkdir($this->cacheDir, 0775, true);
+        }
     }
 
     public function getAllCourses(): array
@@ -38,23 +43,52 @@ class CourseRepository
 
         $cfg = $this->coursesConfig[$slug];
         $root = rtrim((string)($cfg['source_root'] ?? ''), '/\\');
+        $pgScriptsRoot = (string)($cfg['pgscripts_root'] ?? '');
+
+        $fingerprint = $this->computeCatalogFingerprint($root, $pgScriptsRoot, $cfg['tracks'] ?? []);
+        $cacheFile = $this->cacheDir . '/catalog_cache_' . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $slug) . '.json';
+
+        if (is_file($cacheFile)) {
+            $cachedRaw = @file_get_contents($cacheFile);
+            if ($cachedRaw !== false) {
+                $cachedData = @json_decode($cachedRaw, true);
+                if (is_array($cachedData) && ($cachedData['fingerprint'] ?? '') === $fingerprint && isset($cachedData['payload'])) {
+                    $course = array_merge($cfg, $cachedData['payload']);
+                    $this->cache[$slug] = $course;
+                    return $course;
+                }
+            }
+        }
 
         $modules = $this->discoverModules($root, $cfg['tracks'] ?? []);
         $labs = $this->discoverLabs($root);
         $cheatsheets = $this->discoverCheatsheets($root);
         $referentiel = $this->discoverReferentiel($root);
-        $tools = $this->discoverTools((string)($cfg['pgscripts_root'] ?? ''));
+        $tools = $this->discoverTools($pgScriptsRoot);
 
-        // Lier chaque module à son Lab et sa Cheatsheet correspondants
+        // Lier chaque module à son Lab et sa Cheatsheet correspondants + propager le parcours au Lab
         foreach ($modules as $modId => &$mod) {
             $code = $mod['code'];
-            foreach ($labs as $labId => $lab) {
+            foreach ($labs as $labId => &$lab) {
                 if ($lab['code'] === $code) {
                     $mod['linked_lab_id'] = $labId;
-                    $labs[$labId]['linked_module_id'] = $modId;
+                    $mod['linked_lab_title'] = $lab['title'];
+                    $lab['linked_module_id'] = $modId;
+                    $lab['linked_module_title'] = $mod['title'];
+                    $lab['track_id'] = $mod['track_id'];
+                    $lab['track_title'] = $mod['track_title'];
+                    $lab['track_short_title'] = $mod['track_short_title'];
+                    $lab['track_number'] = $mod['track_number'];
+                    $lab['track_color'] = $mod['track_color'];
+                    $lab['phase_code'] = $mod['phase_code'];
+                    $lab['phase_title'] = $mod['phase_title'];
+                    $lab['track_position'] = $mod['track_position'];
+                    $lab['track_total'] = $mod['track_total'];
                     break;
                 }
             }
+            unset($lab);
+
             foreach ($cheatsheets as $csId => $cs) {
                 if ($cs['type'] === 'module' && $cs['code'] === $code) {
                     $mod['linked_cheatsheet_id'] = $csId;
@@ -64,7 +98,7 @@ class CourseRepository
         }
         unset($mod);
 
-        $course = array_merge($cfg, [
+        $payload = [
             'modules' => $modules,
             'labs' => $labs,
             'cheatsheets' => $cheatsheets,
@@ -77,10 +111,34 @@ class CourseRepository
                 'referentiel_count' => count($referentiel),
                 'tools_count' => count($tools),
             ],
-        ]);
+        ];
 
+        @file_put_contents($cacheFile, json_encode([
+            'fingerprint' => $fingerprint,
+            'generated_at' => date('c'),
+            'payload' => $payload,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+        $course = array_merge($cfg, $payload);
         $this->cache[$slug] = $course;
         return $course;
+    }
+
+    private function computeCatalogFingerprint(string $root, string $pgScriptsRoot, array $tracks): string
+    {
+        $dirs = [
+            $root . '/03_supports_de_cours',
+            $root . '/04_ateliers_et_tp',
+            $root . '/05_cheatsheets/modules',
+            $root . '/05_cheatsheets/labs',
+            $root . '/01_programme_et_referentiel',
+            $pgScriptsRoot,
+        ];
+        $parts = ['v3', md5(json_encode($tracks) ?: '')];
+        foreach ($dirs as $d) {
+            $parts[] = is_dir($d) ? (string)@filemtime($d) : '0';
+        }
+        return implode(':', $parts);
     }
 
     public function getModule(string $courseSlug, string $moduleId): ?array
@@ -131,10 +189,33 @@ class CourseRepository
 
             $trackId = 'cursus-complet';
             $trackTitle = 'Parcours 1 : Cursus Complet';
+            $trackShortTitle = 'Cursus Complet (M01–M20)';
+            $trackNumber = 'Parcours 1';
+            $trackColor = '#00B0F0';
+            $phaseCode = 'ÉTAPE';
+            $phaseTitle = 'Formation PostgreSQL 18';
+            $trackPos = 1;
+            $trackTotal = 1;
+
             foreach ($tracks as $tKey => $tCfg) {
-                if (in_array($code, $tCfg['module_Filter'] ?? [], true)) {
+                $filterList = $tCfg['module_Filter'] ?? [];
+                $posIdx = array_search($code, $filterList, true);
+                if ($posIdx !== false) {
                     $trackId = (string)$tKey;
                     $trackTitle = (string)$tCfg['title'];
+                    $trackShortTitle = (string)($tCfg['short_title'] ?? $tCfg['title']);
+                    $trackNumber = (string)($tCfg['number'] ?? 'Parcours');
+                    $trackColor = (string)($tCfg['color'] ?? '#00B0F0');
+                    $trackPos = ((int)$posIdx) + 1;
+                    $trackTotal = count($filterList);
+
+                    foreach ($tCfg['phases'] ?? [] as $phase) {
+                        if (in_array($code, $phase['modules'] ?? [], true)) {
+                            $phaseCode = (string)$phase['code'];
+                            $phaseTitle = (string)$phase['title'];
+                            break;
+                        }
+                    }
                     break;
                 }
             }
@@ -158,10 +239,18 @@ class CourseRepository
                 'summary' => $meta['summary'],
                 'track_id' => $trackId,
                 'track_title' => $trackTitle,
+                'track_short_title' => $trackShortTitle,
+                'track_number' => $trackNumber,
+                'track_color' => $trackColor,
+                'phase_code' => $phaseCode,
+                'phase_title' => $phaseTitle,
+                'track_position' => $trackPos,
+                'track_total' => $trackTotal,
                 'source_md_path' => $mdPath,
                 'source_html_path' => is_file($dir . '/' . $baseName . '.html') ? ($dir . '/' . $baseName . '.html') : null,
                 'downloads' => $downloads,
                 'linked_lab_id' => null,
+                'linked_lab_title' => null,
                 'linked_cheatsheet_id' => null,
             ];
         }
@@ -200,10 +289,20 @@ class CourseRepository
                 'bloom' => $meta['bloom'],
                 'duration' => $meta['duration'],
                 'summary' => $meta['summary'],
+                'track_id' => 'cursus-complet',
+                'track_title' => 'Parcours 1 : Cursus Complet',
+                'track_short_title' => 'Cursus Complet',
+                'track_number' => 'Parcours 1',
+                'track_color' => '#00B0F0',
+                'phase_code' => 'ATELIER',
+                'phase_title' => 'Mise en Pratique Qualiopi',
+                'track_position' => 1,
+                'track_total' => 20,
                 'source_md_path' => $mdPath,
                 'source_html_path' => is_file($dir . '/' . $baseName . '.html') ? ($dir . '/' . $baseName . '.html') : null,
                 'downloads' => $downloads,
                 'linked_module_id' => null,
+                'linked_module_title' => null,
             ];
         }
 
@@ -260,7 +359,6 @@ class CourseRepository
     {
         $docs = [];
 
-        // 1. GUIDE_PARCOURS à la racine
         if (is_file($root . '/GUIDE_PARCOURS.md')) {
             $meta = $this->extractMarkdownSummary($root . '/GUIDE_PARCOURS.md', 'GUIDE_PARCOURS');
             $docs['GUIDE_PARCOURS'] = [
@@ -278,7 +376,6 @@ class CourseRepository
             ];
         }
 
-        // 2. Documents Qualiopi dans 01_programme_et_referentiel
         $refDir = $root . '/01_programme_et_referentiel';
         if (is_dir($refDir)) {
             $files = array_merge(
@@ -306,7 +403,6 @@ class CourseRepository
             }
         }
 
-        // 3. Student Handbook dans 04_ateliers_et_tp/student_handbook
         $hbDir = $root . '/04_ateliers_et_tp/student_handbook';
         if (is_dir($hbDir)) {
             foreach (glob($hbDir . '/*.md') ?: [] as $mdPath) {
@@ -381,20 +477,22 @@ class CourseRepository
         $fp = @fopen($mdPath, 'rb');
         if ($fp !== false) {
             $linesRead = 0;
-            while (($line = fgets($fp)) !== false && $linesRead < 45) {
+            while (($line = fgets($fp)) !== false && $linesRead < 55) {
                 $linesRead++;
                 $trimmed = trim($line);
                 if ($trimmed === '') {
                     continue;
                 }
                 if (str_starts_with($trimmed, '# ')) {
-                    $title = trim(substr($trimmed, 2));
+                    $title = trim(str_replace(['**', '`'], '', substr($trimmed, 2)));
                 } elseif (preg_match('/Compétence[^:]*:\*?\*?\s*(.+)$/iu', $trimmed, $m)) {
-                    $bloom = trim(strip_tags(str_replace(['**', '*'], '', $m[1])));
+                    $bloom = trim(strip_tags(str_replace(['**', '*', '`'], '', $m[1])));
                 } elseif (preg_match('/Durée[^:]*:\*?\*?\s*(.+)$/iu', $trimmed, $m)) {
-                    $duration = trim(strip_tags(str_replace(['**', '*'], '', $m[1])));
-                } elseif ($summary === '' && !str_starts_with($trimmed, '#') && !str_starts_with($trimmed, '>') && !str_starts_with($trimmed, '!') && !str_starts_with($trimmed, '---') && !str_starts_with($trimmed, '|') && strlen($trimmed) > 40) {
-                    $summary = strip_tags(str_replace(['**', '*', '`'], '', $trimmed));
+                    $duration = trim(strip_tags(str_replace(['**', '*', '`'], '', $m[1])));
+                } elseif ($summary === '' && !str_starts_with($trimmed, '#') && !str_starts_with($trimmed, '>') && !str_starts_with($trimmed, '!') && !str_starts_with($trimmed, '---') && !str_starts_with($trimmed, '|') && !str_starts_with($trimmed, '```') && strlen($trimmed) > 35) {
+                    $cleanLine = preg_replace('/^[\*\-\d\.]+\s+/', '', $trimmed) ?? $trimmed;
+                    $cleanLine = preg_replace('/\[([^\]]+)\]\([^)]+\)/', '$1', $cleanLine) ?? $cleanLine;
+                    $summary = trim(strip_tags(str_replace(['**', '*', '`'], '', $cleanLine)));
                 }
             }
             fclose($fp);
@@ -421,7 +519,6 @@ class CourseRepository
             return $text;
         }
         $cut = substr($text, 0, $maxChars);
-        // Éviter de couper au milieu d'une séquence multi-octets UTF-8
         $cut = preg_replace('/[\x80-\xBF]+$/', '', $cut) ?? $cut;
         $cut = preg_replace('/[\xC0-\xFD]$/', '', $cut) ?? $cut;
         return rtrim($cut) . '…';

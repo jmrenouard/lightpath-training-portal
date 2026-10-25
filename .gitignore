@@ -3,6 +3,7 @@
 /storage/data/*.json
 /storage/data/*.lock
 /storage/data/*.tmp*
+/storage/data/parsed_cache/
 /storage/courses/*
 !/storage/data/.gitkeep
 !/storage/courses/.gitkeep
