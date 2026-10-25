@@ -115,9 +115,9 @@ class DockerManager
             ];
         }
 
-        $res = $this->runDockerCommand('inspect -f "{{.State.Status}}|{{.State.StartedAt}}" ' . escapeshellarg($name));
+        $res = $this->runDockerCommand('inspect -f "{{.State.Status}}|{{.State.StartedAt}}" ' . $name);
         if ($res['code'] === 0 && str_contains($res['output'], '|')) {
-            [$state, $startedAt] = explode('|', $res['output'], 2);
+            [$state, $startedAt] = explode('|', trim($res['output'], "\"' \r\n"), 2);
             $running = trim($state) === 'running';
             return [
                 'container_name' => $name,
@@ -133,7 +133,7 @@ class DockerManager
 
         // Vérifier aussi si le conteneur principal pg_formation_primary tourne
         $primaryRes = $this->runDockerCommand('inspect -f "{{.State.Status}}" pg_formation_primary');
-        $primaryRunning = ($primaryRes['code'] === 0 && trim($primaryRes['output']) === 'running');
+        $primaryRunning = ($primaryRes['code'] === 0 && trim($primaryRes['output'], "\"' \r\n") === 'running');
 
         return [
             'container_name' => $name,
@@ -170,11 +170,12 @@ class DockerManager
         }
 
         // Vérifier si le conteneur existe déjà
-        $inspect = $this->runDockerCommand('inspect -f "{{.State.Status}}" ' . escapeshellarg($name));
+        $inspect = $this->runDockerCommand('inspect -f "{{.State.Status}}" ' . $name);
         if ($inspect['code'] === 0) {
-            if (trim($inspect['output']) !== 'running') {
-                $this->runDockerCommand('start ' . escapeshellarg($name));
+            if (trim($inspect['output'], "\"' \r\n") !== 'running') {
+                $this->runDockerCommand('start ' . $name);
             }
+            $this->bootstrapContainerSchema($name);
             $this->storage->logAuditEvent($userEmail, 'DOCKER_START', "Démarrage du conteneur existant {$name} (port {$port})");
             return [
                 'success' => true,
@@ -184,16 +185,16 @@ class DockerManager
         }
 
         // Vérifier si l'image docker-pg-primary:18 est présente, sinon postgres:18
-        $imgCheck = $this->runDockerCommand('image inspect ' . escapeshellarg($this->config['image']));
+        $imgCheck = $this->runDockerCommand('image inspect ' . $this->config['image']);
         $imageToUse = ($imgCheck['code'] === 0) ? $this->config['image'] : $this->config['fallback_image'];
 
         $runArgs = sprintf(
             'run -d --name %s --hostname %s -p %d:5432 --shm-size=512m -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=%s -e POSTGRES_DB=formation_pg %s',
-            escapeshellarg($name),
-            escapeshellarg($name),
+            $name,
+            $name,
             $port,
-            escapeshellarg($this->config['default_password']),
-            escapeshellarg($imageToUse)
+            $this->config['default_password'],
+            $imageToUse
         );
 
         $runRes = $this->runDockerCommand($runArgs);
@@ -208,7 +209,7 @@ class DockerManager
         // Attendre que PostgreSQL accepte les connexions (jusqu'à 8 secondes) et amorcer le schéma de lab
         for ($i = 0; $i < 8; $i++) {
             usleep(800000);
-            $ready = $this->runDockerCommand('exec ' . escapeshellarg($name) . ' pg_isready -U postgres -d formation_pg');
+            $ready = $this->runDockerCommand('exec ' . $name . ' pg_isready -U postgres -d formation_pg');
             if ($ready['code'] === 0) {
                 break;
             }
@@ -227,7 +228,7 @@ class DockerManager
     public function stopUserContainer(int $userId, string $userEmail = 'student'): array
     {
         $name = $this->getContainerName($userId);
-        $res = $this->runDockerCommand('stop ' . escapeshellarg($name));
+        $res = $this->runDockerCommand('stop ' . $name);
         $this->storage->logAuditEvent($userEmail, 'DOCKER_STOP', "Arrêt du conteneur {$name}");
         return [
             'success' => $res['code'] === 0,
@@ -239,7 +240,7 @@ class DockerManager
     public function resetUserContainer(int $userId, string $userEmail = 'student'): array
     {
         $name = $this->getContainerName($userId);
-        $this->runDockerCommand('rm -f ' . escapeshellarg($name));
+        $this->runDockerCommand('rm -f ' . $name);
         $this->storage->logAuditEvent($userEmail, 'DOCKER_RESET', "Réinitialisation complète du conteneur {$name}");
         return $this->startUserContainer($userId, $userEmail);
     }
@@ -302,12 +303,13 @@ class DockerManager
         }
 
         $sql = $scenarios[$scenario][$action];
+        $b64 = base64_encode($sql);
         // Exécuter sur tous les conteneurs actifs (cluster primaire + conteneurs stagiaires)
         $containers = $this->listAllLabContainers();
         $targets = [];
         foreach ($containers as $c) {
             if ($c['running'] && (str_starts_with($c['name'], 'lp_pg18_user_') || $c['name'] === 'pg_formation_primary')) {
-                $cmd = sprintf('exec %s psql -U postgres -d formation_pg -c %s', escapeshellarg($c['name']), escapeshellarg($sql));
+                $cmd = sprintf('exec %s sh -c "echo %s | base64 -d | psql -U postgres -d formation_pg"', $c['name'], $b64);
                 $this->runDockerCommand($cmd);
                 $targets[] = $c['name'];
             }
@@ -355,10 +357,11 @@ INSERT INTO public.film (title, description, release_year, rental_rate, length, 
 SELECT 'ACADEMY DINOSAUR', 'A Epic Drama of a Feminist And a Mad Scientist', 2006, 0.99, 86, 'PG'
 WHERE NOT EXISTS (SELECT 1 FROM public.film LIMIT 1);
 SQL;
+        $b64 = base64_encode($initSql);
         $this->runDockerCommand(sprintf(
-            'exec %s psql -U postgres -d formation_pg -c %s',
-            escapeshellarg($containerName),
-            escapeshellarg($initSql)
+            'exec %s sh -c "echo %s | base64 -d | psql -U postgres -d formation_pg"',
+            $containerName,
+            $b64
         ));
     }
 }

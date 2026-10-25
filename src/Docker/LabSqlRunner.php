@@ -27,10 +27,11 @@ class LabSqlRunner
         $targetContainer = $this->resolveActiveContainer($userId);
 
         if ($targetContainer !== null) {
+            $b64 = base64_encode($sql);
             $cmd = sprintf(
-                'exec %s psql -U postgres -d formation_pg -P pager=off -c %s',
-                escapeshellarg($targetContainer),
-                escapeshellarg($sql)
+                'exec %s sh -c "echo %s | base64 -d | psql -U postgres -d formation_pg -P pager=off"',
+                $targetContainer,
+                $b64
             );
             $res = $this->docker->runDockerCommand($cmd);
             $duration = round((microtime(true) - $start) * 1000, 1);
