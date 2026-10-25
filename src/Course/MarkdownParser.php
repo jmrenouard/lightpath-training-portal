@@ -29,7 +29,7 @@ class MarkdownParser
         $moduleId = pathinfo($mdPath, PATHINFO_FILENAME);
         $manifestPath = dirname(__DIR__, 2) . '/public/assets/slides_cache/' . $moduleId . '/manifest.json';
         $manifestMtime = is_file($manifestPath) ? (int)@filemtime($manifestPath) : 0;
-        $cacheKey = md5('mod_v4_rca145:' . $courseSlug . ':' . $mdPath . ':' . $mtime . ':' . $manifestMtime);
+        $cacheKey = md5('mod_v5_rca146:' . $courseSlug . ':' . $mdPath . ':' . $mtime . ':' . $manifestMtime);
         $cacheFile = $this->cacheDir . '/' . $cacheKey . '.json';
         if (is_file($cacheFile)) {
             $cached = @json_decode((string)@file_get_contents($cacheFile), true);
@@ -56,29 +56,99 @@ class MarkdownParser
     public function parseLabFile(string $mdPath, string $courseSlug = 'postgresql-18'): array
     {
         if (!is_file($mdPath)) {
-            return ['html' => '', 'toc' => [], 'sql_snippets' => []];
+            return [
+                'html' => '',
+                'toc' => [],
+                'enonce_html' => '',
+                'enonce_toc' => [],
+                'corrige_html' => '',
+                'corrige_toc' => [],
+                'sql_snippets' => [],
+            ];
         }
         $mtime = (int)@filemtime($mdPath);
-        $cacheKey = md5('lab_v4_rca145:' . $courseSlug . ':' . $mdPath . ':' . $mtime);
+        $cacheKey = md5('lab_v5_rca146:' . $courseSlug . ':' . $mdPath . ':' . $mtime);
         $cacheFile = $this->cacheDir . '/' . $cacheKey . '.json';
         if (is_file($cacheFile)) {
             $cached = @json_decode((string)@file_get_contents($cacheFile), true);
-            if (is_array($cached) && isset($cached['html'], $cached['sql_snippets'])) {
+            if (is_array($cached) && isset($cached['html'], $cached['enonce_html'], $cached['corrige_html'], $cached['sql_snippets'])) {
                 return $cached;
             }
         }
 
         $raw = (string)file_get_contents($mdPath);
         $sqlSnippets = $this->extractSqlSnippets($raw);
-        $rendered = $this->renderMarkdown($raw, $courseSlug, true);
+        $split = $this->splitLabEnonceAndCorrige($raw);
+
+        $renderedFull = $this->renderMarkdown($split['full_md'], $courseSlug, true);
+        $renderedEnonce = $this->renderMarkdown($split['enonce_md'], $courseSlug, true);
+        $renderedCorrige = $this->renderMarkdown($split['corrige_md'], $courseSlug, true);
+        // En vue Corrigé dédié, ouvrir tous les blocs <details> par défaut pour lecture directe
+        $corrigeHtmlOpen = str_replace('<details class="lms-details">', '<details class="lms-details" open>', $renderedCorrige['html']);
 
         $result = [
-            'html' => $rendered['html'],
-            'toc' => $rendered['toc'],
+            'html' => $renderedFull['html'],
+            'toc' => $renderedFull['toc'],
+            'enonce_html' => $renderedEnonce['html'],
+            'enonce_toc' => $renderedEnonce['toc'],
+            'corrige_html' => $corrigeHtmlOpen,
+            'corrige_toc' => $renderedCorrige['toc'],
             'sql_snippets' => $sqlSnippets,
         ];
         @file_put_contents($cacheFile, json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         return $result;
+    }
+
+    /**
+     * Sépare un fichier Markdown d'atelier pratique en deux volets pédagogiques :
+     * - `enonce_md` : Métadonnées, Prérequis, Mise en Situation, Travail Pas-à-Pas, Résultats Attendus et Challenges (avec solutions repliées en spoiler `<details>`).
+     * - `corrige_md` : Solutions des Challenges Fast-Track + Corrigé Détaillé + Oracle de Validation Automatisé Qualiopi + Grille d'Évaluation (DoD) + Débriefing & REX Expert.
+     */
+    private function splitLabEnonceAndCorrige(string $raw): array
+    {
+        // Encapsuler les blocs "* **Requête Solution :**" suivis d'un bloc de code dans un <details> spoiler
+        $challengeSolutions = [];
+        $processedRaw = preg_replace_callback(
+            '/(?:^\s*[\*\-]\s*\*\*Requête\s+Solution\s*:\*\*\s*\R+)(```[a-zA-Z0-9_-]*\R.*?\R```)/imsu',
+            static function (array $m) use (&$challengeSolutions): string {
+                $codeBlock = trim($m[1]);
+                $idx = count($challengeSolutions) + 1;
+                $challengeSolutions[] = "### 💡 Solution du Challenge Fast-Track #{$idx}\n\n" . $codeBlock;
+                return "<details>\n<summary>👁️ Afficher la Requête Solution (Challenge #{$idx})</summary>\n\n" . $codeBlock . "\n</details>\n";
+            },
+            $raw
+        ) ?? $raw;
+
+        $enoncePart = $processedRaw;
+        $corrigePart = '';
+
+        // Détecter la section H2 de bascule vers le Corrigé / Validation / Débriefing REX
+        if (preg_match('/^##\s+(?:\d+\.\s*)?(?:Corrigé|Commande de Validation|Script de Validation|Validation Automatisée|Solution)/imu', $processedRaw, $m, PREG_OFFSET_CAPTURE)) {
+            $splitOffset = (int)$m[0][1];
+            $enoncePart = rtrim(substr($processedRaw, 0, $splitOffset));
+            // Retirer un séparateur horizontal final "---" éventuel en fin d'énoncé
+            $enoncePart = preg_replace('/\R+---\s*$/u', '', $enoncePart) ?? $enoncePart;
+            $corrigePart = ltrim(substr($processedRaw, $splitOffset));
+        }
+
+        $corrigeBlocks = [];
+        if (!empty($challengeSolutions)) {
+            $corrigeBlocks[] = "## 🎯 Solutions des Défis & Challenges d'Approfondissement\n\n" . implode("\n\n", $challengeSolutions);
+        }
+        if ($corrigePart !== '') {
+            $corrigeBlocks[] = $corrigePart;
+        }
+
+        if (empty($corrigeBlocks)) {
+            // Fallback : extraire les blocs SQL comme corrigé de référence
+            $corrigeBlocks[] = "## ✅ Corrigé Technique & Requêtes de Référence\n\n" . $processedRaw;
+        }
+
+        return [
+            'full_md' => $processedRaw,
+            'enonce_md' => $enoncePart,
+            'corrige_md' => implode("\n\n---\n\n", $corrigeBlocks),
+        ];
     }
 
     public function extractQuizQuestions(string $markdown): array

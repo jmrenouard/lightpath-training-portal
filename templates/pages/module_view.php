@@ -125,7 +125,12 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
         <?php endif; ?>
     </div>
 
-    <div style="display: flex; gap: 0.45rem; flex-wrap: wrap;">
+    <div style="display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center;">
+        <button type="button"
+                class="btn btn-outline btn-sm btn-toggle-right-panel"
+                title="Réduire / Afficher la barre verticale de droite (Alt+D)">
+            ◨ Menu Droite
+        </button>
         <?php if ($prevModId): ?>
             <a href="index.php?page=module&id=<?= urlencode($prevModId) ?>&mode=<?= urlencode($viewMode) ?>&course=<?= urlencode($currentCourseSlug) ?>"
                class="btn btn-outline btn-sm"
@@ -151,11 +156,11 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
         <!-- Barre d'outils supérieure du lecteur de diapositives -->
         <div class="slide-deck-toolbar">
             <div style="display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap;">
-                <button type="button" id="btn-slide-engine-html" class="btn btn-sm btn-primary">
+                <button type="button" id="btn-slide-engine-html" class="btn btn-sm btn-primary" aria-pressed="true">
                     🖥️ Diaporama Studio 16:9 (<?= $totalSlides ?> slides)
                 </button>
                 <?php if (isset($mod['downloads']['slides_pdf'])): ?>
-                    <button type="button" id="btn-slide-engine-pdf" class="btn btn-sm btn-outline">
+                    <button type="button" id="btn-slide-engine-pdf" class="btn btn-sm btn-outline" aria-pressed="false">
                         📄 Lecteur PDF Continu (<?= $totalSlides ?> pages)
                     </button>
                 <?php endif; ?>
@@ -189,96 +194,111 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
             <div id="slide-progress-fill" class="slide-progress-fill" style="width: <?= $totalSlides > 0 ? round(100 / $totalSlides, 1) : 100 ?>%;"></div>
         </div>
 
-        <!-- Scène principale 16:9 + Sommaire latéral des 58 diapositives -->
+        <!-- Scène principale 16:9 (Colonne 1) + Sommaire latéral des diapositives (Colonne 2) -->
         <div class="slide-deck-layout">
-            <!-- Scène 16:9 Studio Interactive -->
-            <div id="slide-stage-html" class="slide-stage-container">
-                <?php foreach ($slides as $idx => $s):
-                    $hasStudioImg = !empty($s['image_url']);
-                    $slideNotes = trim((string)($s['notes'] ?? ''));
-                    $slidePreview = trim((string)($s['body_preview'] ?? ''));
-                ?>
-                    <section class="lms-slide-frame <?= $hasStudioImg ? 'is-studio-image-slide' : '' ?> <?= $idx === 0 ? 'active' : '' ?>"
-                             data-slide-index="<?= $idx ?>"
-                             data-slide-title="<?= Security::e($s['title']) ?>"
-                             data-slide-img="<?= Security::e((string)($s['image_url'] ?? '')) ?>">
-                        <?php if ($hasStudioImg): ?>
-                            <div class="lms-studio-canvas-wrap">
-                                <img src="<?= $idx <= 2 ? Security::e($s['image_url']) : '' ?>"
-                                     data-slide-src="<?= Security::e($s['image_url']) ?>"
-                                     alt="Diapositive <?= (int)$s['index'] ?> / <?= $totalSlides ?> — <?= Security::e($s['title']) ?>"
-                                     class="lms-studio-slide-img lms-zoomable-img"
-                                     decoding="async"/>
-                            </div>
-                            <footer class="lms-studio-caption-bar">
-                                <div class="lms-studio-caption-main">
-                                    <span class="lms-slide-badge"><?= Security::e($s['badge']) ?></span>
-                                    <strong class="lms-studio-caption-title"><?= Security::e($s['title']) ?></strong>
-                                    <span class="lms-slide-counter tabular-nums" style="margin-left: auto;">
-                                        DIAPO <?= sprintf('%02d', (int)$s['index']) ?> / <?= sprintf('%02d', $totalSlides) ?>
-                                    </span>
+            <div class="slide-stage-main-col">
+                <!-- Scène 16:9 Studio Interactive -->
+                <div id="slide-stage-html" class="slide-stage-container">
+                    <?php foreach ($slides as $idx => $s):
+                        $hasStudioImg = !empty($s['image_url']);
+                        $slideNotes = trim((string)($s['notes'] ?? ''));
+                        $slidePreview = trim((string)($s['body_preview'] ?? ''));
+                    ?>
+                        <section class="lms-slide-frame <?= $hasStudioImg ? 'is-studio-image-slide' : '' ?> <?= $idx === 0 ? 'active' : '' ?>"
+                                 data-slide-index="<?= $idx ?>"
+                                 data-slide-number="<?= (int)$s['index'] ?>"
+                                 data-slide-title="<?= Security::e($s['title']) ?>"
+                                 data-slide-img="<?= Security::e((string)($s['image_url'] ?? '')) ?>">
+                            <?php if ($hasStudioImg): ?>
+                                <div class="lms-studio-canvas-wrap">
+                                    <button type="button" class="slide-canvas-nav slide-canvas-prev" title="Diapositive précédente (Flèche Gauche)" aria-label="Diapositive précédente">‹</button>
+                                    <img src="<?= Security::e($s['image_url']) ?>"
+                                         data-slide-src="<?= Security::e($s['image_url']) ?>"
+                                         alt="Diapositive <?= (int)$s['index'] ?> / <?= $totalSlides ?> — <?= Security::e($s['title']) ?>"
+                                         class="lms-studio-slide-img lms-zoomable-img"
+                                         loading="<?= $idx <= 2 ? 'eager' : 'lazy' ?>"
+                                         decoding="async"/>
+                                    <button type="button" class="slide-canvas-nav slide-canvas-next" title="Diapositive suivante (Flèche Droite)" aria-label="Diapositive suivante">›</button>
                                 </div>
-                                <?php if ($slideNotes !== '' || $slidePreview !== ''): ?>
-                                    <div class="lms-studio-speaker-notes">
-                                        <strong>🎙️ Notes & Points Clés :</strong>
-                                        <?= Security::e($slideNotes !== '' ? $slideNotes : $slidePreview) ?>
+                                <footer class="lms-studio-caption-bar">
+                                    <div class="lms-studio-caption-main">
+                                        <span class="lms-slide-badge"><?= Security::e($s['badge']) ?></span>
+                                        <strong class="lms-studio-caption-title"><?= Security::e($s['title']) ?></strong>
+                                        <span class="lms-slide-counter tabular-nums" style="margin-left: auto;">
+                                            DIAPO <?= sprintf('%02d', (int)$s['index']) ?> / <?= sprintf('%02d', $totalSlides) ?>
+                                        </span>
                                     </div>
-                                <?php endif; ?>
-                            </footer>
-                        <?php else: ?>
-                            <header class="lms-slide-header">
-                                <div style="display: flex; align-items: center; gap: 0.6rem; min-width: 0;">
-                                    <img src="assets/img/postgresql_elephant_dark.png" alt="PG18" style="width: 24px; height: 24px;"/>
-                                    <span class="lms-slide-badge"><?= Security::e($s['badge']) ?></span>
-                                    <span class="lms-slide-chapter"><?= Security::e($s['chapter']) ?></span>
-                                </div>
-                                <div class="lms-slide-counter tabular-nums">
-                                    DIAPO <?= sprintf('%02d', (int)$s['index']) ?> / <?= sprintf('%02d', $totalSlides) ?>
-                                </div>
-                            </header>
+                                    <?php if ($slideNotes !== '' || $slidePreview !== ''): ?>
+                                        <div class="lms-studio-speaker-notes">
+                                            <strong>🎙️ Notes & Points Clés :</strong>
+                                            <?= Security::e($slideNotes !== '' ? $slideNotes : $slidePreview) ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </footer>
+                            <?php else: ?>
+                                <header class="lms-slide-header">
+                                    <div style="display: flex; align-items: center; gap: 0.6rem; min-width: 0;">
+                                        <img src="assets/img/postgresql_elephant_dark.png" alt="PG18" style="width: 24px; height: 24px;"/>
+                                        <span class="lms-slide-badge"><?= Security::e($s['badge']) ?></span>
+                                        <span class="lms-slide-chapter"><?= Security::e($s['chapter']) ?></span>
+                                    </div>
+                                    <div class="lms-slide-counter tabular-nums">
+                                        DIAPO <?= sprintf('%02d', (int)$s['index']) ?> / <?= sprintf('%02d', $totalSlides) ?>
+                                    </div>
+                                </header>
 
-                            <div class="lms-slide-body">
-                                <h2 class="lms-slide-title"><?= Security::e($s['title']) ?></h2>
-                                <div class="lms-slide-content markdown-body">
-                                    <?= $s['html'] ?>
+                                <div class="lms-slide-body">
+                                    <h2 class="lms-slide-title"><?= Security::e($s['title']) ?></h2>
+                                    <div class="lms-slide-content markdown-body">
+                                        <?= $s['html'] ?>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <footer class="lms-slide-footer">
-                                <span>LightPath SARL • PostgreSQL 18 — Jean-Marie Renouard</span>
-                                <span class="tabular-nums"><?= Security::e($mod['badge_code']) ?> • Étape <?= (int)($mod['track_position'] ?? 1) ?>/<?= (int)($mod['track_total'] ?? 20) ?></span>
-                            </footer>
-                        <?php endif; ?>
-                    </section>
-                <?php endforeach; ?>
+                                <footer class="lms-slide-footer">
+                                    <span>LightPath SARL • PostgreSQL 18 — Jean-Marie Renouard</span>
+                                    <span class="tabular-nums"><?= Security::e($mod['badge_code']) ?> • Étape <?= (int)($mod['track_position'] ?? 1) ?>/<?= (int)($mod['track_total'] ?? 20) ?></span>
+                                </footer>
+                            <?php endif; ?>
+                        </section>
+                    <?php endforeach; ?>
+                </div>
+
+                <!-- Scène 16:9 PDF PowerPoint Officiel (_slides.pdf) affichée dans la zone principale (Colonne 1) -->
+                <?php if (isset($mod['downloads']['slides_pdf'])): ?>
+                    <div id="slide-stage-pdf" class="slide-stage-pdf" hidden>
+                        <iframe id="slide-pdf-iframe"
+                                src="about:blank"
+                                data-src="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=module&id=<?= urlencode($moduleId) ?>&format=slides_pdf&inline=1"
+                                allow="unload *"
+                                style="width: 100%; height: 78vh; border: none; border-radius: var(--radius-md);"
+                                title="Diaporama PowerPoint PDF 16:9"></iframe>
+                    </div>
+                <?php endif; ?>
             </div>
 
-            <!-- Scène 16:9 PDF PowerPoint Officiel (_slides.pdf) chargée à la demande (data-src) pour éviter toute violation unload au chargement -->
-            <?php if (isset($mod['downloads']['slides_pdf'])): ?>
-                <div id="slide-stage-pdf" class="slide-stage-pdf" hidden>
-                    <iframe id="slide-pdf-iframe"
-                            src="about:blank"
-                            data-src="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=module&id=<?= urlencode($moduleId) ?>&format=slides_pdf&inline=1"
-                            allow="unload *"
-                            style="width: 100%; height: 76vh; border: none; border-radius: var(--radius-md);"
-                            title="Diaporama PowerPoint PDF 16:9"></iframe>
-                </div>
-            <?php endif; ?>
-
-            <!-- Colonne latérale : Liste des Diapositives (Position en direct 1..58 dans le diaporama) -->
-            <aside class="slide-outline-sidebar">
-                <div class="toc-box" style="max-height: 76vh; overflow-y: auto;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem;">
+            <!-- Colonne latérale droite (Colonne 2) : Liste des Diapositives (Sticky & Sans barre de défilement) -->
+            <aside class="slide-outline-sidebar" id="app-right-sidebar-slides">
+                <div class="toc-box slide-outline-box">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; margin-bottom: 0.65rem;">
                         <span style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light);">
                             🖥️ Plan des <?= $totalSlides ?> Diapositives
                         </span>
-                        <span id="slide-sidebar-counter" class="badge-code tabular-nums">1 / <?= $totalSlides ?></span>
+                        <div style="display: flex; align-items: center; gap: 0.35rem;">
+                            <span id="slide-sidebar-counter" class="badge-code tabular-nums">1 / <?= $totalSlides ?></span>
+                            <button type="button"
+                                    class="btn-sidebar-collapse-inline btn-toggle-right-panel"
+                                    title="Réduire la barre verticale de droite (Alt+D)"
+                                    aria-label="Réduire la barre verticale de droite">
+                                ▸
+                            </button>
+                        </div>
                     </div>
                     <div id="slide-outline-list" class="slide-outline-list">
                         <?php foreach ($slides as $idx => $s): ?>
                             <button type="button"
                                     class="slide-outline-item <?= $idx === 0 ? 'active' : '' ?>"
-                                    data-slide-jump="<?= $idx ?>">
+                                    data-slide-jump="<?= $idx ?>"
+                                    title="Diapositive <?= sprintf('%02d', (int)$s['index']) ?> — <?= Security::e($s['title']) ?>">
                                 <span class="slide-outline-num tabular-nums"><?= sprintf('%02d', (int)$s['index']) ?></span>
                                 <span class="slide-outline-text"><?= Security::e($s['title']) ?></span>
                             </button>
@@ -375,14 +395,22 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
         </div>
 
         <!-- COLONNE LATÉRALE ÉPURÉE : SOMMAIRE SCROLLSPY + NOTES + PARCOURS REPLIABLE -->
-        <aside class="reader-sidebar">
+        <aside class="reader-sidebar" id="app-right-sidebar">
             <!-- 1. SOMMAIRE DU DOCUMENT AVEC INDICATEUR DE POSITION EN DIRECT (SCROLLSPY) -->
             <div class="toc-box">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; margin-bottom: 0.45rem;">
                     <span style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light);">
                         📑 Sommaire & Position
                     </span>
-                    <span id="toc-read-pct" class="badge-code tabular-nums" title="Progression de lecture dans ce document">0% lu</span>
+                    <div style="display: flex; align-items: center; gap: 0.35rem;">
+                        <span id="toc-read-pct" class="badge-code tabular-nums" title="Progression de lecture dans ce document">0% lu</span>
+                        <button type="button"
+                                class="btn-sidebar-collapse-inline btn-toggle-right-panel"
+                                title="Réduire la barre verticale de droite (Alt+D)"
+                                aria-label="Réduire la barre verticale de droite">
+                            ▸
+                        </button>
+                    </div>
                 </div>
                 <div class="progress-bar-track" style="height: 5px; margin-bottom: 0.75rem;">
                     <div id="toc-read-bar" class="progress-bar-fill" style="width: 0%;"></div>

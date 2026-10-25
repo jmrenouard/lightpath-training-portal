@@ -7,6 +7,26 @@ class Security
 {
     private static string $cliToken = '';
 
+    public static function sendSecurityHeaders(): void
+    {
+        if (PHP_SAPI === 'cli' || headers_sent()) {
+            return;
+        }
+        header('X-Content-Type-Options: nosniff');
+        header('X-Frame-Options: SAMEORIGIN');
+        header('Referrer-Policy: strict-origin-when-cross-origin');
+        header('Permissions-Policy: unload=*, fullscreen=(self)');
+    }
+
+    /**
+     * Intercepte l'enregistrement d'écouteurs 'unload' par les extensions navigateur tierces
+     * (ex: chext_loader.js) et les redirige vers 'pagehide' pour éviter toute violation console.
+     */
+    public static function renderUnloadShimScript(): string
+    {
+        return '<script>(function(){try{var o=EventTarget.prototype.addEventListener;EventTarget.prototype.addEventListener=function(t,f,opt){if(t==="unload"){t="pagehide";}return o.call(this,t,f,opt);};}catch(_){}})();</script>';
+    }
+
     public static function getCsrfToken(): string
     {
         if (PHP_SAPI === 'cli') {
@@ -40,6 +60,12 @@ class Security
             return false;
         }
         return (bool)preg_match('/^[a-zA-Z0-9_.\-\/]+$/', $norm);
+    }
+
+    public static function sanitizeFilename(string $filename): string
+    {
+        $clean = preg_replace('/[^a-zA-Z0-9_.\-]/', '_', basename($filename));
+        return ($clean !== null && $clean !== '') ? $clean : 'document.bin';
     }
 
     public static function e(?string $value): string

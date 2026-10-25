@@ -333,6 +333,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $cCat = trim((string)($_POST['category'] ?? 'Infrastructure & Cloud'));
             $cDur = trim((string)($_POST['duration'] ?? '35h (5 jours)'));
 
+            $defaultSourceRoot = (string)($coursesConfig['postgresql-18']['source_root'] ?? '');
+            $allowedWorkspaceDir = realpath(dirname(__DIR__, 2)) ?: dirname(__DIR__, 2);
+            $resolvedSourceRoot = $defaultSourceRoot;
+            if ($cSource !== '') {
+                $realCandidate = realpath($cSource);
+                if ($realCandidate !== false && is_dir($realCandidate) && Security::isPathInside($realCandidate, $allowedWorkspaceDir)) {
+                    $resolvedSourceRoot = $realCandidate;
+                }
+            }
+
             if ($cSlug !== '' && $cTitle !== '') {
                 $storage->saveCustomCourse([
                     'slug' => $cSlug,
@@ -346,7 +356,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'icon' => '/assets/img/lightpath_cropped.png',
                     'active' => true,
                     'docker_enabled' => true,
-                    'source_root' => $cSource !== '' ? $cSource : ($coursesConfig['postgresql-18']['source_root'] ?? ''),
+                    'source_root' => $resolvedSourceRoot,
                     'pgscripts_root' => '',
                     'description' => trim((string)($_POST['description'] ?? 'Formation professionnelle LightPath SARL.')),
                     'tracks' => [],

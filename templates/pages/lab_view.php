@@ -41,6 +41,21 @@ $labKeys = array_keys($currentCourse['labs'] ?? []);
 $curIndex = array_search($labId, $labKeys, true);
 $prevLabId = ($curIndex !== false && $curIndex > 0) ? $labKeys[$curIndex - 1] : null;
 $nextLabId = ($curIndex !== false && $curIndex < count($labKeys) - 1) ? $labKeys[$curIndex + 1] : null;
+
+$labMode = (string)($_GET['mode'] ?? 'enonce');
+if (!in_array($labMode, ['enonce', 'corrige', 'full', 'html_preview', 'pdf_preview'], true)) {
+    $labMode = 'enonce';
+}
+$activeLabHtml = match ($labMode) {
+    'corrige' => ($parsed['corrige_html'] ?? $parsed['html']),
+    'full' => $parsed['html'],
+    default => ($parsed['enonce_html'] ?? $parsed['html']),
+};
+$activeLabToc = match ($labMode) {
+    'corrige' => (!empty($parsed['corrige_toc']) ? $parsed['corrige_toc'] : $parsed['toc']),
+    'full' => $parsed['toc'],
+    default => (!empty($parsed['enonce_toc']) ? $parsed['enonce_toc'] : $parsed['toc']),
+};
 ?>
 
 <!-- EN-TÊTE DE L'ATELIER PRATIQUE, POSITION DANS LE PARCOURS & BARRE DE TÉLÉCHARGEMENT -->
@@ -53,7 +68,7 @@ $nextLabId = ($curIndex !== false && $curIndex < count($labKeys) - 1) ? $labKeys
             <span class="badge-code" style="background: rgba(16, 185, 129, 0.16); color: #34D399; border-color: rgba(16, 185, 129, 0.35);">
                 <?= Security::e($lab['badge_code']) ?>
             </span>
-            <span class="badge-phase">
+            <span class="badge-phase tabular-nums">
                 <?= Security::e($lab['phase_code'] ?? 'ATELIER') ?> • 📍 Étape <?= (int)($lab['track_position'] ?? 1) ?> sur <?= (int)($lab['track_total'] ?? 20) ?> du <?= Security::e($lab['track_number'] ?? 'Parcours') ?>
             </span>
             <span style="font-size: 0.8rem; color: var(--text-secondary);">⏱ <?= Security::e($lab['duration']) ?></span>
@@ -90,12 +105,53 @@ $nextLabId = ($curIndex !== false && $curIndex < count($labKeys) - 1) ? $labKeys
 
         <div style="display: flex; gap: 0.45rem;">
             <?php if ($prevLabId): ?>
-                <a href="index.php?page=lab&id=<?= urlencode($prevLabId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm" style="flex:1;">← Lab Préc.</a>
+                <a href="index.php?page=lab&id=<?= urlencode($prevLabId) ?>&mode=<?= urlencode($labMode) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm" style="flex:1;">← Lab Préc.</a>
             <?php endif; ?>
             <?php if ($nextLabId): ?>
-                <a href="index.php?page=lab&id=<?= urlencode($nextLabId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm" style="flex:1;">Lab Suiv. →</a>
+                <a href="index.php?page=lab&id=<?= urlencode($nextLabId) ?>&mode=<?= urlencode($labMode) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm" style="flex:1;">Lab Suiv. →</a>
             <?php endif; ?>
         </div>
+    </div>
+</div>
+
+<!-- BARRE DE BASCULE DES MODES D'ATELIER (ÉNONCÉ / CORRIGÉ COMPLET / VUE INTÉGRALE / RENDU WEB / PDF) -->
+<div class="view-mode-switcher">
+    <div class="view-mode-tabs">
+        <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=enonce&course=<?= urlencode($currentCourseSlug) ?>"
+           class="view-mode-tab <?= $labMode === 'enonce' ? 'active' : '' ?>">
+            <span>📋 Énoncé & Travail Pas-à-Pas</span>
+        </a>
+        <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=corrige&course=<?= urlencode($currentCourseSlug) ?>"
+           class="view-mode-tab <?= $labMode === 'corrige' ? 'active' : '' ?>">
+            <span>✅ Corrigé Complet & Débriefing REX</span>
+        </a>
+        <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=full&course=<?= urlencode($currentCourseSlug) ?>"
+           class="view-mode-tab <?= $labMode === 'full' ? 'active' : '' ?>">
+            <span>📖 Vue Intégrale (Énoncé + Corrigé)</span>
+        </a>
+        <?php if (isset($lab['downloads']['html'])): ?>
+            <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=html_preview&course=<?= urlencode($currentCourseSlug) ?>"
+               class="view-mode-tab <?= $labMode === 'html_preview' ? 'active' : '' ?>">
+                <span>🌐 Rendu Web Studio</span>
+            </a>
+        <?php endif; ?>
+        <?php if (isset($lab['downloads']['pdf'])): ?>
+            <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=pdf_preview&course=<?= urlencode($currentCourseSlug) ?>"
+               class="view-mode-tab <?= $labMode === 'pdf_preview' ? 'active' : '' ?>">
+                <span>📕 Support PDF</span>
+            </a>
+        <?php endif; ?>
+    </div>
+
+    <div style="display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center;">
+        <button type="button" id="btn-toggle-lab-solutions" class="btn btn-outline btn-sm" title="Déplier ou replier toutes les solutions SQL intégrées">
+            👁️ Afficher / Masquer les Solutions
+        </button>
+        <button type="button"
+                class="btn btn-outline btn-sm btn-toggle-right-panel"
+                title="Réduire / Afficher la barre verticale de droite (Alt+D)">
+            ◨ Menu Droite
+        </button>
     </div>
 </div>
 
@@ -145,33 +201,105 @@ $nextLabId = ($curIndex !== false && $curIndex < count($labKeys) - 1) ? $labKeys
             </div>
         </div>
         <textarea id="lab-sql-editor" class="sql-editor-textarea" spellcheck="false"><?= Security::e($defaultSql) ?></textarea>
-        <div id="lab-sql-output" class="sql-output-console">Prêt. Cliquez sur n'importe quel bouton « ▶ Exécuter dans le Lab SQL » dans l'énoncé ci-dessous ou saisissez votre requête SQL, puis cliquez sur « ▶ Exécuter la Requête SQL ».</div>
+        <div id="lab-sql-output" class="sql-output-console">Prêt. Cliquez sur n'importe quel bouton « ▶ Exécuter dans le Lab SQL » dans l'énoncé ou le corrigé ci-dessous, ou saisissez votre requête SQL puis cliquez sur « ▶ Exécuter la Requête SQL ».</div>
     </div>
 </section>
 
-<!-- ÉNONCÉ COMPLET DES 7 PILIERS QUALIOPI & SOMMAIRE SCROLLSPY -->
+<?php if ($labMode === 'html_preview' && isset($lab['downloads']['html'])): ?>
+    <div style="background: #FFFFFF; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border-strong); height: 82vh;">
+        <iframe src="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=lab&id=<?= urlencode($labId) ?>&format=html&inline=1"
+                allow="unload *"
+                style="width: 100%; height: 100%; border: none;"
+                title="<?= Security::e($lab['title']) ?>"></iframe>
+    </div>
+<?php elseif ($labMode === 'pdf_preview' && isset($lab['downloads']['pdf'])): ?>
+    <div style="background: var(--bg-surface); border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border-strong); height: 82vh;">
+        <iframe src="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=lab&id=<?= urlencode($labId) ?>&format=pdf&inline=1"
+                allow="unload *"
+                style="width: 100%; height: 100%; border: none;"
+                title="<?= Security::e($lab['title']) ?> (PDF)"></iframe>
+    </div>
+<?php else: ?>
+<!-- ÉNONCÉ / CORRIGÉ DES 7 PILIERS QUALIOPI & SOMMAIRE SCROLLSPY STICKY -->
 <div class="reader-grid">
     <div class="reader-main-col">
+        <?php if ($labMode === 'corrige'): ?>
+            <div class="lab-mode-banner lab-mode-banner-corrige">
+                <div>
+                    <strong>✅ Mode Corrigé Officiel & Débriefing REX Expert :</strong>
+                    Vous consultez les solutions détaillées, l'Oracle de validation Qualiopi et les explications d'architecture de l'atelier.
+                </div>
+                <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=enonce&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">
+                    📋 Revenir à l'Énoncé
+                </a>
+            </div>
+        <?php elseif ($labMode === 'enonce'): ?>
+            <div class="lab-mode-banner lab-mode-banner-enonce">
+                <div>
+                    <strong>📋 Mode Énoncé & Travail Pas-à-Pas :</strong>
+                    Réalisez les étapes dans la console SQL ci-dessus. Les solutions sont masquées par défaut pour préserver votre démarche d'investigation.
+                </div>
+                <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=corrige&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald btn-sm">
+                    ✅ Voir le Corrigé Complet & REX →
+                </a>
+            </div>
+        <?php endif; ?>
+
         <article id="reader-article-content" class="reader-article markdown-body">
-            <?= $parsed['html'] ?>
+            <?= $activeLabHtml ?>
         </article>
+
+        <!-- CARTE DE NAVIGATION BAS DE PAGE D'ATELIER -->
+        <div class="module-bottom-nav-card">
+            <div style="display: flex; gap: 0.55rem; flex-wrap: wrap;">
+                <?php if ($prevLabId): ?>
+                    <a href="index.php?page=lab&id=<?= urlencode($prevLabId) ?>&mode=<?= urlencode($labMode) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline">
+                        ◀ Atelier Précédent
+                    </a>
+                <?php endif; ?>
+                <?php if ($labMode !== 'corrige'): ?>
+                    <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=corrige&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald">
+                        ✅ Consulter le Corrigé Complet & Débriefing REX
+                    </a>
+                <?php else: ?>
+                    <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=enonce&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline">
+                        📋 Retourner à l'Énoncé Pas-à-Pas
+                    </a>
+                <?php endif; ?>
+            </div>
+            <div>
+                <?php if ($nextLabId): ?>
+                    <a href="index.php?page=lab&id=<?= urlencode($nextLabId) ?>&mode=<?= urlencode($labMode) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-primary">
+                        Atelier Suivant ▶
+                    </a>
+                <?php endif; ?>
+            </div>
+        </div>
     </div>
 
-    <aside class="reader-sidebar">
+    <aside class="reader-sidebar" id="app-right-sidebar">
         <!-- 1. SOMMAIRE DES ÉTAPES DE L'ATELIER (SCROLLSPY EN DIRECT) -->
         <div class="toc-box">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; margin-bottom: 0.45rem;">
                 <span style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light);">
-                    🧪 Étapes & Position
+                    🧪 <?= $labMode === 'corrige' ? 'Plan du Corrigé' : 'Étapes & Position' ?>
                 </span>
-                <span id="toc-read-pct" class="badge-code tabular-nums">0% lu</span>
+                <div style="display: flex; align-items: center; gap: 0.35rem;">
+                    <span id="toc-read-pct" class="badge-code tabular-nums">0% lu</span>
+                    <button type="button"
+                            class="btn-sidebar-collapse-inline btn-toggle-right-panel"
+                            title="Réduire la barre verticale de droite (Alt+D)"
+                            aria-label="Réduire la barre verticale de droite">
+                        ▸
+                    </button>
+                </div>
             </div>
             <div class="progress-bar-track" style="height: 5px; margin-bottom: 0.75rem;">
                 <div id="toc-read-bar" class="progress-bar-fill" style="width: 0%;"></div>
             </div>
 
             <nav id="toc-scrollspy-nav" class="toc-scrollspy-nav">
-                <?php foreach ($parsed['toc'] as $tIdx => $tocItem): ?>
+                <?php foreach ($activeLabToc as $tIdx => $tocItem): ?>
                     <a href="#<?= Security::e($tocItem['id']) ?>"
                        class="toc-link toc-level-<?= (int)$tocItem['level'] ?> <?= $tIdx === 0 ? 'active' : '' ?>"
                        data-scrollspy-target="<?= Security::e($tocItem['id']) ?>">
@@ -231,3 +359,4 @@ $nextLabId = ($curIndex !== false && $curIndex < count($labKeys) - 1) ? $labKeys
         </div>
     </aside>
 </div>
+<?php endif; ?>

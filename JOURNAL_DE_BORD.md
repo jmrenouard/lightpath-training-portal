@@ -49,3 +49,25 @@
   5. **Navigation directe des 34 modules dans la barre verticale gauche (`RCA-LMS-10`) :** Ajout dans la barre latérale gauche de l'arbre complet des 4 parcours contenant les liens directs vers chacun des **34 modules** (`M01`..`M29`, `SQL-01`..`SQL-05`), avec indicateur de complétion `✔`, surbrillance du module actif et filtre instantané `#sidebar-module-filter`.
 * **Tests post-correction :** ✅ 108 / 108 assertions passées dans `php tests/run_tests.php` (0 régression)
 
+---
+
+### Correction RCA-LMS-11 à RCA-LMS-16 (`RCA-146`) — Synchronisation 1:1 des Slides au Clic, Lecteur PDF en Zone Principale, Menu Droite Sticky Sans Scrollbar, Barres Gauche/Droite Repliables, Onglets Énoncé/Corrigé des Labs & Durcissement Sécurité / Unload Shim
+* **Date :** 2026-10-25 21:48
+* **Issues GitHub associées :** `lightpath-training-portal#6` & `training_postgresql#80`
+* **Fichiers modifiés :**
+  - `bin/export_slides_cache.py` & `public/assets/slides_cache/*/manifest.json` (extraction directe des titres, sections et aperçus depuis chaque page de `*_slides.pdf` sur les 34 modules / 1 686 slides pour une correspondance 1:1 absolue avec `slide_NNN.png`)
+  - `src/Course/MarkdownParser.php` (invalidation du cache `mod_v5_rca146` / `lab_v5_rca146`, découpage `splitLabEnonceAndCorrige()` générant `enonce_html`, `enonce_toc`, `corrige_html` et `corrige_toc` sur les 34 ateliers)
+  - `src/Core/Security.php`, `src/bootstrap.php`, `src/Course/DownloadController.php`, `public/index.php`, `src/Docker/DockerManager.php` (`Security::sendSecurityHeaders()`, `Security::renderUnloadShimScript()` convertissant `unload` en `pagehide` contre les violations `chext_loader.js`, validation `isPathInside` sur `admin_add_course` et assainissement Docker)
+  - `templates/layout.php`, `templates/pages/login.php`, `templates/pages/module_view.php`, `templates/pages/lab_view.php` (boutons de repli des barres verticales gauche et droite, conteneur `.slide-stage-main-col`, onglets `Énoncé` / `Corrigé Complet & REX` / `Vue Intégrale` / `Rendu Web` / `PDF` sur les labs, bouton `#btn-toggle-lab-solutions`)
+  - `public/assets/css/app.css` & `public/assets/js/app.js` (`[hidden] { display: none !important; }`, `body { overflow-x: clip; }` restaurant `position: sticky` sur la barre verticale de droite, masquage intégral des barres de défilement `scrollbar-width: none`, `body.left-sidebar-collapsed` / `body.right-sidebar-collapsed` avec persistance `localStorage` et raccourcis `Alt+G` / `Alt+D`)
+  - `AGENTS.md`, `REGISTRE_RCA.md`, `tests/run_tests.php` (123 assertions automatisées)
+* **Nature de la correction :**
+  1. **Synchronisation 1:1 des diapositives au clic (`RCA-LMS-11`) :** Élimination du décalage entre `.pptx` et `_slides.pdf` sur les 29 modules concernés en extrayant les titres directement depuis chaque page du PDF officiel, et suppression de `src=""` sur les images `3..N`.
+  2. **Lecteur PDF Continu dans la colonne principale (`RCA-LMS-12`) :** Encapsulation de `#slide-stage-html` et `#slide-stage-pdf` dans `.slide-stage-main-col` et règle `[hidden] { display: none !important; }` pour que le lecteur PDF s'affiche toujours dans la scène principale et ne remplace jamais le menu vertical de droite.
+  3. **Menu vertical de droite sticky et sans barre de défilement (`RCA-LMS-13`) :** Remplacement de `overflow-x: hidden` sur `html, body` par `overflow-x: clip` sur `body` (rendant `.reader-sidebar` et `.slide-outline-sidebar` parfaitement sticky tout au long du scroll) et suppression de toute barre de défilement visible (`scrollbar-width: none` / `::-webkit-scrollbar`).
+  4. **Barres verticales gauche et droite repliables (`RCA-LMS-14`) :** Ajout des contrôles de réduction/extension en 1 clic pour la barre gauche et la barre droite (`Alt+G` / `Alt+D`, bouton flottant de réouverture et persistance `localStorage`).
+  5. **Vues Énoncé et Corrigé Complet sur les 34 ateliers (`RCA-LMS-15`) :** Ajout dans `lab_view.php` des onglets `📋 Énoncé & Travail Pas-à-Pas`, `✅ Corrigé Complet & Débriefing REX`, `📖 Vue Intégrale`, `🌐 Rendu Web Studio` et `📕 Support PDF` ainsi que du bouton `👁️ Afficher / Masquer les Solutions`.
+  6. **Durcissement sécurité, shim `unload` (`chext_loader.js`) & règle Issue GitHub (`RCA-LMS-16`) :** En-têtes HTTP de sécurité, interception JS `unload -> pagehide` éliminant toute erreur console d'extension Chrome, et codification dans `AGENTS.md` de l'ouverture/fermeture commentée d'une Issue GitHub par tâche sur les deux dépôts.
+* **Tests post-correction :** ✅ 123 / 123 assertions passées dans `php tests/run_tests.php` (0 régression)
+
+

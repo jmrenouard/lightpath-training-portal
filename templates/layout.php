@@ -60,6 +60,7 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+    <?= Security::renderUnloadShimScript() ?>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <meta name="csrf-token" content="<?= Security::e($csrfToken) ?>"/>
@@ -78,19 +79,28 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
     <!-- ==================================================================
          SIDEBAR DE NAVIGATION PRINCIPALE + ACCÈS DIRECT AUX 34 MODULES
          ================================================================== -->
-    <aside class="app-sidebar">
-        <a href="index.php?page=dashboard&course=<?= urlencode($currentCourseSlug) ?>" class="sidebar-brand">
-            <img src="assets/img/lightpath_logo_white_text.png"
-                 data-dark-src="assets/img/lightpath_logo_white_text.png"
-                 data-light-src="assets/img/lightpath_logo_dark_text.png"
-                 alt="LightPath"
-                 class="brand-logo theme-aware-logo"/>
-            <img src="assets/img/postgresql_elephant_dark.png"
-                 data-dark-src="assets/img/postgresql_elephant_dark.png"
-                 data-light-src="assets/img/postgresql_elephant_light.png"
-                 alt="PG18"
-                 class="pg-icon theme-aware-logo"/>
-        </a>
+    <aside class="app-sidebar" id="app-left-sidebar">
+        <div class="sidebar-brand">
+            <a href="index.php?page=dashboard&course=<?= urlencode($currentCourseSlug) ?>" class="sidebar-brand-link">
+                <img src="assets/img/lightpath_logo_white_text.png"
+                     data-dark-src="assets/img/lightpath_logo_white_text.png"
+                     data-light-src="assets/img/lightpath_logo_dark_text.png"
+                     alt="LightPath"
+                     class="brand-logo theme-aware-logo"/>
+                <img src="assets/img/postgresql_elephant_dark.png"
+                     data-dark-src="assets/img/postgresql_elephant_dark.png"
+                     data-light-src="assets/img/postgresql_elephant_light.png"
+                     alt="PG18"
+                     class="pg-icon theme-aware-logo"/>
+            </a>
+            <button type="button"
+                    id="btn-collapse-left-inline"
+                    class="btn-sidebar-collapse-inline"
+                    title="Réduire la barre verticale de gauche (Alt+G)"
+                    aria-label="Réduire la barre verticale de gauche">
+                ◂
+            </button>
+        </div>
 
         <!-- Sélecteur Multi-Formations -->
         <div class="sidebar-course-selector">
@@ -231,12 +241,33 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
          ================================================================== -->
     <div class="app-main">
         <header class="app-topbar">
-            <div class="topbar-search">
-                <span class="search-icon">🔍</span>
-                <input type="search" id="global-search-input" placeholder="Filtrer un module, lab, commande SQL, cheatsheet... (Ctrl+K)"/>
+            <div class="topbar-left-group">
+                <button type="button"
+                        id="btn-toggle-left-sidebar"
+                        class="btn btn-outline btn-sm btn-sidebar-toggle"
+                        title="Réduire / Afficher la barre verticale de gauche (Alt+G)"
+                        aria-label="Réduire ou afficher la barre verticale de gauche">
+                    <span class="sidebar-toggle-icon">◧</span>
+                    <span id="label-toggle-left-sidebar" class="sidebar-toggle-label">Menu Gauche</span>
+                </button>
+                <div class="topbar-search">
+                    <span class="search-icon">🔍</span>
+                    <input type="search" id="global-search-input" placeholder="Filtrer un module, lab, commande SQL, cheatsheet... (Ctrl+K)"/>
+                </div>
             </div>
 
             <div class="topbar-actions">
+                <?php if ($page === 'module' || $page === 'lab'): ?>
+                    <button type="button"
+                            id="btn-toggle-right-sidebar"
+                            class="btn btn-outline btn-sm btn-sidebar-toggle"
+                            title="Réduire / Afficher la barre verticale de droite (Alt+D)"
+                            aria-label="Réduire ou afficher la barre verticale de droite">
+                        <span class="sidebar-toggle-icon">◨</span>
+                        <span id="label-toggle-right-sidebar" class="sidebar-toggle-label">Menu Droite</span>
+                    </button>
+                <?php endif; ?>
+
                 <!-- Statut du Conteneur Docker Personnel (rafraîchi en asynchrone sans bloquer la navigation) -->
                 <a href="index.php?page=dashboard&course=<?= urlencode($currentCourseSlug) ?>#docker-panel"
                    id="topbar-docker-pill"
@@ -284,6 +315,15 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
         </main>
     </div>
 </div>
+
+<?php if ($page === 'module' || $page === 'lab'): ?>
+<button type="button"
+        id="btn-floating-restore-right"
+        class="floating-restore-right-btn"
+        title="Réafficher la barre verticale de droite (Alt+D)">
+    ◂ Afficher Menu Droite
+</button>
+<?php endif; ?>
 
 <!-- Lightbox Plein Écran pour Schémas Mermaid & Infographies Studio -->
 <div id="diagram-lightbox" class="diagram-lightbox" hidden>
