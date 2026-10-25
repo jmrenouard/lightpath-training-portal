@@ -58,11 +58,24 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const centerElementInScrollBox = (box, el) => {
+        if (!box || !el) return;
+        const boxRect = box.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        if (boxRect.height <= 0) return;
+        const delta = (elRect.top - boxRect.top) - (box.clientHeight / 2) + (elRect.height / 2);
+        box.scrollTop = Math.max(0, box.scrollTop + delta);
+    };
+
     const activeSidebarMod = document.querySelector('.sidebar-module-link.active');
     if (activeSidebarMod) {
-        const sidebarNav = activeSidebarMod.closest('.sidebar-nav');
-        if (sidebarNav) {
-            sidebarNav.scrollTop = Math.max(0, activeSidebarMod.offsetTop - sidebarNav.clientHeight / 2 + 24);
+        const trackModsBox = activeSidebarMod.closest('.sidebar-track-modules');
+        if (trackModsBox) {
+            centerElementInScrollBox(trackModsBox, activeSidebarMod);
+        }
+        const appSidebar = activeSidebarMod.closest('.app-sidebar');
+        if (appSidebar) {
+            centerElementInScrollBox(appSidebar, activeSidebarMod);
         }
     }
 
@@ -161,12 +174,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const tocReadBar = document.getElementById('toc-read-bar');
     const tocReadPct = document.getElementById('toc-read-pct');
 
-    // Centrer automatiquement l'étape courante dans le Stepper de Parcours
+    // Centrer automatiquement l'étape courante dans le Stepper de Parcours (au chargement et à l'ouverture du <details>)
     const currentStepperItem = document.querySelector('.curriculum-stepper-list .stepper-item.is-current');
     if (currentStepperItem) {
         const stepperContainer = currentStepperItem.closest('.curriculum-stepper-list');
         if (stepperContainer) {
-            stepperContainer.scrollTop = Math.max(0, currentStepperItem.offsetTop - stepperContainer.clientHeight / 2 + 18);
+            centerElementInScrollBox(stepperContainer, currentStepperItem);
+            const parentDetails = stepperContainer.closest('details');
+            if (parentDetails) {
+                parentDetails.addEventListener('toggle', () => {
+                    if (parentDetails.open) {
+                        centerElementInScrollBox(stepperContainer, currentStepperItem);
+                    }
+                });
+            }
         }
     }
 
@@ -386,8 +407,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (pdfIframe) {
                     const dataSrc = pdfIframe.getAttribute('data-src');
                     if (dataSrc) {
-                        const pageHash = `#page=${currentSlide + 1}`;
-                        const targetUrl = dataSrc + pageHash;
+                        const pageNum = currentSlide + 1;
+                        const sep = dataSrc.includes('?') ? '&' : '?';
+                        const targetUrl = `${dataSrc}${sep}slide_page=${pageNum}#page=${pageNum}`;
                         if (pdfIframe.getAttribute('src') !== targetUrl) {
                             pdfIframe.setAttribute('src', targetUrl);
                         }
@@ -427,9 +449,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const isActive = i === currentSlide;
                 item.classList.toggle('active', isActive);
                 if (isActive) {
-                    const listBox = item.closest('.toc-box');
+                    const listBox = item.closest('.slide-outline-box') || item.closest('.toc-box');
                     if (listBox) {
-                        listBox.scrollTop = Math.max(0, item.offsetTop - listBox.clientHeight / 2 + 20);
+                        centerElementInScrollBox(listBox, item);
                     }
                 }
             });
@@ -475,6 +497,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     switchSlideEngine('html');
                 }
                 goToSlide(idx);
+                if (stageHtml && !document.fullscreenElement) {
+                    const rect = stageHtml.getBoundingClientRect();
+                    if (rect.top < 56 || rect.top > window.innerHeight * 0.45) {
+                        const targetY = Math.max(0, (window.scrollY || window.pageYOffset) + rect.top - 76);
+                        window.scrollTo({ top: targetY, behavior: 'smooth' });
+                    }
+                }
             });
         });
 
@@ -546,11 +575,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Support d'ancre #slide-N au chargement
+        // Support d'ancre #slide-N ou paramètre ?slide=N au chargement
         let initialSlideIdx = 0;
-        const hashMatch = window.location.hash.match(/^#slide-(\d+)$/i);
-        if (hashMatch) {
-            initialSlideIdx = Math.max(0, parseInt(hashMatch[1], 10) - 1);
+        const urlParams = new URLSearchParams(window.location.search);
+        const slideParam = parseInt(urlParams.get('slide') || '0', 10);
+        if (slideParam >= 1) {
+            initialSlideIdx = slideParam - 1;
+        } else {
+            const hashMatch = window.location.hash.match(/^#slide-(\d+)$/i);
+            if (hashMatch) {
+                initialSlideIdx = Math.max(0, parseInt(hashMatch[1], 10) - 1);
+            }
         }
         goToSlide(initialSlideIdx);
     }

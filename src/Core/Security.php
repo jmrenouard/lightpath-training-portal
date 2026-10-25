@@ -62,6 +62,29 @@ class Security
         return (bool)preg_match('/^[a-zA-Z0-9_.\-\/]+$/', $norm);
     }
 
+    /**
+     * Vérifie strictement qu'un chemin résolu ($targetPath) se situe à l'intérieur
+     * d'un répertoire racine autorisé ($baseDir), en prévenant toute évasion par préfixe partiel.
+     */
+    public static function isPathInside(string $targetPath, string $baseDir): bool
+    {
+        if ($targetPath === '' || $baseDir === '' || str_contains($targetPath, "\0") || str_contains($baseDir, "\0")) {
+            return false;
+        }
+        $realTarget = realpath($targetPath);
+        $realBase = realpath($baseDir);
+        if ($realTarget === false || $realBase === false) {
+            return false;
+        }
+        $normTarget = rtrim(str_replace('\\', '/', $realTarget), '/');
+        $normBase = rtrim(str_replace('\\', '/', $realBase), '/');
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $normTarget = strtolower($normTarget);
+            $normBase = strtolower($normBase);
+        }
+        return $normTarget === $normBase || str_starts_with($normTarget, $normBase . '/');
+    }
+
     public static function sanitizeFilename(string $filename): string
     {
         $clean = preg_replace('/[^a-zA-Z0-9_.\-]/', '_', basename($filename));

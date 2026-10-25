@@ -353,7 +353,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'level' => 'Professionnel (Qualiopi)',
                     'duration' => $cDur,
                     'instructor' => $appConfig['trainer_name'],
-                    'icon' => '/assets/img/lightpath_cropped.png',
+                    'icon' => 'assets/img/lightpath_logo_dark_text.png',
                     'active' => true,
                     'docker_enabled' => true,
                     'source_root' => $resolvedSourceRoot,

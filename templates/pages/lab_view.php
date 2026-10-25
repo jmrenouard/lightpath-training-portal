@@ -309,40 +309,40 @@ $activeLabToc = match ($labMode) {
             </nav>
         </div>
 
-        <!-- 2. STEPPER DE POSITION DANS LES ATELIERS DU PARCOURS -->
-        <div class="toc-box">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+        <!-- 2. STEPPER DE POSITION DANS LES ATELIERS DU PARCOURS (REPLIABLE COMME MODULE_VIEW) -->
+        <details class="toc-box" style="cursor: pointer;">
+            <summary style="display: flex; justify-content: space-between; align-items: center; list-style: none;">
                 <span style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light);">
-                    📍 Ateliers du Parcours
+                    📍 Lab <?= (int)($lab['track_position'] ?? 1) ?> / <?= (int)($lab['track_total'] ?? count($trackLabs)) ?> du Parcours
                 </span>
-                <span class="badge-code tabular-nums">
-                    Lab <?= (int)($lab['track_position'] ?? 1) ?> / <?= (int)($lab['track_total'] ?? count($trackLabs)) ?>
-                </span>
-            </div>
-            <div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.45rem;">
-                <?= Security::e($lab['track_short_title'] ?? $lab['track_title'] ?? '') ?>
-            </div>
-            <div class="progress-bar-track" style="height: 5px; margin-bottom: 0.75rem;">
-                <div class="progress-bar-fill" style="width: <?= $trackProgressPct ?>%;"></div>
-            </div>
+                <span class="badge-code tabular-nums"><?= $trackProgressPct ?>%</span>
+            </summary>
+            <div style="margin-top: 0.65rem;">
+                <div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.45rem;">
+                    <?= Security::e($lab['track_short_title'] ?? $lab['track_title'] ?? '') ?>
+                </div>
+                <div class="progress-bar-track" style="height: 5px; margin-bottom: 0.75rem;">
+                    <div class="progress-bar-fill" style="width: <?= $trackProgressPct ?>%;"></div>
+                </div>
 
-            <div class="curriculum-stepper-list">
-                <?php foreach ($trackLabs as $tlKey => $tlItem):
-                    $tlCurrent = ($tlKey === $labId);
-                    $tlDone = in_array($tlKey, $userProgress['completed_labs'] ?? [], true);
-                ?>
-                    <a href="index.php?page=lab&id=<?= urlencode($tlKey) ?>&course=<?= urlencode($currentCourseSlug) ?>"
-                       class="stepper-item <?= $tlCurrent ? 'is-current' : '' ?> <?= $tlDone ? 'is-done' : '' ?>">
-                        <span class="stepper-indicator tabular-nums">
-                            <?= $tlDone ? '✔' : (int)($tlItem['track_position'] ?? 1) ?>
-                        </span>
-                        <span class="stepper-label">
-                            <strong><?= Security::e($tlItem['badge_code']) ?></strong> — <?= Security::e(CourseRepository::truncateUtf8($tlItem['title'], 40)) ?>
-                        </span>
-                    </a>
-                <?php endforeach; ?>
+                <div class="curriculum-stepper-list">
+                    <?php foreach ($trackLabs as $tlKey => $tlItem):
+                        $tlCurrent = ($tlKey === $labId);
+                        $tlDone = in_array($tlKey, $userProgress['completed_labs'] ?? [], true);
+                    ?>
+                        <a href="index.php?page=lab&id=<?= urlencode($tlKey) ?>&course=<?= urlencode($currentCourseSlug) ?>"
+                           class="stepper-item <?= $tlCurrent ? 'is-current' : '' ?> <?= $tlDone ? 'is-done' : '' ?>">
+                            <span class="stepper-indicator tabular-nums">
+                                <?= $tlDone ? '✔' : (int)($tlItem['track_position'] ?? 1) ?>
+                            </span>
+                            <span class="stepper-label">
+                                <strong><?= Security::e($tlItem['badge_code']) ?></strong> — <?= Security::e(CourseRepository::truncateUtf8($tlItem['title'], 40)) ?>
+                            </span>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
             </div>
-        </div>
+        </details>
 
         <!-- 3. BLOC-NOTES D'ATELIER -->
         <div class="toc-box">

@@ -29,7 +29,7 @@ class MarkdownParser
         $moduleId = pathinfo($mdPath, PATHINFO_FILENAME);
         $manifestPath = dirname(__DIR__, 2) . '/public/assets/slides_cache/' . $moduleId . '/manifest.json';
         $manifestMtime = is_file($manifestPath) ? (int)@filemtime($manifestPath) : 0;
-        $cacheKey = md5('mod_v5_rca146:' . $courseSlug . ':' . $mdPath . ':' . $mtime . ':' . $manifestMtime);
+        $cacheKey = md5('mod_v6_rca146:' . $courseSlug . ':' . $mdPath . ':' . $mtime . ':' . $manifestMtime);
         $cacheFile = $this->cacheDir . '/' . $cacheKey . '.json';
         if (is_file($cacheFile)) {
             $cached = @json_decode((string)@file_get_contents($cacheFile), true);
@@ -67,7 +67,7 @@ class MarkdownParser
             ];
         }
         $mtime = (int)@filemtime($mdPath);
-        $cacheKey = md5('lab_v5_rca146:' . $courseSlug . ':' . $mdPath . ':' . $mtime);
+        $cacheKey = md5('lab_v6_rca146:' . $courseSlug . ':' . $mdPath . ':' . $mtime);
         $cacheFile = $this->cacheDir . '/' . $cacheKey . '.json';
         if (is_file($cacheFile)) {
             $cached = @json_decode((string)@file_get_contents($cacheFile), true);
@@ -948,6 +948,11 @@ class MarkdownParser
             $label = $m[1];
             $href = trim(html_entity_decode($m[2], ENT_QUOTES, 'UTF-8'));
 
+            // Bloquer tout schéma URI exécutable (javascript:, vbscript:, data:)
+            if (preg_match('/^\s*(?:javascript|vbscript|data):/i', $href)) {
+                return '<span>' . $label . '</span>';
+            }
+
             // Router directement vers les vues internes du LMS pour les modules, labs et cheatsheets
             if (preg_match('/(module_(?:sql_\d{2}|\d{2})_[a-z0-9_]+)\.(?:md|html|pdf)/i', $href, $mm)) {
                 $url = 'index.php?page=module&course=' . urlencode($courseSlug) . '&id=' . urlencode($mm[1]);
@@ -958,13 +963,13 @@ class MarkdownParser
                 return '<a href="' . Security::e($url) . '" class="lms-link">' . $label . '</a>';
             }
             if (preg_match('/(cheatsheet_[a-z0-9_]+)\.(?:md|html|pdf)/i', $href, $cm)) {
-                $url = 'index.php?page=cheatsheets&course=' . urlencode($courseSlug) . '&id=' . urlencode($cm[1]);
+                $url = 'index.php?page=documents&tab=cheatsheets&course=' . urlencode($courseSlug) . '&id=' . urlencode($cm[1]);
                 return '<a href="' . Security::e($url) . '" class="lms-link">' . $label . '</a>';
             }
             if (str_ends_with($href, '.pdf') || str_ends_with($href, '.html') || str_ends_with($href, '.md') || str_ends_with($href, '.png')) {
                 $clean = preg_replace('#^(\.\./)+#', '', str_replace('\\', '/', $href)) ?? $href;
                 $url = '?action=course_asset&course=' . urlencode($courseSlug) . '&path=' . urlencode($clean);
-                return '<a href="' . Security::e($url) . '" class="lms-link" target="_blank">' . $label . '</a>';
+                return '<a href="' . Security::e($url) . '" class="lms-link" target="_blank" rel="noopener">' . $label . '</a>';
             }
             return '<a href="' . Security::e($href) . '" class="lms-link" target="_blank" rel="noopener">' . $label . '</a>';
         }, $escaped) ?? $escaped;
