@@ -23,6 +23,8 @@ spl_autoload_register(static function (string $class): void {
 });
 
 if (session_status() === PHP_SESSION_NONE && PHP_SAPI !== 'cli') {
+    @ini_set('session.use_strict_mode', '1');
+    @ini_set('session.use_only_cookies', '1');
     session_set_cookie_params([
         'lifetime' => 86400 * 7,
         'path' => '/',
@@ -31,3 +33,5 @@ if (session_status() === PHP_SESSION_NONE && PHP_SAPI !== 'cli') {
     ]);
     session_start();
 }
+
+\LightPath\LMS\Core\Security::sendSecurityHeaders();

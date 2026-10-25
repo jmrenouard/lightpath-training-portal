@@ -109,17 +109,26 @@ class DownloadController
     public function streamFile(array $fileInfo, bool $forceDownload = true): never
     {
         $disp = ($forceDownload && empty($fileInfo['inline'])) ? 'attachment' : 'inline';
+        $safeFilename = Security::sanitizeFilename((string)$fileInfo['filename']);
+        Security::sendSecurityHeaders();
         header('Content-Type: ' . $fileInfo['mime']);
-        header('Content-Disposition: ' . $disp . '; filename="' . addslashes($fileInfo['filename']) . '"');
+        header('Content-Disposition: ' . $disp . '; filename="' . $safeFilename . '"');
         header('X-Content-Type-Options: nosniff');
+        header('Permissions-Policy: unload=*, fullscreen=(self)');
 
         if ($disp === 'inline') {
             header('Cache-Control: public, max-age=86400');
-            header('Permissions-Policy: unload=(self)');
             // Si on affiche un livrable HTML en mode inline (Rendu Web Studio), réécrire les chemins relatifs ../assets/ vers assets/
+            // et injecter le shim unload -> pagehide pour bloquer toute erreur d'extension navigateur (chext_loader.js)
             if (str_starts_with((string)$fileInfo['mime'], 'text/html')) {
                 $html = (string)file_get_contents($fileInfo['path']);
                 $html = (string)preg_replace('/(?:\.\.\/)+assets\//', 'assets/', $html);
+                $shim = Security::renderUnloadShimScript();
+                if (stripos($html, '<head>') !== false) {
+                    $html = (string)preg_replace('/<head>/i', '<head>' . $shim, $html, 1);
+                } else {
+                    $html = $shim . $html;
+                }
                 header('Content-Length: ' . strlen($html));
                 echo $html;
                 exit;

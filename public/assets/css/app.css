@@ -53,7 +53,16 @@ html {
     scroll-behavior: smooth;
 }
 
-html, body {
+[hidden] {
+    display: none !important;
+}
+
+html {
+    margin: 0;
+    padding: 0;
+}
+
+body {
     margin: 0;
     padding: 0;
     background-color: var(--bg-base);
@@ -62,7 +71,7 @@ html, body {
     font-size: 15px;
     line-height: 1.62;
     -webkit-font-smoothing: antialiased;
-    overflow-x: hidden;
+    overflow-x: clip;
 }
 
 /* Chiffres tabulaires obligatoires sur toutes les métriques et tables */
@@ -2282,9 +2291,247 @@ body.theme-light .sidebar-track-group {
     flex-wrap: wrap;
 }
 
+/* ============================================================================
+ * RCA-146 : BARRES LATÉRALES REPLIABLES (GAUCHE & DROITE), MENU DROITE STICKY
+ * SANS BARRE DE DÉFILEMENT, LECTEUR PDF EN ZONE PRINCIPALE & MODES LABS
+ * ============================================================================ */
+.topbar-left-group {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.sidebar-brand-link {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+    flex: 1;
+}
+
+.btn-sidebar-collapse-inline {
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-hairline);
+    border-radius: var(--radius-sm);
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+    padding: 0;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+}
+
+.btn-sidebar-collapse-inline:hover {
+    color: var(--brand-cyan-light);
+    border-color: var(--brand-cyan);
+    background: var(--brand-cyan-glow);
+}
+
+.btn-sidebar-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* 1. Réduction de la barre verticale de gauche (.app-sidebar) */
+body.left-sidebar-collapsed .app-shell {
+    grid-template-columns: 0px minmax(0, 1fr);
+}
+
+body.left-sidebar-collapsed .app-sidebar {
+    width: 0;
+    min-width: 0;
+    overflow: hidden;
+    border-right: none;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* 2. Réduction de la barre verticale de droite (.reader-sidebar / .slide-outline-sidebar) */
+body.right-sidebar-collapsed .reader-grid,
+body.right-sidebar-collapsed .slide-deck-layout {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+body.right-sidebar-collapsed .reader-sidebar,
+body.right-sidebar-collapsed .slide-outline-sidebar {
+    display: none !important;
+}
+
+/* Bouton flottant de réouverture rapide de la barre verticale de droite */
+.floating-restore-right-btn {
+    position: fixed;
+    right: 16px;
+    bottom: 24px;
+    z-index: 65;
+    display: none;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.55rem 0.95rem;
+    border-radius: 99px;
+    background: var(--brand-cyan);
+    color: #FFFFFF;
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    font-weight: 700;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow: var(--shadow-elevated);
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.floating-restore-right-btn:hover {
+    background: var(--brand-cyan-light);
+    color: #0B1120;
+    transform: translateY(-2px);
+}
+
+body.right-sidebar-collapsed .floating-restore-right-btn {
+    display: inline-flex;
+}
+
+/* 3. Barre verticale de droite : suivi du défilement (sticky) & ZÉRO barre de défilement visible */
+.reader-grid,
+.slide-deck-layout {
+    align-items: start;
+}
+
+.slide-stage-main-col {
+    min-width: 0;
+    width: 100%;
+}
+
+.slide-stage-pdf {
+    width: 100%;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-elevated);
+}
+
+.reader-sidebar,
+.slide-outline-sidebar {
+    position: -webkit-sticky;
+    position: sticky;
+    top: 76px;
+    align-self: start;
+    max-height: calc(100vh - 92px);
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.slide-outline-box {
+    max-height: calc(100vh - 110px);
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.reader-sidebar,
+.slide-outline-sidebar,
+.slide-outline-box,
+.toc-scrollspy-nav,
+.curriculum-stepper-list,
+.slide-outline-list {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+}
+
+.reader-sidebar::-webkit-scrollbar,
+.slide-outline-sidebar::-webkit-scrollbar,
+.slide-outline-box::-webkit-scrollbar,
+.toc-scrollspy-nav::-webkit-scrollbar,
+.curriculum-stepper-list::-webkit-scrollbar,
+.slide-outline-list::-webkit-scrollbar {
+    width: 0 !important;
+    height: 0 !important;
+    display: none !important;
+}
+
+/* 4. Boutons Précédent / Suivant superposés sur le canevas 16:9 */
+.lms-studio-canvas-wrap {
+    position: relative;
+}
+
+.slide-canvas-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(11, 17, 32, 0.72);
+    color: #FFFFFF;
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    font-size: 1.45rem;
+    font-weight: 700;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.18s ease, background 0.18s ease;
+    z-index: 5;
+}
+
+.lms-studio-canvas-wrap:hover .slide-canvas-nav {
+    opacity: 1;
+}
+
+.slide-canvas-nav:hover {
+    background: var(--brand-cyan);
+    border-color: var(--brand-cyan-light);
+}
+
+.slide-canvas-prev {
+    left: 14px;
+}
+
+.slide-canvas-next {
+    right: 14px;
+}
+
+/* 5. Bandeaux de mode Énoncé / Corrigé dans les Ateliers Pratiques */
+.lab-mode-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 0.95rem 1.25rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 1.15rem;
+    font-size: 0.85rem;
+}
+
+.lab-mode-banner-enonce {
+    background: rgba(0, 176, 240, 0.09);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-left: 4px solid var(--brand-cyan);
+}
+
+.lab-mode-banner-corrige {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    border-left: 4px solid var(--accent-emerald);
+}
+
 @media (max-width: 1180px) {
     .reader-grid { grid-template-columns: minmax(0, 1fr); }
-    .reader-sidebar { position: relative; top: 0; max-height: none; }
+    .reader-sidebar, .slide-outline-sidebar { position: relative; top: 0; max-height: none; }
     .slide-deck-layout { grid-template-columns: minmax(0, 1fr); }
     .tracks-roadmap-grid { grid-template-columns: minmax(0, 1fr); }
 }
@@ -2296,7 +2543,7 @@ body.theme-light .sidebar-track-group {
 }
 
 @media print {
-    .app-sidebar, .app-topbar, .view-mode-switcher, .reader-sidebar, .no-print { display: none !important; }
+    .app-sidebar, .app-topbar, .view-mode-switcher, .reader-sidebar, .slide-outline-sidebar, .floating-restore-right-btn, .no-print { display: none !important; }
     .app-shell, .reader-grid { display: block; }
     body { background: #FFFFFF; color: #000000; }
 }

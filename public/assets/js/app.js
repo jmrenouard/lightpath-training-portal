@@ -231,7 +231,108 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ------------------------------------------------------------------------
-    // 5. Moteur Diaporama Interactif 16:9 (Slide Deck Player)
+    // 4b. Réduction / Extension des Barres Verticales Gauche & Droite (RCA-LMS-14)
+    // ------------------------------------------------------------------------
+    const btnToggleLeft = document.getElementById('btn-toggle-left-sidebar');
+    const btnCollapseLeftInline = document.getElementById('btn-collapse-left-inline');
+    const labelToggleLeft = document.getElementById('label-toggle-left-sidebar');
+    const btnToggleRight = document.getElementById('btn-toggle-right-sidebar');
+    const labelToggleRight = document.getElementById('label-toggle-right-sidebar');
+    const btnFloatingRestoreRight = document.getElementById('btn-floating-restore-right');
+    const rightPanelToggleBtns = document.querySelectorAll('.btn-toggle-right-panel');
+
+    const applyLeftSidebarState = (collapsed) => {
+        document.body.classList.toggle('left-sidebar-collapsed', collapsed);
+        if (labelToggleLeft) {
+            labelToggleLeft.textContent = collapsed ? 'Afficher Menu Gauche' : 'Menu Gauche';
+        }
+        if (btnToggleLeft) {
+            btnToggleLeft.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        }
+    };
+
+    const applyRightSidebarState = (collapsed) => {
+        document.body.classList.toggle('right-sidebar-collapsed', collapsed);
+        if (labelToggleRight) {
+            labelToggleRight.textContent = collapsed ? 'Afficher Menu Droite' : 'Menu Droite';
+        }
+        if (btnToggleRight) {
+            btnToggleRight.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        }
+    };
+
+    const savedLeftCollapsed = localStorage.getItem('lp_lms_left_sidebar') === 'collapsed';
+    const savedRightCollapsed = localStorage.getItem('lp_lms_right_sidebar') === 'collapsed';
+    applyLeftSidebarState(savedLeftCollapsed);
+    applyRightSidebarState(savedRightCollapsed);
+
+    const toggleLeftSidebar = () => {
+        const nextState = !document.body.classList.contains('left-sidebar-collapsed');
+        applyLeftSidebarState(nextState);
+        localStorage.setItem('lp_lms_left_sidebar', nextState ? 'collapsed' : 'expanded');
+    };
+
+    const toggleRightSidebar = () => {
+        const nextState = !document.body.classList.contains('right-sidebar-collapsed');
+        applyRightSidebarState(nextState);
+        localStorage.setItem('lp_lms_right_sidebar', nextState ? 'collapsed' : 'expanded');
+    };
+
+    if (btnToggleLeft) btnToggleLeft.addEventListener('click', toggleLeftSidebar);
+    if (btnCollapseLeftInline) btnCollapseLeftInline.addEventListener('click', toggleLeftSidebar);
+    if (btnToggleRight) btnToggleRight.addEventListener('click', toggleRightSidebar);
+    if (btnFloatingRestoreRight) {
+        btnFloatingRestoreRight.addEventListener('click', () => {
+            applyRightSidebarState(false);
+            localStorage.setItem('lp_lms_right_sidebar', 'expanded');
+        });
+    }
+    rightPanelToggleBtns.forEach((btn) => {
+        btn.addEventListener('click', toggleRightSidebar);
+    });
+
+    // Raccourcis clavier Alt+G (barre gauche) et Alt+D (barre droite)
+    document.addEventListener('keydown', (e) => {
+        if (e.altKey && !e.ctrlKey && !e.metaKey) {
+            const k = e.key.toLowerCase();
+            if (k === 'g') {
+                e.preventDefault();
+                toggleLeftSidebar();
+            } else if (k === 'd') {
+                e.preventDefault();
+                toggleRightSidebar();
+            }
+        }
+    });
+
+    // ------------------------------------------------------------------------
+    // 4c. Bouton Afficher / Masquer les Solutions dans les Ateliers (RCA-LMS-15)
+    // ------------------------------------------------------------------------
+    const btnToggleLabSolutions = document.getElementById('btn-toggle-lab-solutions');
+    if (btnToggleLabSolutions) {
+        btnToggleLabSolutions.addEventListener('click', () => {
+            const article = document.getElementById('reader-article-content');
+            const detailsList = article ? Array.from(article.querySelectorAll('details.lms-details')) : [];
+            if (detailsList.length === 0) {
+                // Si aucun bloc repliable n'est présent dans l'énoncé courant, basculer vers l'onglet Corrigé Complet
+                const corrigeTab = document.querySelector('.view-mode-tab[href*="mode=corrige"]');
+                if (corrigeTab) {
+                    window.location.href = corrigeTab.getAttribute('href');
+                }
+                return;
+            }
+            const anyClosed = detailsList.some((d) => !d.open);
+            detailsList.forEach((d) => {
+                d.open = anyClosed;
+            });
+            btnToggleLabSolutions.textContent = anyClosed
+                ? '🙈 Masquer les Solutions'
+                : '👁️ Afficher / Masquer les Solutions';
+        });
+    }
+
+    // ------------------------------------------------------------------------
+    // 5. Moteur Diaporama Interactif 16:9 (Slide Deck Player — RCA-LMS-11 & 12)
     // ------------------------------------------------------------------------
     const slideDeckWrapper = document.getElementById('lms-slide-deck-wrapper');
     if (slideDeckWrapper) {
@@ -259,8 +360,52 @@ document.addEventListener('DOMContentLoaded', () => {
             const img = frame.querySelector('img[data-slide-src]');
             if (img) {
                 const targetSrc = img.getAttribute('data-slide-src');
-                if (targetSrc && (!img.getAttribute('src') || img.getAttribute('src') === '')) {
+                if (targetSrc && img.getAttribute('src') !== targetSrc) {
                     img.setAttribute('src', targetSrc);
+                }
+            }
+        };
+
+        const switchSlideEngine = (mode) => {
+            if (!stageHtml || !stagePdf) return;
+            if (mode === 'pdf') {
+                stageHtml.hidden = true;
+                stageHtml.style.display = 'none';
+                stagePdf.hidden = false;
+                stagePdf.style.display = 'block';
+                if (htmlControls) htmlControls.style.display = 'none';
+                if (btnEnginePdf) {
+                    btnEnginePdf.className = 'btn btn-sm btn-primary';
+                    btnEnginePdf.setAttribute('aria-pressed', 'true');
+                }
+                if (btnEngineHtml) {
+                    btnEngineHtml.className = 'btn btn-sm btn-outline';
+                    btnEngineHtml.setAttribute('aria-pressed', 'false');
+                }
+                const pdfIframe = document.getElementById('slide-pdf-iframe');
+                if (pdfIframe) {
+                    const dataSrc = pdfIframe.getAttribute('data-src');
+                    if (dataSrc) {
+                        const pageHash = `#page=${currentSlide + 1}`;
+                        const targetUrl = dataSrc + pageHash;
+                        if (pdfIframe.getAttribute('src') !== targetUrl) {
+                            pdfIframe.setAttribute('src', targetUrl);
+                        }
+                    }
+                }
+            } else {
+                stagePdf.hidden = true;
+                stagePdf.style.display = 'none';
+                stageHtml.hidden = false;
+                stageHtml.style.display = 'flex';
+                if (htmlControls) htmlControls.style.display = 'flex';
+                if (btnEngineHtml) {
+                    btnEngineHtml.className = 'btn btn-sm btn-primary';
+                    btnEngineHtml.setAttribute('aria-pressed', 'true');
+                }
+                if (btnEnginePdf) {
+                    btnEnginePdf.className = 'btn btn-sm btn-outline';
+                    btnEnginePdf.setAttribute('aria-pressed', 'false');
                 }
             }
         };
@@ -301,16 +446,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (prevBtn) prevBtn.addEventListener('click', () => goToSlide(currentSlide - 1));
         if (nextBtn) nextBtn.addEventListener('click', () => goToSlide(currentSlide + 1));
+        slideDeckWrapper.querySelectorAll('.slide-canvas-prev').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                goToSlide(currentSlide - 1);
+            });
+        });
+        slideDeckWrapper.querySelectorAll('.slide-canvas-next').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                goToSlide(currentSlide + 1);
+            });
+        });
+
         if (jumpSelect) {
             jumpSelect.addEventListener('change', () => {
-                goToSlide(parseInt(jumpSelect.value, 10) || 0);
+                const idx = parseInt(jumpSelect.value, 10) || 0;
+                if (stagePdf && !stagePdf.hidden) {
+                    switchSlideEngine('html');
+                }
+                goToSlide(idx);
             });
         }
         outlineItems.forEach((btn) => {
             btn.addEventListener('click', () => {
                 const idx = parseInt(btn.getAttribute('data-slide-jump') || '0', 10);
-                if (stagePdf && !stagePdf.hidden && btnEngineHtml) {
-                    btnEngineHtml.click();
+                if (stagePdf && !stagePdf.hidden) {
+                    switchSlideEngine('html');
                 }
                 goToSlide(idx);
             });
@@ -327,27 +489,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (btnEngineHtml && btnEnginePdf && stageHtml && stagePdf) {
-            btnEngineHtml.addEventListener('click', () => {
-                stageHtml.hidden = false;
-                stagePdf.hidden = true;
-                if (htmlControls) htmlControls.style.display = 'flex';
-                btnEngineHtml.className = 'btn btn-sm btn-primary';
-                btnEnginePdf.className = 'btn btn-sm btn-outline';
-            });
-            btnEnginePdf.addEventListener('click', () => {
-                stageHtml.hidden = true;
-                stagePdf.hidden = false;
-                if (htmlControls) htmlControls.style.display = 'none';
-                btnEnginePdf.className = 'btn btn-sm btn-primary';
-                btnEngineHtml.className = 'btn btn-sm btn-outline';
-                const pdfIframe = document.getElementById('slide-pdf-iframe');
-                if (pdfIframe) {
-                    const dataSrc = pdfIframe.getAttribute('data-src');
-                    if (dataSrc && pdfIframe.getAttribute('src') !== dataSrc) {
-                        pdfIframe.setAttribute('src', dataSrc);
-                    }
-                }
-            });
+            btnEngineHtml.addEventListener('click', () => switchSlideEngine('html'));
+            btnEnginePdf.addEventListener('click', () => switchSlideEngine('pdf'));
         }
 
         // Interaction Quiz à l'intérieur des slides
@@ -397,13 +540,19 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
                 e.preventDefault();
                 goToSlide(currentSlide - 1);
-            } else if (e.key.toLowerCase() === 'f' && !e.ctrlKey && !e.metaKey) {
+            } else if (e.key.toLowerCase() === 'f' && !e.ctrlKey && !e.metaKey && !e.altKey) {
                 e.preventDefault();
                 if (fullscreenBtn) fullscreenBtn.click();
             }
         });
 
-        goToSlide(0);
+        // Support d'ancre #slide-N au chargement
+        let initialSlideIdx = 0;
+        const hashMatch = window.location.hash.match(/^#slide-(\d+)$/i);
+        if (hashMatch) {
+            initialSlideIdx = Math.max(0, parseInt(hashMatch[1], 10) - 1);
+        }
+        goToSlide(initialSlideIdx);
     }
 
     // Fermer la lightbox avec Échap hors mode slides

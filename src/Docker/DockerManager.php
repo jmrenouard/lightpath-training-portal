@@ -268,15 +268,19 @@ class DockerManager
             ];
         }
 
-        $imgCheck = $this->runDockerCommand('image inspect ' . $this->config['image']);
-        $imageToUse = ($imgCheck['code'] === 0) ? $this->config['image'] : $this->config['fallback_image'];
+        $safeImage = (string)preg_replace('/[^a-zA-Z0-9_.\-:\/]/', '', (string)$this->config['image']);
+        $safeFallback = (string)preg_replace('/[^a-zA-Z0-9_.\-:\/]/', '', (string)$this->config['fallback_image']);
+        $safePw = (string)preg_replace('/[^a-zA-Z0-9_.\-@!]/', '', (string)$this->config['default_password']);
+
+        $imgCheck = $this->runDockerCommand('image inspect ' . $safeImage);
+        $imageToUse = ($imgCheck['code'] === 0) ? $safeImage : $safeFallback;
 
         $runArgs = sprintf(
             'run -d --name %s --hostname %s -p %d:5432 --shm-size=512m -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=%s -e POSTGRES_DB=formation_pg %s',
             $name,
             $name,
             $port,
-            $this->config['default_password'],
+            $safePw,
             $imageToUse
         );
 

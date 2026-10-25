@@ -277,7 +277,7 @@ $t->assertTrue(is_file(__DIR__ . '/../public/.well-known/appspecific/com.chrome.
 $t->assertTrue(is_file(__DIR__ . '/../public/assets/logos/lightpath_logo_dark_text.png'), "RCA-LMS-07 : Jonction statique public/assets/logos/ opérationnelle");
 $t->assertTrue(is_file(__DIR__ . '/../public/assets/images/modules/img_mod_01_aio_subsystem.png'), "RCA-LMS-07 : Jonction statique public/assets/images/modules/img_mod_01_aio_subsystem.png opérationnelle");
 $dlControllerCode = (string)file_get_contents(__DIR__ . '/../src/Course/DownloadController.php');
-$t->assertTrue(str_contains($dlControllerCode, 'assets/') && str_contains($dlControllerCode, 'Permissions-Policy: unload=(self)'), "RCA-LMS-07 : DownloadController réécrit les chemins ../assets/ et autorise unload=(self)");
+$t->assertTrue(str_contains($dlControllerCode, 'assets/') && str_contains($dlControllerCode, 'Permissions-Policy: unload='), "RCA-LMS-07 : DownloadController réécrit les chemins ../assets/ et autorise unload=*");
 $t->assertTrue(str_contains($modViewTpl, 'data-src="index.php?action=download') && str_contains($modViewTpl, 'allow="unload *"'), "RCA-LMS-07 : Iframe PDF chargée à la demande (data-src) avec allow=\"unload *\"");
 
 // 9.3 RCA-LMS-08 : Alignement exact des 58 diapositives Studio 16:9 sur le Module 01 (et 1 686 slides sur les 34 modules)
@@ -293,5 +293,45 @@ $t->assertTrue(str_contains($parsedMod['html'], 'src="assets/mermaid_cache/merma
 // 9.5 RCA-LMS-10 : Navigation directe vers chacun des 34 modules dans la barre verticale gauche
 $t->assertTrue(str_contains($layoutTpl, 'sidebar-module-filter') && str_contains($layoutTpl, 'sidebar-tracks-accordion') && str_contains($layoutTpl, 'sidebar-module-link'), "RCA-LMS-10 : Arbre de navigation directe des 34 modules + filtre rapide présents dans la barre verticale gauche");
 $t->assertTrue(str_contains($jsContent, 'syncThemeLogos') && str_contains($jsContent, 'sidebar-module-filter'), "RCA-LMS-10 : Logique JS de filtrage latéral et de synchronisation des logos active dans app.js");
+
+// 10. Tests Contrats RCA-146 (RCA-LMS-11 à RCA-LMS-16) : Synchronisation 1:1 Slides/PDF, Lecteur PDF en Zone Principale, Menu Droite Sticky Sans Scrollbar, Barres Gauche/Droite Repliables, Énoncés/Corrigés d'Ateliers & Sécurité Unload
+echo "\n--- 10. Tests Contrats RCA-146 (Synchronisation Slides 1:1, Lecteur PDF Colonne 1, Menu Droite Sticky Sans Scrollbar, Barres Repliables, Énoncés/Corrigés Labs & Sécurité) ---\n";
+
+// 10.1 RCA-LMS-11 : Synchronisation 1:1 entre titres du sommaire des slides et images PNG du PDF officiel
+$mod01Slides = $parsedMod['slides'] ?? [];
+$t->assertTrue(str_contains($mod01Slides[1]['title'] ?? '', 'Objectifs Pédagogiques'), "RCA-LMS-11 : Slide 2 du Module 01 correspond à 'Objectifs Pédagogiques Opérationnels'");
+$t->assertTrue(str_contains($mod01Slides[2]['title'] ?? '', 'Plan du Module'), "RCA-LMS-11 : Slide 3 du Module 01 correspond exactement à la page PDF 3 'Plan du Module'");
+$t->assertTrue(str_contains($mod01Slides[3]['title'] ?? '', 'Références & Documentation Officielle'), "RCA-LMS-11 : Slide 4 du Module 01 correspond exactement à la page PDF 4 'Références & Documentation Officielle postgresql.org'");
+$t->assertTrue(!str_contains($modViewTpl, 'src="<?= $idx <= 2 ?'), "RCA-LMS-11 : Aucune balise <img src=\"\"> vide sur les diapositives 3..N dans module_view.php");
+
+// 10.2 RCA-LMS-12 : Le Lecteur PDF Continu s'affiche dans la colonne principale (.slide-stage-main-col) et non à la place du menu de droite
+$t->assertTrue(str_contains($modViewTpl, 'class="slide-stage-main-col"') && str_contains($cssContent, '[hidden] {') && str_contains($jsContent, 'switchSlideEngine'), "RCA-LMS-12 : #slide-stage-html et #slide-stage-pdf sont encapsulés dans .slide-stage-main-col avec bascule propre");
+
+// 10.3 RCA-LMS-13 : Barre verticale de droite sticky (overflow-x: clip) et sans barre de défilement visible (scrollbar-width: none)
+$t->assertTrue(str_contains($cssContent, 'overflow-x: clip;') && !str_contains($cssContent, "html, body {\n    margin: 0;\n    padding: 0;\n    background-color: var(--bg-base);\n    color: var(--text-primary);\n    font-family: var(--font-sans);\n    font-size: 15px;\n    line-height: 1.62;\n    -webkit-font-smoothing: antialiased;\n    overflow-x: hidden;"), "RCA-LMS-13 : body utilise overflow-x: clip pour préserver position: sticky sur la barre verticale de droite");
+$t->assertTrue(str_contains($cssContent, 'scrollbar-width: none !important;') && str_contains($cssContent, '.reader-sidebar::-webkit-scrollbar'), "RCA-LMS-13 : Suppression totale des barres de défilement visibles sur les menus verticaux de droite");
+$t->assertTrue(!str_contains($modViewTpl, 'style="max-height: 76vh; overflow-y: auto;"'), "RCA-LMS-13 : Suppression du style inline overflow-y: auto sur le sommaire des slides");
+
+// 10.4 RCA-LMS-14 : Réduction / Extension des barres verticales de gauche et de droite
+$t->assertTrue(str_contains($layoutTpl, 'btn-toggle-left-sidebar') && str_contains($layoutTpl, 'btn-toggle-right-sidebar') && str_contains($layoutTpl, 'btn-floating-restore-right'), "RCA-LMS-14 : Boutons de réduction/extension des barres verticales gauche et droite présents dans layout.php");
+$t->assertTrue(str_contains($cssContent, 'body.left-sidebar-collapsed') && str_contains($cssContent, 'body.right-sidebar-collapsed'), "RCA-LMS-14 : Styles CSS de repli des barres verticales gauche et droite actifs");
+$t->assertTrue(str_contains($jsContent, 'lp_lms_left_sidebar') && str_contains($jsContent, 'lp_lms_right_sidebar'), "RCA-LMS-14 : Persistance localStorage de l'état des barres verticales gauche et droite active");
+
+// 10.5 RCA-LMS-15 : Onglets Énoncé et Corrigé Complet sur les 34 Ateliers Pratiques
+$labViewTpl = (string)file_get_contents(__DIR__ . '/../templates/pages/lab_view.php');
+$t->assertTrue(str_contains($labViewTpl, 'mode=enonce') && str_contains($labViewTpl, 'mode=corrige') && str_contains($labViewTpl, 'btn-toggle-lab-solutions'), "RCA-LMS-15 : Sélecteur Énoncé / Corrigé Complet / Vue Intégrale et bouton Solutions présents dans lab_view.php");
+$labsWithEnonceAndCorrige = 0;
+foreach ($pgCourse['labs'] as $lKey => $lInfo) {
+    $pl = $parser->parseLabFile($lInfo['source_md_path']);
+    if (!empty($pl['enonce_html']) && !empty($pl['corrige_html']) && strlen($pl['enonce_html']) > 200 && strlen($pl['corrige_html']) > 100) {
+        $labsWithEnonceAndCorrige++;
+    }
+}
+$t->assertEquals(34, $labsWithEnonceAndCorrige, "RCA-LMS-15 : 34 / 34 ateliers disposent d'un volet Énoncé et d'un volet Corrigé Complet distincts");
+
+// 10.6 RCA-LMS-16 : En-têtes de sécurité HTTP, Shim JS anti-violation unload (chext_loader.js) & Règle Issue GitHub
+$securityPhpCode = (string)file_get_contents(__DIR__ . '/../src/Core/Security.php');
+$t->assertTrue(str_contains($securityPhpCode, 'sendSecurityHeaders') && str_contains($securityPhpCode, 'renderUnloadShimScript') && str_contains($securityPhpCode, 'pagehide'), "RCA-LMS-16 : Security::sendSecurityHeaders() et Security::renderUnloadShimScript() actifs dans Security.php");
+$t->assertTrue(str_contains($layoutTpl, 'Security::renderUnloadShimScript()') && str_contains($dlControllerCode, 'Security::renderUnloadShimScript()'), "RCA-LMS-16 : Shim JS unload->pagehide injecté dans layout.php, login.php et les aperçus HTML inline");
 
 exit($t->summary());

@@ -215,3 +215,121 @@ Tâche : Vérifier que templates/layout.php affiche l'accordéon de navigation d
 ```
 * **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-25
 
+---
+
+## 11. RCA-LMS-11 (`RCA-146.A`) — Synchronisation 1:1 des Diapositives au Clic (Élimination du Décalage entre `.pptx` et `_slides.pdf`)
+
+* **Date de détection :** 2026-10-25
+* **Composant Affecté :** `bin/export_slides_cache.py`, `public/assets/slides_cache/*/manifest.json`, `templates/pages/module_view.php`, `src/Course/MarkdownParser.php`
+* **1. Mécanisme :**
+  29 des 34 modules présentaient un nombre de pages différent entre le fichier `.pptx` et le fichier `*_slides.pdf` compilé (ex: Module 01 avait une page 4 « Références & Documentation Officielle » dans le PDF absente du PPTX). L'extraction des titres par index depuis le `.pptx` décalait tous les titres à partir de la diapositive 3 par rapport aux images `slide_NNN.png` extraites du PDF : cliquer sur un titre dans le sommaire affichait donc la mauvaise image. De plus, `src=""` sur les slides `> 2` était invalide en HTML5.
+* **2. Hypothèse :**
+  Extraire le titre (`title`), la section (`section`) et l'aperçu textuel (`body_preview`) de chaque diapositive directement depuis la page `i` correspondante du fichier `*_slides.pdf` via PyMuPDF (`fitz`), apparier les notes de l'orateur du `.pptx` par titre normalisé, et renseigner `src="<?= Security::e($s['image_url']) ?>"` avec `loading="lazy"` sur toutes les balises `<img>`.
+* **3. Contre-mesure :**
+  Refonte de `bin/export_slides_cache.py`, régénération des 34 `manifest.json` (1 686 slides synchronisées 1:1), invalidation du cache `mod_v5_rca146` dans `MarkdownParser.php` et suppression de `src=""` dans `templates/pages/module_view.php`.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal. Lis RCA-LMS-11 dans REGISTRE_RCA.md.
+Tâche : Vérifier que bin/export_slides_cache.py extrait les titres directement depuis chaque page de *_slides.pdf pour garantir une correspondance 1:1 entre le titre affiché et l'image slide_NNN.png, et que module_view.php ne génère aucun attribut src="" vide. Valide avec php tests/run_tests.php.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-25
+
+---
+
+## 12. RCA-LMS-12 (`RCA-146.B`) — Affichage du Lecteur PDF Continu dans la Zone Principale (et non à la place du Menu Vertical de Droite)
+
+* **Date de détection :** 2026-10-25
+* **Composant Affecté :** `templates/pages/module_view.php`, `public/assets/css/app.css`, `public/assets/js/app.js`
+* **1. Mécanisme :**
+  Dans `.slide-deck-layout` (`grid-template-columns: minmax(0, 1fr) 290px`), `#slide-stage-html`, `#slide-stage-pdf` et `.slide-outline-sidebar` étaient trois enfants directs de la grille à 2 colonnes. Comme `.slide-stage-container` définissait `display: flex;`, l'attribut HTML `hidden` sur `#slide-stage-html` était surchargé par le CSS : lors du clic sur « Lecteur PDF Continu », `#slide-stage-html` restait visible en colonne 1 et `#slide-stage-pdf` prenait la place de la colonne 2 (290 px, colonne du menu vertical de droite), poussant le sommaire à la ligne suivante.
+* **2. Hypothèse :**
+  Encapsuler `#slide-stage-html` et `#slide-stage-pdf` dans un conteneur unique `<div class="slide-stage-main-col">` occupant toujours la colonne 1 de `.slide-deck-layout`, ajouter la règle globale `[hidden] { display: none !important; }` dans `public/assets/css/app.css`, et basculer explicitement `style.display` dans `switchSlideEngine()` (`public/assets/js/app.js`).
+* **3. Contre-mesure :**
+  Ajout de `.slide-stage-main-col` dans `templates/pages/module_view.php`, règle `[hidden] { display: none !important; }` dans `app.css` et fonction `switchSlideEngine()` dans `app.js`.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal. Lis RCA-LMS-12 dans REGISTRE_RCA.md.
+Tâche : Vérifier que #slide-stage-html et #slide-stage-pdf sont encapsulés dans .slide-stage-main-col (colonne 1 de .slide-deck-layout) et que [hidden] { display: none !important; } est présent dans app.css. Valide avec php tests/run_tests.php.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-25
+
+---
+
+## 13. RCA-LMS-13 (`RCA-146.C`) — Menu Vertical de Droite Sticky au Défilement & Suppression Totale des Barres de Défilement Visibles
+
+* **Date de détection :** 2026-10-25
+* **Composant Affecté :** `public/assets/css/app.css`, `templates/pages/module_view.php`
+* **1. Mécanisme :**
+  1) La règle `html, body { overflow-x: hidden; }` dans `public/assets/css/app.css` créait un contexte de défilement sur `body` qui désactivait `position: sticky` sur `.reader-sidebar` et `.slide-outline-sidebar` : la barre verticale de droite disparaissait dès que l'utilisateur faisait défiler le cours vers le bas.
+  2) Les conteneurs `.reader-sidebar`, `.slide-outline-sidebar`, `.toc-scrollspy-nav`, `.curriculum-stepper-list` et `.slide-outline-list` affichaient des barres de défilement (scrollbars) disgracieuses.
+* **2. Hypothèse :**
+  Remplacer `overflow-x: hidden` sur `html, body` par `overflow-x: clip` uniquement sur `body` pour restaurer le comportement natif `position: sticky` (`top: 76px`) tout au long du défilement, et appliquer `scrollbar-width: none !important; -ms-overflow-style: none !important;` ainsi que `::-webkit-scrollbar { width: 0 !important; height: 0 !important; display: none !important; }` sur l'ensemble des conteneurs du menu vertical de droite.
+* **3. Contre-mesure :**
+  Mise à jour de `public/assets/css/app.css` et remplacement du style inline `style="max-height: 76vh; overflow-y: auto;"` par la classe `.slide-outline-box` dans `templates/pages/module_view.php`.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal. Lis RCA-LMS-13 dans REGISTRE_RCA.md.
+Tâche : Vérifier que body utilise overflow-x: clip dans public/assets/css/app.css (afin que position: sticky fonctionne sur .reader-sidebar et .slide-outline-sidebar) et que scrollbar-width: none !important + ::-webkit-scrollbar { display: none !important; } masquent toute barre de défilement sur les menus verticaux de droite. Valide avec php tests/run_tests.php.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-25
+
+---
+
+## 14. RCA-LMS-14 (`RCA-146.D`) — Réduction / Extension en 1-Clic des Barres Verticales de Gauche et de Droite
+
+* **Date de détection :** 2026-10-25
+* **Composant Affecté :** `templates/layout.php`, `templates/pages/module_view.php`, `templates/pages/lab_view.php`, `public/assets/css/app.css`, `public/assets/js/app.js`
+* **1. Mécanisme :**
+  L'utilisateur ne pouvait réduire ni la barre verticale de gauche (`.app-sidebar`, 298 px) ni la barre verticale de droite (`.reader-sidebar` 330 px / `.slide-outline-sidebar` 290 px) pour maximiser l'espace de lecture du cours, du diaporama 16:9 ou de l'atelier SQL.
+* **2. Hypothèse :**
+  Intégrer des boutons de bascule dédiés dans la barre supérieure (`#btn-toggle-left-sidebar` et `#btn-toggle-right-sidebar`), dans l'en-tête des barres latérales (`#btn-collapse-left-inline`, `.btn-toggle-right-panel`) ainsi qu'un bouton flottant de réouverture rapide (`#btn-floating-restore-right`), avec persistance dans `localStorage` (`lp_lms_left_sidebar`, `lp_lms_right_sidebar`) et raccourcis clavier (`Alt+G` / `Alt+D`).
+* **3. Contre-mesure :**
+  Ajout des contrôles UI dans `templates/layout.php`, `templates/pages/module_view.php` et `templates/pages/lab_view.php`, classes `body.left-sidebar-collapsed` et `body.right-sidebar-collapsed` dans `public/assets/css/app.css` et gestionnaires JS dans `public/assets/js/app.js`.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal. Lis RCA-LMS-14 dans REGISTRE_RCA.md.
+Tâche : Vérifier la présence de #btn-toggle-left-sidebar, #btn-toggle-right-sidebar, .btn-toggle-right-panel et #btn-floating-restore-right ainsi que des classes CSS body.left-sidebar-collapsed et body.right-sidebar-collapsed. Valide avec php tests/run_tests.php.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-25
+
+---
+
+## 15. RCA-LMS-15 (`RCA-146.E`) — Modes d'Étude « Énoncé » et « Corrigé Complet & REX » sur les 34 Ateliers Pratiques
+
+* **Date de détection :** 2026-10-25
+* **Composant Affecté :** `src/Course/MarkdownParser.php`, `templates/pages/lab_view.php`, `public/assets/js/app.js`, `public/assets/css/app.css`
+* **1. Mécanisme :**
+  Contrairement aux modules de cours qui offraient plusieurs vues d'étude, la page d'atelier (`templates/pages/lab_view.php`) affichait uniquement un flux monolithique mélangeant l'énoncé et les corrigés, sans onglets dédiés permettant de consulter séparément l'Énoncé Pas-à-Pas et le Corrigé Complet / Débriefing REX.
+* **2. Hypothèse :**
+  Découper chaque atelier dans `MarkdownParser::parseLabFile()` (`splitLabEnonceAndCorrige()`) en deux volets distincts (`enonce_html` avec solutions Fast-Track repliées en `<details>` spoilers, et `corrige_html` regroupant les solutions des défis, le Corrigé Détaillé, l'Oracle de validation Qualiopi, la Grille d'évaluation DoD et le Débriefing REX Expert), et ajouter dans `templates/pages/lab_view.php` une barre `.view-mode-switcher` (`📋 Énoncé & Travail Pas-à-Pas`, `✅ Corrigé Complet & Débriefing REX`, `📖 Vue Intégrale`, `🌐 Rendu Web Studio`, `📕 Support PDF`) complétée du bouton `#btn-toggle-lab-solutions`.
+* **3. Contre-mesure :**
+  Implémentation de `splitLabEnonceAndCorrige()` dans `src/Course/MarkdownParser.php`, ajout des 5 onglets de mode et du bouton `#btn-toggle-lab-solutions` dans `templates/pages/lab_view.php` et validation sur les 34 ateliers.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal. Lis RCA-LMS-15 dans REGISTRE_RCA.md.
+Tâche : Vérifier que MarkdownParser::parseLabFile() retourne enonce_html et corrige_html non vides pour les 34 labs et que templates/pages/lab_view.php expose les onglets mode=enonce, mode=corrige, mode=full, mode=html_preview et mode=pdf_preview. Valide avec php tests/run_tests.php.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-25
+
+---
+
+## 16. RCA-LMS-16 (`RCA-146.F`) — Durcissement Sécurité End-to-End, Shim `unload -> pagehide` (`chext_loader.js`) & Règle d'Issue GitHub Systématique
+
+* **Date de détection :** 2026-10-25
+* **Composant Affecté :** `src/Core/Security.php`, `src/bootstrap.php`, `src/Course/DownloadController.php`, `public/index.php`, `src/Docker/DockerManager.php`, `AGENTS.md`
+* **1. Mécanisme :**
+  1) Certaines extensions Chrome injectent un script `chext_loader.js` qui enregistre `window.addEventListener('unload', ...)`. Lorsque le navigateur ou un document applique une politique restrictive sur `unload`, la console affiche `[Violation] Permissions policy violation: unload is not allowed in this document`.
+  2) Les en-têtes HTTP de sécurité (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`) et l'intercepteur JS `unload -> pagehide` n'étaient pas centralisés dans `src/bootstrap.php`.
+  3) La règle d'ingénierie exigeant une Issue GitHub par tâche fermée avec commentaire après fusion de la PR sur les deux dépôts devait être codifiée dans `AGENTS.md`.
+* **2. Hypothèse :**
+  Centraliser `Security::sendSecurityHeaders()` (`Permissions-Policy: unload=*, fullscreen=(self)`) dans `src/bootstrap.php`, injecter `Security::renderUnloadShimScript()` (qui convertit silencieusement tout `addEventListener('unload', ...)` en `'pagehide'`) en tête de `<head>` dans `layout.php`, `login.php` et les aperçus HTML inline de `DownloadController.php`, durcir `admin_add_course` et `DockerManager.php`, et codifier la règle d'Issue GitHub dans `AGENTS.md`.
+* **3. Contre-mesure :**
+  Mise à jour de `src/Core/Security.php`, `src/bootstrap.php`, `src/Course/DownloadController.php`, `public/index.php`, `src/Docker/DockerManager.php`, `templates/layout.php`, `templates/pages/login.php` et `AGENTS.md`.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôts lightpath-training-portal et training_postgresql. Lis RCA-LMS-16 dans REGISTRE_RCA.md.
+Tâche : Vérifier que Security::sendSecurityHeaders() et Security::renderUnloadShimScript() sont actifs sur toutes les pages et aperçus HTML, et que AGENTS.md impose la création et la fermeture commentée d'une Issue GitHub après chaque PR fusionnée sur les deux dépôts. Valide avec php tests/run_tests.php.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-25
+
+
