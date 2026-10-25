@@ -1373,6 +1373,7 @@ body.theme-light .slide-stage-container {
 }
 
 .toc-box {
+    position: relative;
     background: var(--bg-surface);
     border: 1px solid var(--border-hairline);
     border-radius: var(--radius-md);
@@ -1381,7 +1382,8 @@ body.theme-light .slide-stage-container {
 }
 
 .toc-scrollspy-nav {
-    max-height: 36vh;
+    position: relative;
+    max-height: 48vh;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -1428,6 +1430,7 @@ body.theme-light .slide-stage-container {
 
 /* Stepper de position dans le parcours */
 .curriculum-stepper-list {
+    position: relative;
     max-height: 28vh;
     overflow-y: auto;
     display: flex;

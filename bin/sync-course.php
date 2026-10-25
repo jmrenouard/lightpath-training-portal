@@ -9,7 +9,11 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../src/bootstrap.php';
 
-$slug = $argv[1] ?? 'postgresql-18';
+$rawSlug = (string)($argv[1] ?? 'postgresql-18');
+$slug = (string)preg_replace('/[^a-zA-Z0-9_\-]/', '', $rawSlug);
+if ($slug === '') {
+    $slug = 'postgresql-18';
+}
 $sourceDir = $argv[2] ?? realpath(__DIR__ . '/../../training_postgresql');
 
 if (!$sourceDir || !is_dir((string)$sourceDir)) {

@@ -2,7 +2,8 @@
 declare(strict_types=1);
 use LightPath\LMS\Core\Security;
 
-$docTab = (string)($_GET['tab'] ?? 'all');
+$defaultDocTab = (($page ?? '') === 'cheatsheets') ? 'cheatsheets' : 'all';
+$docTab = (string)($_GET['tab'] ?? $defaultDocTab);
 ?>
 
 <div class="hero-banner" style="padding: 1.5rem 2rem;">

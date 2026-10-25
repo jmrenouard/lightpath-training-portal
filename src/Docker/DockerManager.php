@@ -29,7 +29,13 @@ class DockerManager
 
     public function getUserPort(int $userId): int
     {
-        return (int)$this->config['base_port'] + max(1, $userId);
+        $basePort = max(1024, min(60000, (int)$this->config['base_port']));
+        $safeId = max(1, $userId);
+        $port = $basePort + $safeId;
+        if ($port > 65535) {
+            $port = $basePort + (($safeId - 1) % (65535 - $basePort)) + 1;
+        }
+        return $port;
     }
 
     public function getContainerName(int $userId): string

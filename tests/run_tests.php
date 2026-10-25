@@ -329,9 +329,18 @@ foreach ($pgCourse['labs'] as $lKey => $lInfo) {
 }
 $t->assertEquals(34, $labsWithEnonceAndCorrige, "RCA-LMS-15 : 34 / 34 ateliers disposent d'un volet Énoncé et d'un volet Corrigé Complet distincts");
 
-// 10.6 RCA-LMS-16 : En-têtes de sécurité HTTP, Shim JS anti-violation unload (chext_loader.js) & Règle Issue GitHub
+// 10.6 RCA-LMS-16 : En-têtes de sécurité HTTP, Shim JS anti-violation unload (chext_loader.js), Security::isPathInside(), bornage Docker & Règle Issue GitHub
 $securityPhpCode = (string)file_get_contents(__DIR__ . '/../src/Core/Security.php');
 $t->assertTrue(str_contains($securityPhpCode, 'sendSecurityHeaders') && str_contains($securityPhpCode, 'renderUnloadShimScript') && str_contains($securityPhpCode, 'pagehide'), "RCA-LMS-16 : Security::sendSecurityHeaders() et Security::renderUnloadShimScript() actifs dans Security.php");
 $t->assertTrue(str_contains($layoutTpl, 'Security::renderUnloadShimScript()') && str_contains($dlControllerCode, 'Security::renderUnloadShimScript()'), "RCA-LMS-16 : Shim JS unload->pagehide injecté dans layout.php, login.php et les aperçus HTML inline");
+
+$workspaceRoot = realpath(dirname(__DIR__, 2)) ?: dirname(__DIR__, 2);
+$t->assertTrue(Security::isPathInside(__DIR__, $workspaceRoot), "RCA-LMS-16 : Security::isPathInside() valide un sous-dossier légitime du workspace");
+$t->assertTrue(!Security::isPathInside(dirname($workspaceRoot), $workspaceRoot), "RCA-LMS-16 : Security::isPathInside() bloque un répertoire parent hors du workspace");
+$t->assertTrue(!Security::isPathInside('/nonexistent_path_xyz', $workspaceRoot), "RCA-LMS-16 : Security::isPathInside() rejette un chemin inexistant");
+
+$highPort = $docker->getUserPort(999999);
+$t->assertTrue($highPort >= 1024 && $highPort <= 65535, "RCA-LMS-16 : DockerManager::getUserPort(999999) borne strictement le port TCP dans [1024..65535] (obtenu : {$highPort})");
+$t->assertTrue(str_contains($jsContent, 'centerElementInScrollBox') && str_contains($labViewTpl, '<details class="toc-box"'), "RCA-LMS-16 : Centrage précis par getBoundingClientRect et repli harmonisé du stepper dans lab_view.php");
 
 exit($t->summary());
