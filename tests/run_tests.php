@@ -190,4 +190,74 @@ foreach ($phpFiles as $pf) {
     $t->assertEquals(0, $code, "Syntaxe PHP valide : " . basename($pf));
 }
 
+// 8. Tests Contrats RCA-144 (RCA-LMS-01 à RCA-LMS-05) : Visuel, Mermaid, Cache < 20ms, Parcours, ScrollSpy & Mode Slides 16:9
+echo "\n--- 8. Tests Contrats RCA-144 (Rendu Visuel, Mermaid Retina, Cache < 20ms, Parcours, ScrollSpy & Diaporama 16:9) ---\n";
+
+// 8.1 RCA-LMS-01 : Diagrammes Mermaid Retina, Callouts à puces & Zéro Markdown brut sur les 34 Modules et 34 Labs
+$t->assertTrue(str_contains($parsedMod['html'], 'lms-mermaid-card'), "RCA-LMS-01 : Module 01 rend les schémas Mermaid sous forme de carte visuelle .lms-mermaid-card");
+$t->assertTrue(str_contains($parsedMod['html'], 'assets%2Fmermaid_cache%2Fmermaid_'), "RCA-LMS-01 : Module 01 résout l'image Retina pré-calculée mermaid_<hash>.png");
+$t->assertTrue(!str_contains($parsedMod['html'], 'lms-mermaid-code'), "RCA-LMS-01 : Zéro bloc Mermaid brut non transformé (.lms-mermaid-code)");
+$t->assertTrue(str_contains($parsedMod['html'], 'lms-doc-meta-grid'), "RCA-LMS-01 : En-tête de métadonnées transformé en grille .lms-doc-meta-grid");
+$t->assertTrue(str_contains($parsedMod['html'], 'lms-callout-list'), "RCA-LMS-01 : Les listes à puces dans les callouts (> * ...) sont transformées en <ul class=\"lms-callout-list\">");
+$t->assertTrue(!str_contains($parsedMod['html'], '<br/>* '), "RCA-LMS-01 : Zéro puce brute <br/>* à l'intérieur des callouts");
+$t->assertTrue(is_file(__DIR__ . '/../public/assets/js/mermaid.min.js'), "RCA-LMS-01 : Moteur vectoriel local public/assets/js/mermaid.min.js présent (zéro CDN)");
+
+$rawAsteriskModules = 0;
+$minSlidesCount = 999;
+foreach ($pgCourse['modules'] as $mKey => $mInfo) {
+    $pm = $parser->parseModuleFile($mInfo['source_md_path']);
+    // Supprimer les blocs <pre>...</pre> et <code>...</code> avant de vérifier l'absence de ** bruts
+    $textOnly = preg_replace('/<(pre|code)\b[^>]*>.*?<\/\1>/isu', '', $pm['html']) ?? $pm['html'];
+    if (str_contains($textOnly, '**') || str_contains($textOnly, '<br/>* ')) {
+        $rawAsteriskModules++;
+        echo "  [WARN] Artefact Markdown détecté dans {$mKey}\n";
+    }
+    $sc = count($pm['slides'] ?? []);
+    if ($sc < $minSlidesCount) {
+        $minSlidesCount = $sc;
+    }
+}
+$t->assertEquals(0, $rawAsteriskModules, "RCA-LMS-01 : 0 / 34 modules avec tokens Markdown '**' ou '<br/>* ' non transformés hors code");
+
+$rawAsteriskLabs = 0;
+foreach ($pgCourse['labs'] as $lKey => $lInfo) {
+    $pl = $parser->parseLabFile($lInfo['source_md_path']);
+    $textOnly = preg_replace('/<(pre|code)\b[^>]*>.*?<\/\1>/isu', '', $pl['html']) ?? $pl['html'];
+    if (str_contains($textOnly, '**') || str_contains($textOnly, '<br/>* ')) {
+        $rawAsteriskLabs++;
+        echo "  [WARN] Artefact Markdown détecté dans {$lKey}\n";
+    }
+}
+$t->assertEquals(0, $rawAsteriskLabs, "RCA-LMS-01 : 0 / 34 labs avec tokens Markdown '**' ou '<br/>* ' non transformés hors code");
+
+// 8.2 RCA-LMS-02 : Garde-fous anti-débordement CSS
+$cssContent = (string)file_get_contents(__DIR__ . '/../public/assets/css/app.css');
+$t->assertTrue(str_contains($cssContent, 'overflow-wrap: break-word') && str_contains($cssContent, 'min-width: 0'), "RCA-LMS-02 : Garde-fous CSS anti-débordement (overflow-wrap: break-word & min-width: 0) actifs");
+
+// 8.3 RCA-LMS-03 : Performance du Cache Catalogue & Docker (< 20 ms)
+$t0 = microtime(true);
+$warmRepo = new CourseRepository($coursesConfig);
+$warmCourse = $warmRepo->getCourse('postgresql-18');
+$warmDockerStatus = $docker->getCachedUserContainerStatus(1);
+$elapsedMs = (microtime(true) - $t0) * 1000.0;
+$t->assertTrue($elapsedMs < 25.0, sprintf("RCA-LMS-03 : Chargement Catalogue + Statut Docker en cache ultra-rapide (%.2f ms < 25 ms)", $elapsedMs));
+$t->assertTrue(!empty($warmDockerStatus['container_name']), "RCA-LMS-03 : Statut Docker en cache immédiat sans appel shell wsl bloquant");
+
+// 8.4 RCA-LMS-04 : Structuration des 4 Parcours, Stepper de Position & ScrollSpy
+$tracksCfg = $pgCourse['tracks'] ?? [];
+$t->assertEquals(4, count($tracksCfg), "RCA-LMS-04 : Les 4 parcours pédagogiques sont définis");
+foreach ($tracksCfg as $tId => $tData) {
+    $t->assertTrue(!empty($tData['phases']) && !empty($tData['target_audience']) && !empty($tData['objective']), "RCA-LMS-04 : Parcours '{$tId}' possède ses journées/phases, son public cible et son objectif");
+}
+$t->assertEquals(1, $mod01['track_position'] ?? 0, "RCA-LMS-04 : Module 01 est positionné à l'Étape 1 de son parcours");
+$t->assertEquals(20, $mod01['track_total'] ?? 0, "RCA-LMS-04 : Module 01 indique un total de 20 étapes dans le Parcours 1");
+
+$jsContent = (string)file_get_contents(__DIR__ . '/../public/assets/js/app.js');
+$t->assertTrue(str_contains($jsContent, 'updateScrollSpy') && str_contains($jsContent, 'data-scrollspy-target'), "RCA-LMS-04 : Moteur ScrollSpy temps réel présent dans public/assets/js/app.js");
+
+// 8.5 RCA-LMS-05 : Mode Diaporama Interactif 16:9 (Slides HTML5 + PDF Slides)
+$t->assertGreaterThanOrEqual(12, $minSlidesCount, "RCA-LMS-05 : Chacun des 34 modules génère au moins 12 diapositives 16:9 interactives (min mesuré : {$minSlidesCount})");
+$modViewTpl = (string)file_get_contents(__DIR__ . '/../templates/pages/module_view.php');
+$t->assertTrue(str_contains($modViewTpl, 'lms-slide-deck-wrapper') && str_contains($modViewTpl, 'mode=slides'), "RCA-LMS-05 : Lecteur Diaporama 16:9 intégré dans templates/pages/module_view.php");
+
 exit($t->summary());

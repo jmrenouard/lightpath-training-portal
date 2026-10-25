@@ -24,7 +24,7 @@ function renderDownloadStrip(string $courseSlug, string $itemType, string $itemI
     $out = '<div class="download-strip">';
     foreach ($downloads as $fmt => $info) {
         $label = $icons[$fmt] ?? strtoupper($fmt);
-        $size = !$compact && !empty($info['size_formatted']) ? ' <span style="opacity:0.65;font-size:0.66rem;">(' . Security::e($info['size_formatted']) . ')</span>' : '';
+        $size = !$compact && !empty($info['size_formatted']) ? ' <span class="dl-size">(' . Security::e($info['size_formatted']) . ')</span>' : '';
         $url = sprintf(
             'index.php?action=download&course=%s&type=%s&id=%s&format=%s',
             urlencode($courseSlug),
@@ -39,6 +39,16 @@ function renderDownloadStrip(string $courseSlug, string $itemType, string $itemI
     $out .= '</div>';
     return $out;
 }
+
+// Déterminer le parcours actif si on consulte un module, un lab ou un filtre de catalogue
+$activeSidebarTrack = (string)($_GET['track'] ?? '');
+if ($activeSidebarTrack === '' && $page === 'module') {
+    $mId = (string)($_GET['id'] ?? '');
+    $activeSidebarTrack = (string)($currentCourse['modules'][$mId]['track_id'] ?? '');
+} elseif ($activeSidebarTrack === '' && $page === 'lab') {
+    $lId = (string)($_GET['id'] ?? '');
+    $activeSidebarTrack = (string)($currentCourse['labs'][$lId]['track_id'] ?? '');
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -51,6 +61,11 @@ function renderDownloadStrip(string $courseSlug, string $itemType, string $itemI
     <link rel="stylesheet" href="assets/css/app.css"/>
 </head>
 <body>
+<!-- Barre de progression de lecture globale (ScrollSpy) -->
+<div id="reading-progress-container" class="reading-progress-container" aria-hidden="true">
+    <div id="reading-progress-bar" class="reading-progress-bar"></div>
+</div>
+
 <div class="app-shell">
 
     <!-- ==================================================================
@@ -78,29 +93,42 @@ function renderDownloadStrip(string $courseSlug, string $itemType, string $itemI
             <div class="nav-section-title">Espace Apprenant</div>
             <a href="index.php?page=dashboard&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'dashboard' ? 'active' : '' ?>">
                 <span>🏠 Tableau de Bord</span>
-                <span class="nav-badge"><?= $globalCompletionPct ?>%</span>
+                <span class="nav-badge tabular-nums"><?= $globalCompletionPct ?>%</span>
             </a>
-            <a href="index.php?page=catalog&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= ($page === 'catalog' || $page === 'module') ? 'active' : '' ?>">
+            <a href="index.php?page=catalog&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= ($page === 'catalog' && ($_GET['tab'] ?? '') !== 'labs' && $activeSidebarTrack === '') || ($page === 'module' && ($_GET['mode'] ?? '') !== 'slides') ? 'active' : '' ?>">
                 <span>📚 Modules de Cours</span>
-                <span class="nav-badge"><?= $doneModules ?>/<?= $totalModules ?></span>
+                <span class="nav-badge tabular-nums"><?= $doneModules ?>/<?= $totalModules ?></span>
+            </a>
+            <a href="index.php?page=module&id=<?= urlencode((string)($_GET['id'] ?? 'module_01_introduction_postgresql_18')) ?>&mode=slides&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= ($page === 'module' && ($_GET['mode'] ?? '') === 'slides') ? 'active' : '' ?>">
+                <span>🖥️ Mode Diaporama 16:9</span>
+                <span class="nav-badge">Slides</span>
             </a>
             <a href="index.php?page=catalog&tab=labs&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= ($page === 'lab' || ($page === 'catalog' && ($_GET['tab'] ?? '') === 'labs')) ? 'active' : '' ?>">
                 <span>🧪 Ateliers & Labs Docker</span>
-                <span class="nav-badge"><?= $doneLabs ?>/<?= $totalLabs ?></span>
+                <span class="nav-badge tabular-nums"><?= $doneLabs ?>/<?= $totalLabs ?></span>
             </a>
             <a href="index.php?page=documents&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'documents' ? 'active' : '' ?>">
                 <span>📥 Centre de Téléchargement</span>
-                <span class="nav-badge">Tous formats</span>
+                <span class="nav-badge">6 formats</span>
             </a>
             <a href="index.php?page=certificate&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'certificate' ? 'active' : '' ?>">
                 <span>🎓 Certificat Qualiopi</span>
                 <span class="nav-badge">Bloom</span>
             </a>
 
-            <div class="nav-section-title" style="margin-top: 1rem;">Parcours Pédagogiques</div>
-            <?php foreach (($currentCourse['tracks'] ?? []) as $tKey => $track): ?>
-                <a href="index.php?page=catalog&track=<?= urlencode((string)$tKey) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item" style="font-size: 0.82rem;">
-                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">• <?= Security::e($track['title']) ?></span>
+            <div class="nav-section-title" style="margin-top: 1rem;">Les 4 Parcours Pédagogiques</div>
+            <?php foreach (($currentCourse['tracks'] ?? []) as $tKey => $track):
+                $tMods = $track['module_Filter'] ?? [];
+                $isTrackActive = ($activeSidebarTrack === (string)$tKey);
+            ?>
+                <a href="index.php?page=catalog&track=<?= urlencode((string)$tKey) ?>&course=<?= urlencode($currentCourseSlug) ?>"
+                   class="nav-item nav-track-item <?= $isTrackActive ? 'active' : '' ?>"
+                   title="<?= Security::e($track['title']) ?>">
+                    <span class="nav-track-label">
+                        <span class="track-dot" style="background: <?= Security::e($track['color'] ?? '#00B0F0') ?>;"></span>
+                        <span class="nav-track-text"><?= Security::e($track['short_title'] ?? $track['title']) ?></span>
+                    </span>
+                    <span class="nav-badge tabular-nums"><?= count($tMods) ?></span>
                 </a>
             <?php endforeach; ?>
 
@@ -139,10 +167,13 @@ function renderDownloadStrip(string $courseSlug, string $itemType, string $itemI
             </div>
 
             <div class="topbar-actions">
-                <!-- Statut du Conteneur Docker Personnel -->
-                <a href="index.php?page=dashboard&course=<?= urlencode($currentCourseSlug) ?>#docker-panel" class="docker-pill" title="État de votre conteneur PostgreSQL 18 dédié">
-                    <span class="status-dot <?= !empty($dockerStatus['running']) ? 'online' : 'offline' ?>"></span>
-                    <span class="tabular-nums">
+                <!-- Statut du Conteneur Docker Personnel (rafraîchi en asynchrone sans bloquer la navigation) -->
+                <a href="index.php?page=dashboard&course=<?= urlencode($currentCourseSlug) ?>#docker-panel"
+                   id="topbar-docker-pill"
+                   class="docker-pill"
+                   title="État de votre conteneur PostgreSQL 18 dédié">
+                    <span id="topbar-docker-dot" class="status-dot <?= !empty($dockerStatus['running']) ? 'online' : 'offline' ?>"></span>
+                    <span id="topbar-docker-text" class="tabular-nums">
                         🐳 <?= Security::e($dockerStatus['container_name']) ?>
                         (Port <?= (int)$dockerStatus['port'] ?> : <?= !empty($dockerStatus['running']) ? 'ACTIF' : 'PRÊT' ?>)
                     </span>
@@ -183,6 +214,22 @@ function renderDownloadStrip(string $courseSlug, string $itemType, string $itemI
         </main>
     </div>
 </div>
+
+<!-- Lightbox Plein Écran pour Schémas Mermaid & Infographies Studio -->
+<div id="diagram-lightbox" class="diagram-lightbox" hidden>
+    <div class="diagram-lightbox-backdrop"></div>
+    <div class="diagram-lightbox-content">
+        <div class="diagram-lightbox-toolbar">
+            <span id="diagram-lightbox-caption" class="diagram-lightbox-title">Schéma d'Architecture PostgreSQL 18</span>
+            <button type="button" id="btn-close-lightbox" class="btn btn-sm btn-danger">✕ Fermer (Échap)</button>
+        </div>
+        <div class="diagram-lightbox-body">
+            <img id="diagram-lightbox-img" src="" alt="Schéma agrandi"/>
+        </div>
+    </div>
+</div>
+
+<script src="assets/js/mermaid.min.js"></script>
 <script src="assets/js/app.js"></script>
 </body>
 </html>

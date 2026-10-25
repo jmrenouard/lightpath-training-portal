@@ -187,6 +187,13 @@ if (str_starts_with($action, 'api_')) {
             echo json_encode(['success' => true, 'saved_at' => date('H:i:s')]);
             exit;
 
+        case 'api_docker_status':
+            echo json_encode([
+                'success' => true,
+                'status' => $docker->getUserContainerStatus($userId),
+            ]);
+            exit;
+
         case 'api_docker_action':
             $cmdAction = (string)($payload['docker_cmd'] ?? 'status');
             $targetUserId = isset($payload['target_user_id']) && $auth->isStaff($currentUser)
@@ -350,7 +357,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // 5. PRÉPARATION DU CONTEXTE GLOBAL & AFFICHAGE DES PAGES
 // ============================================================================
 $userProgress = $storage->getUserProgress($userId, $currentCourseSlug);
-$dockerStatus = $docker->getUserContainerStatus($userId);
+$dockerStatus = ($page === 'docker')
+    ? $docker->getUserContainerStatus($userId)
+    : $docker->getCachedUserContainerStatus($userId);
 $allCourses = $courseRepo->getAllCourses();
 
 $totalModules = count($currentCourse['modules'] ?? []);

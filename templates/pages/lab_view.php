@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 use LightPath\LMS\Core\Security;
+use LightPath\LMS\Course\CourseRepository;
 
 $labId = (string)($_GET['id'] ?? 'lab_01_introduction_setup_postgresql_18');
 $lab = $courseRepo->getLab($currentCourseSlug, $labId);
@@ -20,35 +21,59 @@ $isLabDone = in_array($labId, $userProgress['completed_labs'] ?? [], true);
 $savedNote = (string)($userProgress['notes'][$labId] ?? '');
 $defaultSql = $parsed['sql_snippets'][0]['sql'] ?? "SELECT version(), current_setting('server_version_num'), current_setting('data_checksums');";
 
+// Calculer les ateliers du même parcours pour le Stepper de Position
+$trackId = (string)($lab['track_id'] ?? 'cursus-complet');
+$trackLabs = [];
+foreach (($currentCourse['labs'] ?? []) as $lKey => $lItem) {
+    if (($lItem['track_id'] ?? '') === $trackId) {
+        $trackLabs[$lKey] = $lItem;
+    }
+}
+$trackDoneCount = 0;
+foreach ($trackLabs as $tlKey => $tlItem) {
+    if (in_array($tlKey, $userProgress['completed_labs'] ?? [], true)) {
+        $trackDoneCount++;
+    }
+}
+$trackProgressPct = count($trackLabs) > 0 ? (int)round(($trackDoneCount / count($trackLabs)) * 100) : 0;
+
 $labKeys = array_keys($currentCourse['labs'] ?? []);
 $curIndex = array_search($labId, $labKeys, true);
 $prevLabId = ($curIndex !== false && $curIndex > 0) ? $labKeys[$curIndex - 1] : null;
 $nextLabId = ($curIndex !== false && $curIndex < count($labKeys) - 1) ? $labKeys[$curIndex + 1] : null;
 ?>
 
-<!-- EN-TÊTE DE L'ATELIER PRATIQUE & BARRE DE TÉLÉCHARGEMENT -->
-<div class="hero-banner" style="padding: 1.5rem 2rem;">
-    <div style="flex: 1;">
-        <div style="display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
-            <a href="index.php?page=catalog&tab=labs&course=<?= urlencode($currentCourseSlug) ?>" class="badge-code">← Tous les Ateliers</a>
+<!-- EN-TÊTE DE L'ATELIER PRATIQUE, POSITION DANS LE PARCOURS & BARRE DE TÉLÉCHARGEMENT -->
+<div class="hero-banner" style="padding: 1.4rem 1.85rem;">
+    <div style="flex: 1; min-width: 0;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
+            <a href="index.php?page=catalog&tab=labs&track=<?= urlencode($trackId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="badge-code">
+                ← <?= Security::e($lab['track_number'] ?? 'Parcours') ?> (Labs)
+            </a>
             <span class="badge-code" style="background: rgba(16, 185, 129, 0.16); color: #34D399; border-color: rgba(16, 185, 129, 0.35);">
                 <?= Security::e($lab['badge_code']) ?>
+            </span>
+            <span class="badge-phase">
+                <?= Security::e($lab['phase_code'] ?? 'ATELIER') ?> • 📍 Étape <?= (int)($lab['track_position'] ?? 1) ?> sur <?= (int)($lab['track_total'] ?? 20) ?> du <?= Security::e($lab['track_number'] ?? 'Parcours') ?>
             </span>
             <span style="font-size: 0.8rem; color: var(--text-secondary);">⏱ <?= Security::e($lab['duration']) ?></span>
             <?php if (!empty($lab['linked_module_id'])): ?>
                 <a href="index.php?page=module&id=<?= urlencode((string)$lab['linked_module_id']) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="badge-code">
-                    📖 Voir le Module de Cours Associé
+                    📖 Voir le Cours
+                </a>
+                <a href="index.php?page=module&id=<?= urlencode((string)$lab['linked_module_id']) ?>&mode=slides&course=<?= urlencode($currentCourseSlug) ?>" class="badge-code">
+                    🖥️ Voir les Slides 16:9
                 </a>
             <?php endif; ?>
         </div>
 
-        <h1 style="font-size: 1.55rem; margin-bottom: 0.35rem;"><?= Security::e($lab['title']) ?></h1>
-        <p style="color: var(--text-secondary); margin: 0 0 0.75rem; font-size: 0.88rem;">
+        <h1 style="font-size: 1.5rem; margin-bottom: 0.35rem;"><?= Security::e($lab['title']) ?></h1>
+        <p style="color: var(--text-secondary); margin: 0 0 0.75rem; font-size: 0.87rem;">
             <strong>Compétence Visée (Norme 7 Piliers Qualiopi) :</strong> <?= Security::e($lab['bloom']) ?>
         </p>
 
         <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-            <span style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted);">📥 Télécharger l'énoncé :</span>
+            <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted);">📥 Télécharger l'énoncé :</span>
             <?= renderDownloadStrip($currentCourseSlug, 'lab', $labId, $lab['downloads'] ?? []) ?>
         </div>
     </div>
@@ -77,12 +102,12 @@ $nextLabId = ($curIndex !== false && $curIndex < count($labKeys) - 1) ? $labKeys
 <!-- STUDIO DOCKER INTERACTIF & CONSOLE SQL LIVE -->
 <section class="docker-cockpit">
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
-        <div>
+        <div style="min-width: 0; flex: 1;">
             <span class="badge-code">🐳 BAC À SABLE DOCKER DÉDIÉ À VOTRE SESSION</span>
-            <h3 style="margin: 0.35rem 0 0.15rem; font-size: 1.1rem;">
+            <h3 style="margin: 0.35rem 0 0.15rem; font-size: 1.08rem;">
                 Conteneur : <code><?= Security::e($dockerStatus['container_name']) ?></code> •
                 Port : <code class="tabular-nums"><?= (int)$dockerStatus['port'] ?></code> •
-                Statut : <strong style="color: <?= !empty($dockerStatus['running']) ? '#34D399' : '#FBBF24' ?>;">
+                Statut : <strong id="lab-docker-status-text" style="color: <?= !empty($dockerStatus['running']) ? '#34D399' : '#FBBF24' ?>;">
                     <?= !empty($dockerStatus['running']) ? 'EN LIGNE (RUNNING)' : 'PRÊT AU DÉMARRAGE' ?>
                 </strong>
             </h3>
@@ -98,11 +123,9 @@ $nextLabId = ($curIndex !== false && $curIndex < count($labKeys) - 1) ? $labKeys
             <button type="button" class="btn btn-outline btn-sm btn-docker-cmd" data-cmd="reset">
                 🔄 Réinitialiser la Base
             </button>
-            <?php if (!empty($dockerStatus['running'])): ?>
-                <button type="button" class="btn btn-danger btn-sm btn-docker-cmd" data-cmd="stop">
-                    ⏹ Stop
-                </button>
-            <?php endif; ?>
+            <button type="button" class="btn btn-danger btn-sm btn-docker-cmd" data-cmd="stop">
+                ⏹ Stop
+            </button>
         </div>
     </div>
 
@@ -126,26 +149,76 @@ $nextLabId = ($curIndex !== false && $curIndex < count($labKeys) - 1) ? $labKeys
     </div>
 </section>
 
-<!-- ÉNONCÉ COMPLET DES 7 PILIERS QUALIOPI & SOMMAIRE -->
+<!-- ÉNONCÉ COMPLET DES 7 PILIERS QUALIOPI & SOMMAIRE SCROLLSPY -->
 <div class="reader-grid">
-    <article class="reader-article">
-        <?= $parsed['html'] ?>
-    </article>
+    <div class="reader-main-col">
+        <article id="reader-article-content" class="reader-article markdown-body">
+            <?= $parsed['html'] ?>
+        </article>
+    </div>
 
     <aside class="reader-sidebar">
+        <!-- 1. SOMMAIRE DES ÉTAPES DE L'ATELIER (SCROLLSPY EN DIRECT) -->
         <div class="toc-box">
-            <div style="font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light); margin-bottom: 0.65rem;">
-                🧪 Étapes de l'Atelier
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem;">
+                <span style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light);">
+                    🧪 Étapes & Position
+                </span>
+                <span id="toc-read-pct" class="badge-code tabular-nums">0% lu</span>
             </div>
-            <?php foreach ($parsed['toc'] as $tocItem): ?>
-                <a href="#<?= Security::e($tocItem['id']) ?>" class="toc-link toc-level-<?= (int)$tocItem['level'] ?>">
-                    <?= Security::e($tocItem['title']) ?>
-                </a>
-            <?php endforeach; ?>
+            <div class="progress-bar-track" style="height: 5px; margin-bottom: 0.75rem;">
+                <div id="toc-read-bar" class="progress-bar-fill" style="width: 0%;"></div>
+            </div>
+
+            <nav id="toc-scrollspy-nav" class="toc-scrollspy-nav">
+                <?php foreach ($parsed['toc'] as $tIdx => $tocItem): ?>
+                    <a href="#<?= Security::e($tocItem['id']) ?>"
+                       class="toc-link toc-level-<?= (int)$tocItem['level'] ?> <?= $tIdx === 0 ? 'active' : '' ?>"
+                       data-scrollspy-target="<?= Security::e($tocItem['id']) ?>">
+                        <?= Security::e($tocItem['title']) ?>
+                    </a>
+                <?php endforeach; ?>
+            </nav>
         </div>
 
+        <!-- 2. STEPPER DE POSITION DANS LES ATELIERS DU PARCOURS -->
         <div class="toc-box">
-            <div style="font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light); margin-bottom: 0.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                <span style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light);">
+                    📍 Ateliers du Parcours
+                </span>
+                <span class="badge-code tabular-nums">
+                    Lab <?= (int)($lab['track_position'] ?? 1) ?> / <?= (int)($lab['track_total'] ?? count($trackLabs)) ?>
+                </span>
+            </div>
+            <div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.45rem;">
+                <?= Security::e($lab['track_short_title'] ?? $lab['track_title'] ?? '') ?>
+            </div>
+            <div class="progress-bar-track" style="height: 5px; margin-bottom: 0.75rem;">
+                <div class="progress-bar-fill" style="width: <?= $trackProgressPct ?>%;"></div>
+            </div>
+
+            <div class="curriculum-stepper-list">
+                <?php foreach ($trackLabs as $tlKey => $tlItem):
+                    $tlCurrent = ($tlKey === $labId);
+                    $tlDone = in_array($tlKey, $userProgress['completed_labs'] ?? [], true);
+                ?>
+                    <a href="index.php?page=lab&id=<?= urlencode($tlKey) ?>&course=<?= urlencode($currentCourseSlug) ?>"
+                       class="stepper-item <?= $tlCurrent ? 'is-current' : '' ?> <?= $tlDone ? 'is-done' : '' ?>">
+                        <span class="stepper-indicator tabular-nums">
+                            <?= $tlDone ? '✔' : (int)($tlItem['track_position'] ?? 1) ?>
+                        </span>
+                        <span class="stepper-label">
+                            <strong><?= Security::e($tlItem['badge_code']) ?></strong> — <?= Security::e(CourseRepository::truncateUtf8($tlItem['title'], 40)) ?>
+                        </span>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <!-- 3. BLOC-NOTES D'ATELIER -->
+        <div class="toc-box">
+            <div style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light); margin-bottom: 0.5rem;">
                 📝 Notes d'Atelier / REX
             </div>
             <textarea id="user-personal-note" class="form-control" rows="5" placeholder="Consignez vos observations EXPLAIN, métriques TPS ou commandes..."><?= Security::e($savedNote) ?></textarea>

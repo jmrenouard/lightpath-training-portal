@@ -113,6 +113,9 @@ class DownloadController
         header('Content-Disposition: ' . $disp . '; filename="' . addslashes($fileInfo['filename']) . '"');
         header('Content-Length: ' . $fileInfo['size']);
         header('X-Content-Type-Options: nosniff');
+        if ($disp === 'inline') {
+            header('Cache-Control: private, max-age=3600');
+        }
         readfile($fileInfo['path']);
         exit;
     }

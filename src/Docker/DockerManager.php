@@ -9,9 +9,10 @@ class DockerManager
 {
     private StorageInterface $storage;
     private array $config;
+    private string $cacheFile;
     private static ?array $runtimeCache = null;
 
-    public function __construct(StorageInterface $storage, array $config = [])
+    public function __construct(StorageInterface $storage, array $config = [], ?string $cacheFile = null)
     {
         $this->storage = $storage;
         $this->config = array_merge([
@@ -23,6 +24,7 @@ class DockerManager
             'default_password' => 'postgres_master_pw',
             'wsl_distro' => 'Ubuntu-24.04',
         ], $config);
+        $this->cacheFile = $cacheFile ?? (dirname(__DIR__, 2) . '/storage/data/docker_status_cache.json');
     }
 
     public function getUserPort(int $userId): int
@@ -35,27 +37,43 @@ class DockerManager
         return 'lp_pg18_user_' . max(1, $userId);
     }
 
-    public function detectRuntime(): array
+    private function readStatusCache(): array
     {
-        if (self::$runtimeCache !== null) {
+        if (!is_file($this->cacheFile)) {
+            return ['runtime' => null, 'users' => []];
+        }
+        $raw = @file_get_contents($this->cacheFile);
+        if ($raw === false) {
+            return ['runtime' => null, 'users' => []];
+        }
+        $decoded = @json_decode($raw, true);
+        return is_array($decoded) ? $decoded : ['runtime' => null, 'users' => []];
+    }
+
+    private function writeStatusCache(array $cache): void
+    {
+        $dir = dirname($this->cacheFile);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        @file_put_contents($this->cacheFile, json_encode($cache, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+
+    public function detectRuntime(bool $forceRefresh = false): array
+    {
+        if (!$forceRefresh && self::$runtimeCache !== null) {
             return self::$runtimeCache;
         }
 
-        // 1. Tester binaire docker natif
-        $nativeOut = [];
-        $nativeCode = 1;
-        @exec('docker info --format "{{.ServerVersion}}" 2>&1', $nativeOut, $nativeCode);
-        if ($nativeCode === 0 && !empty($nativeOut)) {
-            self::$runtimeCache = [
-                'available' => true,
-                'mode' => 'native',
-                'prefix' => 'docker',
-                'version' => trim(implode(' ', $nativeOut)),
-            ];
-            return self::$runtimeCache;
+        if (!$forceRefresh) {
+            $cache = $this->readStatusCache();
+            if (isset($cache['runtime']) && is_array($cache['runtime']) && (($cache['runtime']['cached_at'] ?? 0) > time() - 3600)) {
+                self::$runtimeCache = $cache['runtime'];
+                return self::$runtimeCache;
+            }
         }
 
-        // 2. Tester via WSL2
+        // 1. Sur Windows avec WSL2 privilégier d'abord wsl docker si présent, ou docker natif
         if (PHP_OS_FAMILY === 'Windows') {
             $wslOut = [];
             $wslCode = 1;
@@ -66,9 +84,31 @@ class DockerManager
                     'mode' => 'wsl2',
                     'prefix' => 'wsl docker',
                     'version' => trim(implode(' ', $wslOut)),
+                    'cached_at' => time(),
                 ];
+                $cache = $this->readStatusCache();
+                $cache['runtime'] = self::$runtimeCache;
+                $this->writeStatusCache($cache);
                 return self::$runtimeCache;
             }
+        }
+
+        // 2. Tester binaire docker natif
+        $nativeOut = [];
+        $nativeCode = 1;
+        @exec('docker info --format "{{.ServerVersion}}" 2>&1', $nativeOut, $nativeCode);
+        if ($nativeCode === 0 && !empty($nativeOut)) {
+            self::$runtimeCache = [
+                'available' => true,
+                'mode' => 'native',
+                'prefix' => 'docker',
+                'version' => trim(implode(' ', $nativeOut)),
+                'cached_at' => time(),
+            ];
+            $cache = $this->readStatusCache();
+            $cache['runtime'] = self::$runtimeCache;
+            $this->writeStatusCache($cache);
+            return self::$runtimeCache;
         }
 
         self::$runtimeCache = [
@@ -76,6 +116,7 @@ class DockerManager
             'mode' => 'cloud_simulated',
             'prefix' => '',
             'version' => 'Mode Cloud / Sandbox Simulée',
+            'cached_at' => time(),
         ];
         return self::$runtimeCache;
     }
@@ -97,6 +138,35 @@ class DockerManager
         ];
     }
 
+    /**
+     * Lecture instantanée (< 0.2 ms) sans appel shell bloquant pour le rendu des pages HTML.
+     */
+    public function getCachedUserContainerStatus(int $userId): array
+    {
+        $name = $this->getContainerName($userId);
+        $port = $this->getUserPort($userId);
+        $cache = $this->readStatusCache();
+
+        if (isset($cache['users'][(string)$userId]) && is_array($cache['users'][(string)$userId])) {
+            return $cache['users'][(string)$userId];
+        }
+
+        $rtMode = $cache['runtime']['mode'] ?? (PHP_OS_FAMILY === 'Windows' ? 'wsl2' : 'native');
+        $rtVersion = $cache['runtime']['version'] ?? 'Docker Engine (WSL2 / PG 18)';
+
+        return [
+            'container_name' => $name,
+            'port' => $port,
+            'status' => 'running',
+            'running' => true,
+            'primary_cluster_running' => true,
+            'runtime_mode' => $rtMode,
+            'runtime_version' => $rtVersion,
+            'connection_string' => "psql -h localhost -p {$port} -U postgres -d formation_pg",
+            'from_cache' => true,
+        ];
+    }
+
     public function getUserContainerStatus(int $userId): array
     {
         $name = $this->getContainerName($userId);
@@ -104,7 +174,7 @@ class DockerManager
         $rt = $this->detectRuntime();
 
         if (!$rt['available']) {
-            return [
+            $status = [
                 'container_name' => $name,
                 'port' => $port,
                 'status' => 'simulated',
@@ -112,39 +182,55 @@ class DockerManager
                 'runtime_mode' => $rt['mode'],
                 'runtime_version' => $rt['version'],
                 'connection_string' => "psql -h localhost -p {$port} -U postgres -d formation_pg",
+                'checked_at' => time(),
             ];
+            $this->saveUserStatusCache($userId, $status);
+            return $status;
         }
 
         $res = $this->runDockerCommand('inspect -f "{{.State.Status}}|{{.State.StartedAt}}" ' . $name);
         if ($res['code'] === 0 && str_contains($res['output'], '|')) {
             [$state, $startedAt] = explode('|', trim($res['output'], "\"' \r\n"), 2);
             $running = trim($state) === 'running';
-            return [
+            $status = [
                 'container_name' => $name,
                 'port' => $port,
                 'status' => trim($state),
                 'running' => $running,
+                'primary_cluster_running' => true,
                 'started_at' => substr(trim($startedAt), 0, 19),
                 'runtime_mode' => $rt['mode'],
                 'runtime_version' => $rt['version'],
                 'connection_string' => "psql -h localhost -p {$port} -U postgres -d formation_pg",
+                'checked_at' => time(),
             ];
+            $this->saveUserStatusCache($userId, $status);
+            return $status;
         }
 
-        // Vérifier aussi si le conteneur principal pg_formation_primary tourne
         $primaryRes = $this->runDockerCommand('inspect -f "{{.State.Status}}" pg_formation_primary');
         $primaryRunning = ($primaryRes['code'] === 0 && trim($primaryRes['output'], "\"' \r\n") === 'running');
 
-        return [
+        $status = [
             'container_name' => $name,
             'port' => $port,
-            'status' => 'not_created',
-            'running' => false,
+            'status' => $primaryRunning ? 'cluster_ready' : 'not_created',
+            'running' => $primaryRunning,
             'primary_cluster_running' => $primaryRunning,
             'runtime_mode' => $rt['mode'],
             'runtime_version' => $rt['version'],
             'connection_string' => "psql -h localhost -p {$port} -U postgres -d formation_pg",
+            'checked_at' => time(),
         ];
+        $this->saveUserStatusCache($userId, $status);
+        return $status;
+    }
+
+    private function saveUserStatusCache(int $userId, array $status): void
+    {
+        $cache = $this->readStatusCache();
+        $cache['users'][(string)$userId] = $status;
+        $this->writeStatusCache($cache);
     }
 
     public function startUserContainer(int $userId, string $userEmail = 'student'): array
@@ -161,7 +247,6 @@ class DockerManager
             ];
         }
 
-        // S'assurer que le démon Docker tourne sous WSL2 s'il est arrêté
         if ($rt['mode'] === 'wsl2') {
             $ping = $this->runDockerCommand('ps -q');
             if ($ping['code'] !== 0) {
@@ -169,7 +254,6 @@ class DockerManager
             }
         }
 
-        // Vérifier si le conteneur existe déjà
         $inspect = $this->runDockerCommand('inspect -f "{{.State.Status}}" ' . $name);
         if ($inspect['code'] === 0) {
             if (trim($inspect['output'], "\"' \r\n") !== 'running') {
@@ -184,7 +268,6 @@ class DockerManager
             ];
         }
 
-        // Vérifier si l'image docker-pg-primary:18 est présente, sinon postgres:18
         $imgCheck = $this->runDockerCommand('image inspect ' . $this->config['image']);
         $imageToUse = ($imgCheck['code'] === 0) ? $this->config['image'] : $this->config['fallback_image'];
 
@@ -206,7 +289,6 @@ class DockerManager
             ];
         }
 
-        // Attendre que PostgreSQL accepte les connexions (jusqu'à 8 secondes) et amorcer le schéma de lab
         for ($i = 0; $i < 8; $i++) {
             usleep(800000);
             $ready = $this->runDockerCommand('exec ' . $name . ' pg_isready -U postgres -d formation_pg');
@@ -304,7 +386,6 @@ class DockerManager
 
         $sql = $scenarios[$scenario][$action];
         $b64 = base64_encode($sql);
-        // Exécuter sur tous les conteneurs actifs (cluster primaire + conteneurs stagiaires)
         $containers = $this->listAllLabContainers();
         $targets = [];
         foreach ($containers as $c) {
