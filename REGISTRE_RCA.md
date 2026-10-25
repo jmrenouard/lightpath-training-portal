@@ -2,7 +2,7 @@
 
 > **Organisation :** LightPath SARL (`https://www.lightpath.fr`)  
 > **Auteur :** Jean-Marie Renouard (Expert Bases de Données & DataOps, Co-développeur de MySQLTuner)  
-> **Synchronisation Référentiel :** `training_postgresql/REGISTRE_RCA.md` (**RCA-144**)
+> **Synchronisation Référentiel :** `training_postgresql/REGISTRE_RCA.md` (**RCA-144 & RCA-145**)
 
 ---
 
@@ -15,6 +15,11 @@
 | **RCA-LMS-03** | `RCA-144.C` | Optimisation Critique des Temps de Réponse HTTP (`< 15 ms`) : Cache Catalogue JSON & Décorrélation Asynchrone `wsl docker inspect` | `src/Course/CourseRepository.php`, `src/Docker/DockerManager.php`, `public/index.php`, `public/assets/js/app.js` | CRITIQUE | ✅ Implémenté | `test_performance_cache` pass (`< 15 ms` par requête) |
 | **RCA-LMS-04** | `RCA-144.D` | Structuration Visuelle des 4 Parcours Pédagogiques, Couplage `Module ↔ Lab`, ScrollSpy Temps Réel du Sommaire & Stepper de Position | `config/courses.php`, `templates/pages/dashboard.php`, `catalog.php`, `module_view.php`, `lab_view.php`, `public/assets/js/app.js` | HAUTE | ✅ Implémenté | `test_tracks_and_scrollspy` pass |
 | **RCA-LMS-05** | `RCA-144.E` | Mode Diaporama Interactif 16:9 (`Slide Deck Player` HTML5 + Visionneuse PowerPoint `_slides.pdf` Intégrée) | `src/Course/MarkdownParser.php`, `templates/pages/module_view.php`, `public/assets/css/app.css`, `public/assets/js/app.js` | CRITIQUE | ✅ Implémenté | `test_slide_deck_extraction` pass ($\ge 15$ slides/module) |
+| **RCA-LMS-06** | `RCA-145.A` | Logos Dark/Light 100 % Transparents (`lightpath_logo_white_text.png` sans rectangle blanc & `postgresql_elephant.png` à texte clair sur fond sombre) | `public/assets/img/lightpath_logo_white_text.png`, `public/assets/img/postgresql_elephant.png`, `templates/layout.php`, `public/assets/css/app.css` | CRITIQUE | ✅ Implémenté | `alpha == 0` vérifié aux 4 coins & contraste texte clair certifié |
+| **RCA-LMS-07** | `RCA-145.B` | Éradication de 100 % des Erreurs `404 Not Found` Console (`assets/logos`, `assets/images`, `favicon.ico`, `.well-known`) & des Violations `unload` | `public/assets/{logos,images,mermaid_cache,vendor}`, `src/Course/DownloadController.php`, `public/favicon.ico` | CRITIQUE | ✅ Implémenté | 0 erreur 404 sur tous les modes (`reader`, `slides`, `html_preview`) |
+| **RCA-LMS-08** | `RCA-145.C` | Alignement Exact du Mode Diaporama 16:9 sur les **58 Slides** du Module 01 (et les **1 686 Slides** des 34 Modules Officiels `.pptx` / `_slides.pdf`) | `public/assets/slides_cache/*`, `src/Course/MarkdownParser.php`, `templates/pages/module_view.php` | CRITIQUE | ✅ Implémenté | 58/58 slides Module 01 & 1 686 slides Studio 16:9 vérifiées |
+| **RCA-LMS-09** | `RCA-145.D` | Accélération de l'Affichage Navigateur : Suppression du Chargement Synchrone de `mermaid.min.js` (3,33 Mo), `session_write_close()` & Images Statiques Directes | `templates/layout.php`, `public/index.php`, `public/assets/js/app.js`, `src/Course/MarkdownParser.php` | CRITIQUE | ✅ Implémenté | 0 blocage JS/Session, affichage instantané des pages |
+| **RCA-LMS-10** | `RCA-145.E` | Accordéon de Navigation Directe des 34 Modules dans la Barre Latérale Gauche & Refonte Ergonomique Épurée de la Vue Module | `templates/layout.php`, `templates/pages/module_view.php`, `public/assets/css/app.css`, `public/assets/js/app.js` | HAUTE | ✅ Implémenté | Navigation 1-clic vers les 34 modules depuis la sidebar gauche |
 
 ---
 
@@ -112,3 +117,101 @@ Contexte : dépôt lightpath-training-portal. Lis RCA-LMS-05 dans REGISTRE_RCA.m
 Tâche : Vérifier que MarkdownParser::extractSlides() génère au moins 15 diapositives 16:9 structurées par module et que templates/pages/module_view.php permet de suivre le cours en Mode Diaporama Interactif 16:9 ainsi qu'en mode PDF Slides officiel. Valide avec php tests/run_tests.php.
 ```
 * **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-25
+
+---
+
+## 6. RCA-LMS-06 (`RCA-145.A`) — Logos Dark/Light 100 % Transparents (`lightpath_logo_white_text.png` & `postgresql_elephant.png`)
+
+* **Date de détection :** 2026-10-25
+* **Composant Affecté :** `public/assets/img/lightpath_logo_white_text.png`, `public/assets/img/postgresql_elephant.png`, `templates/layout.php`, `public/assets/css/app.css`
+* **1. Mécanisme :**
+  `lightpath_logo_white_text.png` avait un fond blanc rectangulaire opaque (`alpha = 255`) avec un texte foncé, et `postgresql_elephant.png` avait le texte `"Postgre"` et le contour extérieur de Slonik en noir (`#000000`) sur fond transparent, ce qui le rendait invisible sur le thème sombre `#0B1120`.
+* **2. Hypothèse :**
+  Générer par traitement RGBA (`Pillow`/`NumPy`) un vrai `lightpath_logo_white_text.png` à fond 100 % transparent (`alpha = 0`) et texte `"LightPath"` blanc pur `#F8FAFC`, ainsi qu'un `postgresql_elephant.png` adapté au thème sombre (contour blanc net, `"Postgre"` en `#F8FAFC` et `"SQL"` en `#38BDF8`), avec commutation automatique vers les variantes claires (`lightpath_logo_dark_text.png` / `postgresql_elephant_light.png`) en thème clair.
+* **3. Contre-mesure :**
+  Régénération RGBA sans fond blanc des logos dans `public/assets/img/` et `training_postgresql/assets/logos/`, et bascule automatique Dark/Light dans `templates/layout.php` et `public/assets/css/app.css`.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal. Lis RCA-LMS-06 dans REGISTRE_RCA.md.
+Tâche : Vérifier que public/assets/img/lightpath_logo_white_text.png et postgresql_elephant.png ont alpha=0 aux 4 coins et un texte clair lisible sur fond sombre. Valide avec php tests/run_tests.php.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-25
+
+---
+
+## 7. RCA-LMS-07 (`RCA-145.B`) — Éradication des Erreurs `404 Not Found` Console & Violations `unload`
+
+* **Date de détection :** 2026-10-25
+* **Composant Affecté :** `public/assets/`, `src/Course/DownloadController.php`, `public/favicon.ico`, `public/.well-known/appspecific/com.chrome.devtools.json`
+* **1. Mécanisme :**
+  En mode `Rendu Web Studio` (`mode=html_preview`), les chemins relatifs `../assets/logos/...` et `../assets/images/...` des fichiers `.html` étaient résolus vers `/assets/logos/...` et `/assets/images/...` absents de `public/assets/`. En outre, `/favicon.ico` et `/.well-known/appspecific/com.chrome.devtools.json` renvoyaient 404, et l'iframe PDF cachée provoquait des avertissements `Permissions policy violation: unload`.
+* **2. Hypothèse :**
+  Exposer `logos/`, `images/`, `mermaid_cache/` et `vendor/` sous `public/assets/`, créer `public/favicon.ico` et `public/.well-known/appspecific/com.chrome.devtools.json`, réécrire les chemins relatifs dans `DownloadController::streamFile()` pour les rendus HTML inline, et ne charger les iframes PDF qu'au clic explicite (`data-src`).
+* **3. Contre-mesure :**
+  Création des jonctions/fichiers statiques sous `public/`, réécriture dynamique dans `DownloadController::streamFile()` et suppression du préchargement d'iframe PDF.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal. Lis RCA-LMS-07 dans REGISTRE_RCA.md.
+Tâche : Vérifier que /assets/logos/postgresql_elephant.png, /assets/logos/lightpath_logo_dark_text.png, /assets/images/modules/img_mod_01_aio_subsystem.png et /favicon.ico existent sous public/ et que DownloadController réécrit les chemins relatifs HTML. Valide avec php tests/run_tests.php.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-25
+
+---
+
+## 8. RCA-LMS-08 (`RCA-145.C`) — Alignement Exact du Mode Diaporama 16:9 sur les 58 Slides du Module 01 (et les 1 686 Slides des 34 Modules)
+
+* **Date de détection :** 2026-10-25
+* **Composant Affecté :** `public/assets/slides_cache/`, `src/Course/MarkdownParser.php`, `templates/pages/module_view.php`
+* **1. Mécanisme :**
+  Le découpeur heuristique PHP produisait 27 slides pour le Module 01 alors que le support de présentation officiel (`module_01_introduction_postgresql_18.pptx` / `_slides.pdf`) comporte **58 diapositives Studio 16:9** (et **1 686 diapositives** sur l'ensemble des 34 modules).
+* **2. Hypothèse :**
+  Exporter les **1 686 diapositives Studio 16:9** des 34 modules (`58 slides` pour le Module 01) depuis `*_slides.pdf` et `*.pptx` dans `public/assets/slides_cache/<module_id>/` (`slide_001.png`..`slide_NNN.png` + `manifest.json` avec titres exacts, chapitres et notes présentateur) et alimenter le lecteur 16:9 directement avec ces diapositives officielles.
+* **3. Contre-mesure :**
+  Génération des 34 manifestes et des 1 686 diapositives 16:9 dans `public/assets/slides_cache/`, lecture prioritaire dans `MarkdownParser::extractSlides()` et affichage haute fidélité dans `module_view.php`.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal. Lis RCA-LMS-08 dans REGISTRE_RCA.md.
+Tâche : Vérifier que le Module 01 expose exactement 58 slides dans extractSlides() et que chacun des 34 modules possède son manifest.json aligné sur son support _slides.pdf. Valide avec php tests/run_tests.php.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-25
+
+---
+
+## 9. RCA-LMS-09 (`RCA-145.D`) — Accélération de l'Affichage Navigateur (Zéro Blocage `mermaid.min.js` 3,33 Mo, `session_write_close()` & Images Statiques Directes)
+
+* **Date de détection :** 2026-10-25
+* **Composant Affecté :** `templates/layout.php`, `public/index.php`, `public/assets/js/app.js`, `src/Course/MarkdownParser.php`
+* **1. Mécanisme :**
+  1) `mermaid.min.js` (3,33 Mo) était chargé sur toutes les pages alors que tous les diagrammes sont déjà pré-rendus en PNG.
+  2) `app.js` appelait `POST /index.php?action=api_docker_status` à chaque page, bloquant le verrou de session PHP et le serveur mono-processus `php -S` pendant l'exécution de `wsl docker inspect`.
+  3) Les images de cours passaient par `index.php?action=course_asset`.
+* **2. Hypothèse :**
+  Ne charger `mermaid.min.js` qu'à la demande s'il existe un bloc `.mermaid` non pré-rendu, libérer immédiatement le verrou de session via `session_write_close()` dans `public/index.php`, supprimer l'appel automatique `api_docker_status` au chargement de page, et servir toutes les images directement via `assets/images/...` et `assets/mermaid_cache/...`.
+* **3. Contre-mesure :**
+  Mise à jour de `templates/layout.php`, `public/index.php`, `public/assets/js/app.js` et `src/Course/MarkdownParser.php`.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal. Lis RCA-LMS-09 dans REGISTRE_RCA.md.
+Tâche : Vérifier l'absence de <script src="assets/js/mermaid.min.js"> statique dans templates/layout.php, la présence de session_write_close() dans public/index.php, et l'utilisation d'URLs statiques directes assets/images/ et assets/mermaid_cache/ dans MarkdownParser.php. Valide avec php tests/run_tests.php.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-25
+
+---
+
+## 10. RCA-LMS-10 (`RCA-145.E`) — Accordéon de Navigation Directe des 34 Modules dans la Barre Latérale Gauche & Ergonomie de la Vue Module
+
+* **Date de détection :** 2026-10-25
+* **Composant Affecté :** `templates/layout.php`, `templates/pages/module_view.php`, `public/assets/css/app.css`, `public/assets/js/app.js`
+* **1. Mécanisme :**
+  La barre verticale gauche ne proposait pas de liens directs vers les 34 modules de formation, obligeant l'apprenant à repasser par le catalogue à chaque changement de module, et l'en-tête de la page Module était visuellement chargé.
+* **2. Hypothèse :**
+  Intégrer dans la barre verticale gauche (`templates/layout.php`) un accordéon par parcours listant tous les modules (`M01`..`M29`, `SQL-01`..`SQL-05`) avec filtre rapide et état de complétion, et clarifier l'agencement de `module_view.php`.
+* **3. Contre-mesure :**
+  Ajout de l'arbre des 34 modules dans la sidebar gauche (`templates/layout.php`), filtre rapide dans `app.js` et refonte de l'en-tête et du sommaire latéral dans `templates/pages/module_view.php`.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal. Lis RCA-LMS-10 dans REGISTRE_RCA.md.
+Tâche : Vérifier que templates/layout.php affiche l'accordéon de navigation des 34 modules dans la barre verticale gauche (.sidebar-module-tree) et que module_view.php propose une navigation claire. Valide avec php tests/run_tests.php.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-25
+

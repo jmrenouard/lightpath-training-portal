@@ -102,6 +102,11 @@ if ($currentUser === null) {
 }
 
 $userId = (int)$currentUser['id'];
+// Initialiser le jeton CSRF en session puis libérer immédiatement le verrou de session sur les requêtes GET/API
+Security::getCsrfToken();
+if ($_SERVER['REQUEST_METHOD'] === 'GET' || str_starts_with($action, 'api_')) {
+    session_write_close();
+}
 
 // ============================================================================
 // 2. ROUTES DE TÉLÉCHARGEMENT DIRECT & ASSETS DE COURS (PDF, PPTX, MD, HTML, DOCX)
@@ -119,7 +124,9 @@ if ($action === 'download') {
         exit;
     }
 
-    $storage->logAuditEvent($currentUser['email'], 'DOWNLOAD', "Téléchargement {$resolved['filename']} ({$format})");
+    if (!$inline) {
+        $storage->logAuditEvent($currentUser['email'], 'DOWNLOAD', "Téléchargement {$resolved['filename']} ({$format})");
+    }
     $downloader->streamFile($resolved, !$inline);
 }
 

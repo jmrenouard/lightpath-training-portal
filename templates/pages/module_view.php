@@ -39,11 +39,14 @@ foreach ($trackModules as $tmKey => $tmItem) {
 }
 $trackProgressPct = count($trackModules) > 0 ? (int)round(($trackDoneCount / count($trackModules)) * 100) : 0;
 
-// Calculer Module Précédent / Suivant
-$modKeys = array_keys($currentCourse['modules'] ?? []);
+// Calculer Module Précédent / Suivant avec leurs badges (ex: M01 / M02)
+$allCourseMods = $currentCourse['modules'] ?? [];
+$modKeys = array_keys($allCourseMods);
 $curIndex = array_search($moduleId, $modKeys, true);
 $prevModId = ($curIndex !== false && $curIndex > 0) ? $modKeys[$curIndex - 1] : null;
 $nextModId = ($curIndex !== false && $curIndex < count($modKeys) - 1) ? $modKeys[$curIndex + 1] : null;
+$prevModBadge = $prevModId !== null ? (string)($allCourseMods[$prevModId]['badge_code'] ?? '') : '';
+$nextModBadge = $nextModId !== null ? (string)($allCourseMods[$nextModId]['badge_code'] ?? '') : '';
 
 $viewMode = (string)($_GET['mode'] ?? 'reader');
 if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
@@ -51,58 +54,58 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
 }
 ?>
 
-<!-- EN-TÊTE DU MODULE, POSITION DANS LE PARCOURS & TÉLÉCHARGEMENTS MULTI-FORMATS -->
-<div class="hero-banner" style="padding: 1.4rem 1.85rem;">
+<!-- EN-TÊTE CLAIR DU MODULE, POSITION DANS LE PARCOURS & ACTIONS RAPIDES -->
+<div class="hero-banner" style="padding: 1.25rem 1.65rem;">
     <div style="flex: 1; min-width: 0;">
         <!-- Fil d'Ariane & Position dans le Parcours -->
-        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.55rem;">
-            <a href="index.php?page=catalog&track=<?= urlencode($trackId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="badge-code">
-                ← <?= Security::e($mod['track_number'] ?? 'Parcours') ?>
+        <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
+            <a href="index.php?page=catalog&track=<?= urlencode($trackId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="badge-code" title="Voir tous les modules de ce parcours">
+                ← <?= Security::e($mod['track_number'] ?? 'Parcours') ?> (<?= Security::e($mod['track_short_title'] ?? '') ?>)
             </a>
             <span class="badge-code"><?= Security::e($mod['badge_code']) ?></span>
-            <span class="badge-phase">
-                <?= Security::e($mod['phase_code'] ?? 'ÉTAPE') ?> • 📍 Étape <?= (int)($mod['track_position'] ?? 1) ?> sur <?= (int)($mod['track_total'] ?? 20) ?> du <?= Security::e($mod['track_number'] ?? 'Parcours') ?>
+            <span class="badge-phase tabular-nums">
+                <?= Security::e($mod['phase_code'] ?? 'ÉTAPE') ?> • 📍 Étape <?= (int)($mod['track_position'] ?? 1) ?> / <?= (int)($mod['track_total'] ?? 20) ?>
             </span>
-            <span style="font-size: 0.8rem; color: var(--text-secondary);">⏱ <?= Security::e($mod['duration']) ?></span>
+            <span style="font-size: 0.78rem; color: var(--text-secondary);">⏱ <?= Security::e($mod['duration']) ?></span>
         </div>
 
-        <h1 style="font-size: 1.5rem; margin-bottom: 0.35rem;"><?= Security::e($mod['title']) ?></h1>
-        <p style="color: var(--text-secondary); margin: 0 0 0.75rem; font-size: 0.87rem;">
+        <h1 style="font-size: 1.42rem; margin-bottom: 0.3rem;"><?= Security::e($mod['title']) ?></h1>
+        <p style="color: var(--text-secondary); margin: 0 0 0.65rem; font-size: 0.85rem;">
             <strong>Compétence Opérationnelle :</strong> <?= Security::e($mod['bloom']) ?>
         </p>
 
         <!-- Liens de téléchargement directs tous formats -->
-        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-            <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted);">📥 Télécharger :</span>
-            <?= renderDownloadStrip($currentCourseSlug, 'module', $moduleId, $mod['downloads'] ?? []) ?>
+        <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
+            <span style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted);">📥 Supports :</span>
+            <?= renderDownloadStrip($currentCourseSlug, 'module', $moduleId, $mod['downloads'] ?? [], true) ?>
         </div>
     </div>
 
-    <div style="display: flex; flex-direction: column; gap: 0.5rem; min-width: 240px;">
+    <div style="display: flex; flex-direction: column; gap: 0.45rem; min-width: 235px;">
         <button type="button"
-                class="btn <?= $isDone ? 'btn-emerald' : 'btn-primary' ?> btn-toggle-complete"
+                class="btn <?= $isDone ? 'btn-emerald' : 'btn-primary' ?> btn-sm btn-toggle-complete"
                 data-type="module"
                 data-id="<?= Security::e($moduleId) ?>"
                 data-course="<?= Security::e($currentCourseSlug) ?>"
                 data-completed="<?= $isDone ? '1' : '0' ?>">
-            <?= $isDone ? '✔ Module Terminé (Cliquer pour annuler)' : '✅ Marquer ce Module comme Terminé' ?>
+            <?= $isDone ? '✔ Module Terminé (Annuler)' : '✅ Marquer comme Terminé' ?>
         </button>
 
         <?php if (!empty($mod['linked_lab_id'])): ?>
             <a href="index.php?page=lab&id=<?= urlencode((string)$mod['linked_lab_id']) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald btn-sm">
-                🧪 Passer à l'Atelier Pratique Docker →
+                🧪 Atelier Pratique (Lab <?= Security::e($mod['code']) ?>) →
             </a>
         <?php endif; ?>
 
         <?php if (!empty($mod['linked_cheatsheet_id'])): ?>
             <a href="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=cheatsheet&id=<?= urlencode((string)$mod['linked_cheatsheet_id']) ?>&format=pdf" class="btn btn-outline btn-sm">
-                📑 Télécharger la Fiche Mémo (Cheatsheet PDF)
+                📑 Fiche Mémo PDF
             </a>
         <?php endif; ?>
     </div>
 </div>
 
-<!-- BARRE DE BASCULE DES 3 MODES D'ÉTUDE (COURS INTERACTIF / DIAPORAMA 16:9 / PAGE WEB STUDIO) -->
+<!-- BARRE DE BASCULE DES 3 MODES D'ÉTUDE + NAVIGATION MODULE PRÉCÉDENT / SUIVANT -->
 <div class="view-mode-switcher">
     <div class="view-mode-tabs">
         <a href="index.php?page=module&id=<?= urlencode($moduleId) ?>&mode=reader&course=<?= urlencode($currentCourseSlug) ?>"
@@ -111,7 +114,7 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
         </a>
         <a href="index.php?page=module&id=<?= urlencode($moduleId) ?>&mode=slides&course=<?= urlencode($currentCourseSlug) ?>"
            class="view-mode-tab <?= $viewMode === 'slides' ? 'active' : '' ?>">
-            <span>🖥️ Mode Diaporama 16:9</span>
+            <span>🖥️ Diaporama Studio 16:9</span>
             <span class="tab-pill tabular-nums"><?= $totalSlides ?> slides</span>
         </a>
         <?php if (isset($mod['downloads']['html'])): ?>
@@ -124,13 +127,17 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
 
     <div style="display: flex; gap: 0.45rem; flex-wrap: wrap;">
         <?php if ($prevModId): ?>
-            <a href="index.php?page=module&id=<?= urlencode($prevModId) ?>&mode=<?= urlencode($viewMode) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">
-                ← Module Précédent
+            <a href="index.php?page=module&id=<?= urlencode($prevModId) ?>&mode=<?= urlencode($viewMode) ?>&course=<?= urlencode($currentCourseSlug) ?>"
+               class="btn btn-outline btn-sm"
+               title="<?= Security::e($allCourseMods[$prevModId]['title'] ?? '') ?>">
+                ◀ <?= Security::e($prevModBadge) ?> Précédent
             </a>
         <?php endif; ?>
         <?php if ($nextModId): ?>
-            <a href="index.php?page=module&id=<?= urlencode($nextModId) ?>&mode=<?= urlencode($viewMode) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">
-                Module Suivant →
+            <a href="index.php?page=module&id=<?= urlencode($nextModId) ?>&mode=<?= urlencode($viewMode) ?>&course=<?= urlencode($currentCourseSlug) ?>"
+               class="btn btn-primary btn-sm"
+               title="<?= Security::e($allCourseMods[$nextModId]['title'] ?? '') ?>">
+                Suivant <?= Security::e($nextModBadge) ?> ▶
             </a>
         <?php endif; ?>
     </div>
@@ -138,18 +145,18 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
 
 <?php if ($viewMode === 'slides'): ?>
     <!-- ======================================================================
-         MODE DIAPORAMA INTERACTIF 16:9 (LECTEUR HTML5 + SLIDES POWERPOINT PDF)
+         MODE DIAPORAMA OFFICIEL STUDIO 16:9 (58 SLIDES POUR M01, 1 686 TOTAL)
          ====================================================================== -->
     <div id="lms-slide-deck-wrapper" class="slide-deck-wrapper">
         <!-- Barre d'outils supérieure du lecteur de diapositives -->
         <div class="slide-deck-toolbar">
             <div style="display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap;">
                 <button type="button" id="btn-slide-engine-html" class="btn btn-sm btn-primary">
-                    ⚡ Diaporama Interactif 16:9 (<?= $totalSlides ?> slides)
+                    🖥️ Diaporama Studio 16:9 (<?= $totalSlides ?> slides)
                 </button>
                 <?php if (isset($mod['downloads']['slides_pdf'])): ?>
                     <button type="button" id="btn-slide-engine-pdf" class="btn btn-sm btn-outline">
-                        📊 Support PowerPoint Officiel (PDF 16:9)
+                        📄 Lecteur PDF Continu (<?= $totalSlides ?> pages)
                     </button>
                 <?php endif; ?>
             </div>
@@ -162,7 +169,7 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
                 <select id="slide-jump-select" class="slide-jump-select tabular-nums" aria-label="Choisir une diapositive">
                     <?php foreach ($slides as $s): ?>
                         <option value="<?= (int)$s['index'] - 1 ?>">
-                            Slide <?= sprintf('%02d', (int)$s['index']) ?>/<?= sprintf('%02d', $totalSlides) ?> — <?= Security::e(CourseRepository::truncateUtf8($s['title'], 52)) ?>
+                            Slide <?= sprintf('%02d', (int)$s['index']) ?>/<?= sprintf('%02d', $totalSlides) ?> — <?= Security::e(CourseRepository::truncateUtf8($s['title'], 56)) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -182,55 +189,88 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
             <div id="slide-progress-fill" class="slide-progress-fill" style="width: <?= $totalSlides > 0 ? round(100 / $totalSlides, 1) : 100 ?>%;"></div>
         </div>
 
-        <!-- Scène principale 16:9 + Sommaire latéral des diapositives -->
+        <!-- Scène principale 16:9 + Sommaire latéral des 58 diapositives -->
         <div class="slide-deck-layout">
-            <!-- Scène 16:9 Interactive HTML5 -->
+            <!-- Scène 16:9 Studio Interactive -->
             <div id="slide-stage-html" class="slide-stage-container">
-                <?php foreach ($slides as $idx => $s): ?>
-                    <section class="lms-slide-frame <?= $idx === 0 ? 'active' : '' ?>"
+                <?php foreach ($slides as $idx => $s):
+                    $hasStudioImg = !empty($s['image_url']);
+                    $slideNotes = trim((string)($s['notes'] ?? ''));
+                    $slidePreview = trim((string)($s['body_preview'] ?? ''));
+                ?>
+                    <section class="lms-slide-frame <?= $hasStudioImg ? 'is-studio-image-slide' : '' ?> <?= $idx === 0 ? 'active' : '' ?>"
                              data-slide-index="<?= $idx ?>"
-                             data-slide-title="<?= Security::e($s['title']) ?>">
-                        <header class="lms-slide-header">
-                            <div style="display: flex; align-items: center; gap: 0.6rem; min-width: 0;">
-                                <img src="assets/img/postgresql_elephant.png" alt="PG18" style="width: 24px; height: 24px;"/>
-                                <span class="lms-slide-badge"><?= Security::e($s['badge']) ?></span>
-                                <span class="lms-slide-chapter"><?= Security::e($s['chapter']) ?></span>
+                             data-slide-title="<?= Security::e($s['title']) ?>"
+                             data-slide-img="<?= Security::e((string)($s['image_url'] ?? '')) ?>">
+                        <?php if ($hasStudioImg): ?>
+                            <div class="lms-studio-canvas-wrap">
+                                <img src="<?= $idx <= 2 ? Security::e($s['image_url']) : '' ?>"
+                                     data-slide-src="<?= Security::e($s['image_url']) ?>"
+                                     alt="Diapositive <?= (int)$s['index'] ?> / <?= $totalSlides ?> — <?= Security::e($s['title']) ?>"
+                                     class="lms-studio-slide-img lms-zoomable-img"
+                                     decoding="async"/>
                             </div>
-                            <div class="lms-slide-counter tabular-nums">
-                                DIAPO <?= sprintf('%02d', (int)$s['index']) ?> / <?= sprintf('%02d', $totalSlides) ?>
-                            </div>
-                        </header>
+                            <footer class="lms-studio-caption-bar">
+                                <div class="lms-studio-caption-main">
+                                    <span class="lms-slide-badge"><?= Security::e($s['badge']) ?></span>
+                                    <strong class="lms-studio-caption-title"><?= Security::e($s['title']) ?></strong>
+                                    <span class="lms-slide-counter tabular-nums" style="margin-left: auto;">
+                                        DIAPO <?= sprintf('%02d', (int)$s['index']) ?> / <?= sprintf('%02d', $totalSlides) ?>
+                                    </span>
+                                </div>
+                                <?php if ($slideNotes !== '' || $slidePreview !== ''): ?>
+                                    <div class="lms-studio-speaker-notes">
+                                        <strong>🎙️ Notes & Points Clés :</strong>
+                                        <?= Security::e($slideNotes !== '' ? $slideNotes : $slidePreview) ?>
+                                    </div>
+                                <?php endif; ?>
+                            </footer>
+                        <?php else: ?>
+                            <header class="lms-slide-header">
+                                <div style="display: flex; align-items: center; gap: 0.6rem; min-width: 0;">
+                                    <img src="assets/img/postgresql_elephant_dark.png" alt="PG18" style="width: 24px; height: 24px;"/>
+                                    <span class="lms-slide-badge"><?= Security::e($s['badge']) ?></span>
+                                    <span class="lms-slide-chapter"><?= Security::e($s['chapter']) ?></span>
+                                </div>
+                                <div class="lms-slide-counter tabular-nums">
+                                    DIAPO <?= sprintf('%02d', (int)$s['index']) ?> / <?= sprintf('%02d', $totalSlides) ?>
+                                </div>
+                            </header>
 
-                        <div class="lms-slide-body">
-                            <h2 class="lms-slide-title"><?= Security::e($s['title']) ?></h2>
-                            <div class="lms-slide-content markdown-body">
-                                <?= $s['html'] ?>
+                            <div class="lms-slide-body">
+                                <h2 class="lms-slide-title"><?= Security::e($s['title']) ?></h2>
+                                <div class="lms-slide-content markdown-body">
+                                    <?= $s['html'] ?>
+                                </div>
                             </div>
-                        </div>
 
-                        <footer class="lms-slide-footer">
-                            <span>LightPath SARL • PostgreSQL 18 — Jean-Marie Renouard</span>
-                            <span class="tabular-nums"><?= Security::e($mod['badge_code']) ?> • Étape <?= (int)($mod['track_position'] ?? 1) ?>/<?= (int)($mod['track_total'] ?? 20) ?></span>
-                        </footer>
+                            <footer class="lms-slide-footer">
+                                <span>LightPath SARL • PostgreSQL 18 — Jean-Marie Renouard</span>
+                                <span class="tabular-nums"><?= Security::e($mod['badge_code']) ?> • Étape <?= (int)($mod['track_position'] ?? 1) ?>/<?= (int)($mod['track_total'] ?? 20) ?></span>
+                            </footer>
+                        <?php endif; ?>
                     </section>
                 <?php endforeach; ?>
             </div>
 
-            <!-- Scène 16:9 PDF PowerPoint Officiel (_slides.pdf) -->
+            <!-- Scène 16:9 PDF PowerPoint Officiel (_slides.pdf) chargée à la demande (data-src) pour éviter toute violation unload au chargement -->
             <?php if (isset($mod['downloads']['slides_pdf'])): ?>
                 <div id="slide-stage-pdf" class="slide-stage-pdf" hidden>
-                    <iframe src="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=module&id=<?= urlencode($moduleId) ?>&format=slides_pdf&inline=1"
+                    <iframe id="slide-pdf-iframe"
+                            src="about:blank"
+                            data-src="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=module&id=<?= urlencode($moduleId) ?>&format=slides_pdf&inline=1"
+                            allow="unload *"
                             style="width: 100%; height: 76vh; border: none; border-radius: var(--radius-md);"
                             title="Diaporama PowerPoint PDF 16:9"></iframe>
                 </div>
             <?php endif; ?>
 
-            <!-- Colonne latérale : Liste des Diapositives (Position en direct dans le diaporama) -->
+            <!-- Colonne latérale : Liste des Diapositives (Position en direct 1..58 dans le diaporama) -->
             <aside class="slide-outline-sidebar">
-                <div class="toc-box" style="max-height: 74vh; overflow-y: auto;">
+                <div class="toc-box" style="max-height: 76vh; overflow-y: auto;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem;">
                         <span style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light);">
-                            🖥️ Plan des Diapositives
+                            🖥️ Plan des <?= $totalSlides ?> Diapositives
                         </span>
                         <span id="slide-sidebar-counter" class="badge-code tabular-nums">1 / <?= $totalSlides ?></span>
                     </div>
@@ -252,13 +292,14 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
 <?php elseif ($viewMode === 'html_preview' && isset($mod['downloads']['html'])): ?>
     <div style="background: #FFFFFF; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border-strong); height: 82vh;">
         <iframe src="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=module&id=<?= urlencode($moduleId) ?>&format=html&inline=1"
+                allow="unload *"
                 style="width: 100%; height: 100%; border: none;"
                 title="<?= Security::e($mod['title']) ?>"></iframe>
     </div>
 
 <?php else: ?>
     <!-- ======================================================================
-         GRILLE LECTEUR INTERACTIF + SOMMAIRE SCROLLSPY & STEPPER DE PARCOURS
+         GRILLE LECTEUR INTERACTIF + SOMMAIRE SCROLLSPY STICKY
          ====================================================================== -->
     <div class="reader-grid">
         <div class="reader-main-col">
@@ -308,9 +349,32 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
                     </form>
                 </section>
             <?php endif; ?>
+
+            <!-- CARTE DE NAVIGATION BAS DE PAGE (PRÉCÉDENT / ATELIER PRATIQUE / SUIVANT) -->
+            <div class="module-bottom-nav-card">
+                <div>
+                    <?php if ($prevModId): ?>
+                        <a href="index.php?page=module&id=<?= urlencode($prevModId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline">
+                            ◀ <?= Security::e($prevModBadge) ?> — Module Précédent
+                        </a>
+                    <?php endif; ?>
+                </div>
+                <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+                    <?php if (!empty($mod['linked_lab_id'])): ?>
+                        <a href="index.php?page=lab&id=<?= urlencode((string)$mod['linked_lab_id']) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald">
+                            🧪 Passer au Lab Pratique Docker (Lab <?= Security::e($mod['code']) ?>)
+                        </a>
+                    <?php endif; ?>
+                    <?php if ($nextModId): ?>
+                        <a href="index.php?page=module&id=<?= urlencode($nextModId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-primary">
+                            Module Suivant (<?= Security::e($nextModBadge) ?>) ▶
+                        </a>
+                    <?php endif; ?>
+                </div>
+            </div>
         </div>
 
-        <!-- COLONNE LATÉRALE : SOMMAIRE SCROLLSPY + POSITION DANS LE PARCOURS + NOTES -->
+        <!-- COLONNE LATÉRALE ÉPURÉE : SOMMAIRE SCROLLSPY + NOTES + PARCOURS REPLIABLE -->
         <aside class="reader-sidebar">
             <!-- 1. SOMMAIRE DU DOCUMENT AVEC INDICATEUR DE POSITION EN DIRECT (SCROLLSPY) -->
             <div class="toc-box">
@@ -342,47 +406,12 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
                 </nav>
             </div>
 
-            <!-- 2. STEPPER DE POSITION DANS LE PARCOURS DE FORMATION -->
-            <div class="toc-box">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
-                    <span style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light);">
-                        📍 Position dans le Parcours
-                    </span>
-                    <span class="badge-code tabular-nums">
-                        Étape <?= (int)($mod['track_position'] ?? 1) ?> / <?= (int)($mod['track_total'] ?? count($trackModules)) ?>
-                    </span>
-                </div>
-                <div style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.45rem;">
-                    <?= Security::e($mod['track_short_title'] ?? $mod['track_title']) ?>
-                </div>
-                <div class="progress-bar-track" style="height: 5px; margin-bottom: 0.75rem;">
-                    <div class="progress-bar-fill" style="width: <?= $trackProgressPct ?>%;"></div>
-                </div>
-
-                <div class="curriculum-stepper-list">
-                    <?php foreach ($trackModules as $tmKey => $tmItem):
-                        $tmCurrent = ($tmKey === $moduleId);
-                        $tmDone = in_array($tmKey, $userProgress['completed_modules'] ?? [], true);
-                    ?>
-                        <a href="index.php?page=module&id=<?= urlencode($tmKey) ?>&course=<?= urlencode($currentCourseSlug) ?>"
-                           class="stepper-item <?= $tmCurrent ? 'is-current' : '' ?> <?= $tmDone ? 'is-done' : '' ?>">
-                            <span class="stepper-indicator tabular-nums">
-                                <?= $tmDone ? '✔' : (int)$tmItem['track_position'] ?>
-                            </span>
-                            <span class="stepper-label">
-                                <strong><?= Security::e($tmItem['badge_code']) ?></strong> — <?= Security::e(CourseRepository::truncateUtf8($tmItem['title'], 42)) ?>
-                            </span>
-                        </a>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-
-            <!-- 3. BLOC-NOTES PERSONNEL DE L'ÉTUDIANT -->
+            <!-- 2. BLOC-NOTES PERSONNEL DE L'ÉTUDIANT -->
             <div class="toc-box">
                 <div style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light); margin-bottom: 0.5rem;">
                     📝 Mes Notes Personnelles
                 </div>
-                <textarea id="user-personal-note" class="form-control" rows="5" placeholder="Notez vos points clés, paramètres postgresql.conf ou questions..."><?= Security::e($savedNote) ?></textarea>
+                <textarea id="user-personal-note" class="form-control" rows="4" placeholder="Notez vos points clés, paramètres postgresql.conf ou questions..."><?= Security::e($savedNote) ?></textarea>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.55rem;">
                     <span id="note-save-status" style="font-size: 0.74rem; color: var(--accent-emerald);"></span>
                     <button type="button" id="btn-save-note" class="btn btn-primary btn-sm" data-id="<?= Security::e($moduleId) ?>" data-course="<?= Security::e($currentCourseSlug) ?>">
@@ -390,6 +419,37 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
                     </button>
                 </div>
             </div>
+
+            <!-- 3. PROGRESSION DANS LE PARCOURS (REPLIABLE POUR GARDER L'INTERFACE AÉRÉE) -->
+            <details class="toc-box" style="cursor: pointer;">
+                <summary style="display: flex; justify-content: space-between; align-items: center; list-style: none;">
+                    <span style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light);">
+                        📍 Étape <?= (int)($mod['track_position'] ?? 1) ?> / <?= (int)($mod['track_total'] ?? count($trackModules)) ?> du Parcours
+                    </span>
+                    <span class="badge-code tabular-nums"><?= $trackProgressPct ?>%</span>
+                </summary>
+                <div style="margin-top: 0.65rem;">
+                    <div class="progress-bar-track" style="height: 5px; margin-bottom: 0.65rem;">
+                        <div class="progress-bar-fill" style="width: <?= $trackProgressPct ?>%;"></div>
+                    </div>
+                    <div class="curriculum-stepper-list">
+                        <?php foreach ($trackModules as $tmKey => $tmItem):
+                            $tmCurrent = ($tmKey === $moduleId);
+                            $tmDone = in_array($tmKey, $userProgress['completed_modules'] ?? [], true);
+                        ?>
+                            <a href="index.php?page=module&id=<?= urlencode($tmKey) ?>&course=<?= urlencode($currentCourseSlug) ?>"
+                               class="stepper-item <?= $tmCurrent ? 'is-current' : '' ?> <?= $tmDone ? 'is-done' : '' ?>">
+                                <span class="stepper-indicator tabular-nums">
+                                    <?= $tmDone ? '✔' : (int)$tmItem['track_position'] ?>
+                                </span>
+                                <span class="stepper-label">
+                                    <strong><?= Security::e($tmItem['badge_code']) ?></strong> — <?= Security::e(CourseRepository::truncateUtf8($tmItem['title'], 42)) ?>
+                                </span>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </details>
         </aside>
     </div>
 <?php endif; ?>

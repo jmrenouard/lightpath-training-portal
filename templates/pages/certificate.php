@@ -16,13 +16,23 @@ use LightPath\LMS\Core\Security;
 <div style="background: var(--bg-surface); border: 2px solid var(--brand-cyan); border-radius: var(--radius-lg); padding: 3rem; box-shadow: var(--shadow-elevated); max-width: 1050px; margin: 0 auto;">
     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-hairline); padding-bottom: 1.5rem; margin-bottom: 2rem;">
         <div style="display: flex; align-items: center; gap: 1rem;">
-            <img src="assets/img/lightpath_logo_white_text.png" alt="LightPath SARL" style="height: 52px; background: #0B1120; padding: 6px 12px; border-radius: 6px;"/>
+            <img src="assets/img/lightpath_logo_white_text.png"
+                 data-dark-src="assets/img/lightpath_logo_white_text.png"
+                 data-light-src="assets/img/lightpath_logo_dark_text.png"
+                 alt="LightPath SARL"
+                 class="theme-aware-logo"
+                 style="height: 48px;"/>
             <div>
                 <div style="font-weight: 800; font-size: 1.2rem;"><?= Security::e($appConfig['company']) ?></div>
                 <div style="font-size: 0.82rem; color: var(--text-secondary);">Organisme de Formation Professionnelle • Réf. <?= Security::e($appConfig['qualiopi_ref']) ?></div>
             </div>
         </div>
-        <img src="assets/img/postgresql_elephant.png" alt="PostgreSQL 18" style="height: 56px;"/>
+        <img src="assets/img/postgresql_elephant_dark.png"
+             data-dark-src="assets/img/postgresql_elephant_dark.png"
+             data-light-src="assets/img/postgresql_elephant_light.png"
+             alt="PostgreSQL 18"
+             class="theme-aware-logo"
+             style="height: 48px;"/>
     </div>
 
     <div style="text-align: center; margin-bottom: 2rem;">
