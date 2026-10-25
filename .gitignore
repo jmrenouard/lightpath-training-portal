@@ -4,6 +4,11 @@
 /storage/data/*.lock
 /storage/data/*.tmp*
 /storage/data/parsed_cache/
+/public/assets/logos
+/public/assets/images
+/public/assets/mermaid_cache
+/public/assets/vendor
+/public/assets/slides_cache/
 /storage/courses/*
 !/storage/data/.gitkeep
 !/storage/courses/.gitkeep

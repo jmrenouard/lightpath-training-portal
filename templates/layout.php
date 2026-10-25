@@ -40,15 +40,22 @@ function renderDownloadStrip(string $courseSlug, string $itemType, string $itemI
     return $out;
 }
 
-// Déterminer le parcours actif si on consulte un module, un lab ou un filtre de catalogue
+// Déterminer le parcours et l'élément actif si on consulte un module, un lab ou un filtre de catalogue
 $activeSidebarTrack = (string)($_GET['track'] ?? '');
-if ($activeSidebarTrack === '' && $page === 'module') {
-    $mId = (string)($_GET['id'] ?? '');
-    $activeSidebarTrack = (string)($currentCourse['modules'][$mId]['track_id'] ?? '');
-} elseif ($activeSidebarTrack === '' && $page === 'lab') {
+$activeModuleId = '';
+if ($page === 'module') {
+    $activeModuleId = (string)($_GET['id'] ?? 'module_01_introduction_postgresql_18');
+    if ($activeSidebarTrack === '') {
+        $activeSidebarTrack = (string)($currentCourse['modules'][$activeModuleId]['track_id'] ?? '');
+    }
+} elseif ($page === 'lab') {
     $lId = (string)($_GET['id'] ?? '');
-    $activeSidebarTrack = (string)($currentCourse['labs'][$lId]['track_id'] ?? '');
+    $activeModuleId = (string)($currentCourse['labs'][$lId]['linked_module_id'] ?? '');
+    if ($activeSidebarTrack === '') {
+        $activeSidebarTrack = (string)($currentCourse['labs'][$lId]['track_id'] ?? '');
+    }
 }
+$completedModulesList = $userProgress['completed_modules'] ?? [];
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -69,12 +76,20 @@ if ($activeSidebarTrack === '' && $page === 'module') {
 <div class="app-shell">
 
     <!-- ==================================================================
-         SIDEBAR DE NAVIGATION PRINCIPALE
+         SIDEBAR DE NAVIGATION PRINCIPALE + ACCÈS DIRECT AUX 34 MODULES
          ================================================================== -->
     <aside class="app-sidebar">
         <a href="index.php?page=dashboard&course=<?= urlencode($currentCourseSlug) ?>" class="sidebar-brand">
-            <img src="assets/img/lightpath_logo_white_text.png" alt="LightPath" class="brand-logo"/>
-            <img src="assets/img/postgresql_elephant.png" alt="PG18" class="pg-icon"/>
+            <img src="assets/img/lightpath_logo_white_text.png"
+                 data-dark-src="assets/img/lightpath_logo_white_text.png"
+                 data-light-src="assets/img/lightpath_logo_dark_text.png"
+                 alt="LightPath"
+                 class="brand-logo theme-aware-logo"/>
+            <img src="assets/img/postgresql_elephant_dark.png"
+                 data-dark-src="assets/img/postgresql_elephant_dark.png"
+                 data-light-src="assets/img/postgresql_elephant_light.png"
+                 alt="PG18"
+                 class="pg-icon theme-aware-logo"/>
         </a>
 
         <!-- Sélecteur Multi-Formations -->
@@ -95,12 +110,12 @@ if ($activeSidebarTrack === '' && $page === 'module') {
                 <span>🏠 Tableau de Bord</span>
                 <span class="nav-badge tabular-nums"><?= $globalCompletionPct ?>%</span>
             </a>
-            <a href="index.php?page=catalog&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= ($page === 'catalog' && ($_GET['tab'] ?? '') !== 'labs' && $activeSidebarTrack === '') || ($page === 'module' && ($_GET['mode'] ?? '') !== 'slides') ? 'active' : '' ?>">
-                <span>📚 Modules de Cours</span>
+            <a href="index.php?page=catalog&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= ($page === 'catalog' && ($_GET['tab'] ?? '') !== 'labs' && $activeSidebarTrack === '') ? 'active' : '' ?>">
+                <span>📚 Catalogue des Parcours</span>
                 <span class="nav-badge tabular-nums"><?= $doneModules ?>/<?= $totalModules ?></span>
             </a>
-            <a href="index.php?page=module&id=<?= urlencode((string)($_GET['id'] ?? 'module_01_introduction_postgresql_18')) ?>&mode=slides&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= ($page === 'module' && ($_GET['mode'] ?? '') === 'slides') ? 'active' : '' ?>">
-                <span>🖥️ Mode Diaporama 16:9</span>
+            <a href="index.php?page=module&id=<?= urlencode($activeModuleId !== '' ? $activeModuleId : 'module_01_introduction_postgresql_18') ?>&mode=slides&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= ($page === 'module' && ($_GET['mode'] ?? '') === 'slides') ? 'active' : '' ?>">
+                <span>🖥️ Diaporama Studio 16:9</span>
                 <span class="nav-badge">Slides</span>
             </a>
             <a href="index.php?page=catalog&tab=labs&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= ($page === 'lab' || ($page === 'catalog' && ($_GET['tab'] ?? '') === 'labs')) ? 'active' : '' ?>">
@@ -108,7 +123,7 @@ if ($activeSidebarTrack === '' && $page === 'module') {
                 <span class="nav-badge tabular-nums"><?= $doneLabs ?>/<?= $totalLabs ?></span>
             </a>
             <a href="index.php?page=documents&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'documents' ? 'active' : '' ?>">
-                <span>📥 Centre de Téléchargement</span>
+                <span>📥 Téléchargements</span>
                 <span class="nav-badge">6 formats</span>
             </a>
             <a href="index.php?page=certificate&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'certificate' ? 'active' : '' ?>">
@@ -116,21 +131,76 @@ if ($activeSidebarTrack === '' && $page === 'module') {
                 <span class="nav-badge">Bloom</span>
             </a>
 
-            <div class="nav-section-title" style="margin-top: 1rem;">Les 4 Parcours Pédagogiques</div>
-            <?php foreach (($currentCourse['tracks'] ?? []) as $tKey => $track):
-                $tMods = $track['module_Filter'] ?? [];
-                $isTrackActive = ($activeSidebarTrack === (string)$tKey);
-            ?>
-                <a href="index.php?page=catalog&track=<?= urlencode((string)$tKey) ?>&course=<?= urlencode($currentCourseSlug) ?>"
-                   class="nav-item nav-track-item <?= $isTrackActive ? 'active' : '' ?>"
-                   title="<?= Security::e($track['title']) ?>">
-                    <span class="nav-track-label">
-                        <span class="track-dot" style="background: <?= Security::e($track['color'] ?? '#00B0F0') ?>;"></span>
-                        <span class="nav-track-text"><?= Security::e($track['short_title'] ?? $track['title']) ?></span>
-                    </span>
-                    <span class="nav-badge tabular-nums"><?= count($tMods) ?></span>
-                </a>
-            <?php endforeach; ?>
+            <!-- NAVIGATION DIRECTE PAR PARCOURS ET PAR MODULE (M01..M29, SQL-01..SQL-05) -->
+            <div class="nav-section-title" style="margin-top: 0.9rem; display: flex; justify-content: space-between; align-items: center;">
+                <span>Navigation Directe (34 Modules)</span>
+            </div>
+            <div class="sidebar-module-filter-wrap">
+                <input type="search"
+                       id="sidebar-module-filter"
+                       class="sidebar-module-filter"
+                       placeholder="Filtrer un module (ex: M01, MVCC, SQL)..."
+                       autocomplete="off"
+                       aria-label="Filtrer les modules dans la barre latérale"/>
+            </div>
+
+            <div id="sidebar-tracks-accordion" class="sidebar-tracks-accordion">
+                <?php
+                $allCourseModules = $currentCourse['modules'] ?? [];
+                foreach (($currentCourse['tracks'] ?? []) as $tKey => $track):
+                    $tFilter = $track['module_Filter'] ?? [];
+                    $isTrackActive = ($activeSidebarTrack === (string)$tKey);
+                    $shouldOpen = $isTrackActive || ($activeSidebarTrack === '' && $tKey === 'cursus-complet');
+
+                    // Collecter les modules appartenant à ce parcours
+                    $trackModsList = [];
+                    $trackDone = 0;
+                    foreach ($allCourseModules as $mKey => $mInfo) {
+                        if (in_array((string)$mInfo['code'], $tFilter, true)) {
+                            $trackModsList[$mKey] = $mInfo;
+                            if (in_array($mKey, $completedModulesList, true)) {
+                                $trackDone++;
+                            }
+                        }
+                    }
+                ?>
+                    <details class="sidebar-track-group <?= $isTrackActive ? 'is-active-track' : '' ?>"
+                             data-track-id="<?= Security::e((string)$tKey) ?>"
+                             <?= $shouldOpen ? 'open' : '' ?>>
+                        <summary class="sidebar-track-summary" title="<?= Security::e($track['title']) ?>">
+                            <span class="nav-track-label">
+                                <span class="track-dot" style="background: <?= Security::e($track['color'] ?? '#00B0F0') ?>;"></span>
+                                <span class="nav-track-text"><?= Security::e($track['short_title'] ?? $track['title']) ?></span>
+                            </span>
+                            <span class="nav-badge tabular-nums"><?= $trackDone ?>/<?= count($trackModsList) ?></span>
+                        </summary>
+
+                        <div class="sidebar-track-modules">
+                            <a href="index.php?page=catalog&track=<?= urlencode((string)$tKey) ?>&course=<?= urlencode($currentCourseSlug) ?>"
+                               class="sidebar-track-overview-link">
+                                🧭 Vue d'ensemble du <?= Security::e($track['number'] ?? 'Parcours') ?> →
+                            </a>
+                            <?php foreach ($trackModsList as $mKey => $mInfo):
+                                $isCurrentMod = ($activeModuleId === (string)$mKey);
+                                $isDoneMod = in_array((string)$mKey, $completedModulesList, true);
+                                $shortLabel = preg_replace('/^Module\s+(?:SQL\s*)?\d+\s*[—\-:]\s*/iu', '', (string)$mInfo['title']) ?? (string)$mInfo['title'];
+                            ?>
+                                <a href="index.php?page=module&id=<?= urlencode((string)$mKey) ?>&course=<?= urlencode($currentCourseSlug) ?>"
+                                   class="sidebar-module-link <?= $isCurrentMod ? 'active' : '' ?> <?= $isDoneMod ? 'is-done' : '' ?>"
+                                   data-module-id="<?= Security::e((string)$mKey) ?>"
+                                   data-search-text="<?= Security::e(strtolower($mInfo['badge_code'] . ' ' . $mInfo['title'])) ?>"
+                                   title="<?= Security::e($mInfo['badge_code'] . ' — ' . $mInfo['title']) ?>">
+                                    <span class="sidebar-mod-code tabular-nums"><?= Security::e($mInfo['badge_code']) ?></span>
+                                    <span class="sidebar-mod-title"><?= Security::e($shortLabel) ?></span>
+                                    <?php if ($isDoneMod): ?>
+                                        <span class="sidebar-mod-check" title="Module terminé">✔</span>
+                                    <?php endif; ?>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    </details>
+                <?php endforeach; ?>
+            </div>
 
             <?php if ($auth->isStaff($currentUser)): ?>
                 <div class="nav-section-title" style="margin-top: 1rem;">Administration & Formateur</div>
@@ -229,7 +299,6 @@ if ($activeSidebarTrack === '' && $page === 'module') {
     </div>
 </div>
 
-<script src="assets/js/mermaid.min.js"></script>
 <script src="assets/js/app.js"></script>
 </body>
 </html>

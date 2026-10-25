@@ -26,7 +26,10 @@ class MarkdownParser
             return ['html' => '', 'toc' => [], 'quiz' => [], 'slides' => []];
         }
         $mtime = (int)@filemtime($mdPath);
-        $cacheKey = md5('mod_v3:' . $courseSlug . ':' . $mdPath . ':' . $mtime);
+        $moduleId = pathinfo($mdPath, PATHINFO_FILENAME);
+        $manifestPath = dirname(__DIR__, 2) . '/public/assets/slides_cache/' . $moduleId . '/manifest.json';
+        $manifestMtime = is_file($manifestPath) ? (int)@filemtime($manifestPath) : 0;
+        $cacheKey = md5('mod_v4_rca145:' . $courseSlug . ':' . $mdPath . ':' . $mtime . ':' . $manifestMtime);
         $cacheFile = $this->cacheDir . '/' . $cacheKey . '.json';
         if (is_file($cacheFile)) {
             $cached = @json_decode((string)@file_get_contents($cacheFile), true);
@@ -38,7 +41,7 @@ class MarkdownParser
         $raw = (string)file_get_contents($mdPath);
         $quiz = $this->extractQuizQuestions($raw);
         $rendered = $this->renderMarkdown($raw, $courseSlug, false);
-        $slides = $this->extractSlides($raw, $courseSlug, $quiz);
+        $slides = $this->extractSlides($raw, $courseSlug, $quiz, $moduleId);
 
         $result = [
             'html' => $rendered['html'],
@@ -56,7 +59,7 @@ class MarkdownParser
             return ['html' => '', 'toc' => [], 'sql_snippets' => []];
         }
         $mtime = (int)@filemtime($mdPath);
-        $cacheKey = md5('lab_v3:' . $courseSlug . ':' . $mdPath . ':' . $mtime);
+        $cacheKey = md5('lab_v4_rca145:' . $courseSlug . ':' . $mdPath . ':' . $mtime);
         $cacheFile = $this->cacheDir . '/' . $cacheKey . '.json';
         if (is_file($cacheFile)) {
             $cached = @json_decode((string)@file_get_contents($cacheFile), true);
@@ -137,11 +140,54 @@ class MarkdownParser
     }
 
     /**
-     * Génère les diapositives 16:9 interactives à partir du Markdown source d'un module.
+     * Génère les diapositives 16:9 interactives d'un module.
+     * Priorise le manifeste officiel Studio 16:9 pré-calculé (public/assets/slides_cache/<module_id>/manifest.json,
+     * ex: 58 diapositives pour le Module 01, 1 686 diapositives sur les 34 modules), avec fallback sur le découpage Markdown.
      */
-    public function extractSlides(string $markdown, string $courseSlug = 'postgresql-18', array $quiz = []): array
+    public function extractSlides(string $markdown, string $courseSlug = 'postgresql-18', array $quiz = [], ?string $moduleId = null): array
     {
-        // Retirer les blocs <details> de quiz déjà traités séparément en slides QCM dédiées
+        if ($moduleId !== null && $moduleId !== '') {
+            $manifestFile = dirname(__DIR__, 2) . '/public/assets/slides_cache/' . $moduleId . '/manifest.json';
+            if (is_file($manifestFile)) {
+                $manifest = @json_decode((string)@file_get_contents($manifestFile), true);
+                if (is_array($manifest) && !empty($manifest['slides']) && is_array($manifest['slides'])) {
+                    $total = (int)($manifest['total_slides'] ?? count($manifest['slides']));
+                    $officialSlides = [];
+                    foreach ($manifest['slides'] as $idx => $s) {
+                        $num = (int)($s['number'] ?? ($idx + 1));
+                        $sec = (string)($s['section'] ?? ('Section ' . $num));
+                        $title = (string)($s['title'] ?? ('Diapositive ' . $num . ' / ' . $total));
+                        $imgUrl = (string)($s['image_url'] ?? '');
+                        $notes = (string)($s['notes'] ?? '');
+                        $preview = (string)($s['body_preview'] ?? '');
+                        $type = (string)($s['type'] ?? 'concept');
+                        $loadingAttr = $num <= 2 ? 'eager' : 'lazy';
+
+                        $slideHtml = '<div class="lms-studio-slide-figure">'
+                            . '<img src="' . Security::e($imgUrl) . '" alt="' . Security::e($title) . '" class="lms-studio-slide-img" loading="' . $loadingAttr . '" decoding="async"/>'
+                            . '</div>';
+
+                        $officialSlides[] = [
+                            'index' => $num,
+                            'number' => $num,
+                            'total' => $total,
+                            'chapter' => $sec,
+                            'section' => $sec,
+                            'title' => $title,
+                            'type' => $type,
+                            'badge' => $sec,
+                            'image_url' => $imgUrl,
+                            'notes' => $notes,
+                            'body_preview' => $preview,
+                            'html' => $slideHtml,
+                        ];
+                    }
+                    return $officialSlides;
+                }
+            }
+        }
+
+        // Fallback : découpage Markdown si le manifeste Studio 16:9 n'est pas présent
         $cleanMd = preg_replace_callback(
             '/<details>\s*<summary>(.*?)<\/summary>(.*?)<\/details>/isu',
             static function (array $m): string {
@@ -638,8 +684,9 @@ class MarkdownParser
 
         if ($hasCachedPng) {
             $imgUrl = $this->resolveAssetUrl($relPngPath, $courseSlug);
+            $fallbackRef = '?action=course_asset&course=' . urlencode($courseSlug) . '&path=' . urlencode($relPngPath);
             $canvas = '<div class="lms-mermaid-canvas">'
-                . '<img src="' . Security::e($imgUrl) . '" alt="Schéma d\'Architecture PostgreSQL 18" class="lms-mermaid-img lms-zoomable-img" loading="lazy"/>'
+                . '<img src="' . Security::e($imgUrl) . '" data-asset-ref="' . Security::e($fallbackRef) . '" alt="Schéma d\'Architecture PostgreSQL 18" class="lms-mermaid-img lms-zoomable-img" loading="lazy" decoding="async"/>'
                 . '</div>';
         } else {
             $canvas = '<div class="lms-mermaid-canvas">'
@@ -787,6 +834,12 @@ class MarkdownParser
             return $clean;
         }
         $clean = preg_replace('#^(\.\./)+#', '', $clean) ?? $clean;
+        if (str_starts_with($clean, 'assets/')) {
+            $localPublic = dirname(__DIR__, 2) . '/public/' . $clean;
+            if (is_file($localPublic)) {
+                return $clean;
+            }
+        }
         return '?action=course_asset&course=' . urlencode($courseSlug) . '&path=' . urlencode($clean);
     }
 

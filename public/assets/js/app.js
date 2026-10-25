@@ -7,33 +7,90 @@ document.addEventListener('DOMContentLoaded', () => {
     const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
 
     // ------------------------------------------------------------------------
-    // 1. Bascule Thème Sombre / Clair
+    // 1. Bascule Thème Sombre / Clair & Logos Adaptatifs (Dark / Light)
     // ------------------------------------------------------------------------
     const themeBtn = document.getElementById('btn-toggle-theme');
+    const syncThemeLogos = () => {
+        const isLight = document.body.classList.contains('theme-light');
+        document.querySelectorAll('.theme-aware-logo').forEach((img) => {
+            const targetSrc = isLight
+                ? img.getAttribute('data-light-src')
+                : img.getAttribute('data-dark-src');
+            if (targetSrc && img.getAttribute('src') !== targetSrc) {
+                img.setAttribute('src', targetSrc);
+            }
+        });
+    };
+
     if (localStorage.getItem('lp_lms_theme') === 'light') {
         document.body.classList.add('theme-light');
     }
+    syncThemeLogos();
+
     if (themeBtn) {
         themeBtn.addEventListener('click', () => {
             document.body.classList.toggle('theme-light');
             const isLight = document.body.classList.contains('theme-light');
             localStorage.setItem('lp_lms_theme', isLight ? 'light' : 'dark');
+            syncThemeLogos();
         });
     }
 
     // ------------------------------------------------------------------------
-    // 2. Initialisation Mermaid Vectoriel Local (Fallback pour diagrammes non cachés)
+    // 1b. Filtre Rapide & Centrage du Module Actif dans la Barre Latérale Gauche
     // ------------------------------------------------------------------------
-    if (window.mermaid && document.querySelectorAll('.mermaid').length > 0) {
-        try {
-            window.mermaid.initialize({
-                startOnLoad: true,
-                theme: 'neutral',
-                securityLevel: 'strict',
-                fontFamily: 'Plus Jakarta Sans, Open Sans, sans-serif'
+    const sidebarFilterInput = document.getElementById('sidebar-module-filter');
+    if (sidebarFilterInput) {
+        sidebarFilterInput.addEventListener('input', () => {
+            const q = sidebarFilterInput.value.trim().toLowerCase();
+            document.querySelectorAll('.sidebar-track-group').forEach((group) => {
+                let visibleCount = 0;
+                group.querySelectorAll('.sidebar-module-link').forEach((link) => {
+                    const hay = (link.getAttribute('data-search-text') || '').toLowerCase();
+                    const match = q === '' || hay.includes(q);
+                    link.style.display = match ? '' : 'none';
+                    if (match) visibleCount++;
+                });
+                if (q !== '') {
+                    group.open = visibleCount > 0;
+                }
             });
-        } catch (_) {
-            // Fallback silencieux
+        });
+    }
+
+    const activeSidebarMod = document.querySelector('.sidebar-module-link.active');
+    if (activeSidebarMod) {
+        const sidebarNav = activeSidebarMod.closest('.sidebar-nav');
+        if (sidebarNav) {
+            sidebarNav.scrollTop = Math.max(0, activeSidebarMod.offsetTop - sidebarNav.clientHeight / 2 + 24);
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // 2. Chargement Paresseux (Lazy) de Mermaid Vectoriel Local (uniquement si requis)
+    // ------------------------------------------------------------------------
+    if (document.querySelectorAll('.mermaid').length > 0) {
+        const initMermaid = () => {
+            if (!window.mermaid) return;
+            try {
+                window.mermaid.initialize({
+                    startOnLoad: true,
+                    theme: 'neutral',
+                    securityLevel: 'strict',
+                    fontFamily: 'Plus Jakarta Sans, Open Sans, sans-serif'
+                });
+                if (typeof window.mermaid.run === 'function') {
+                    window.mermaid.run();
+                }
+            } catch (_) {}
+        };
+        if (window.mermaid) {
+            initMermaid();
+        } else {
+            const s = document.createElement('script');
+            s.src = 'assets/js/mermaid.min.js';
+            s.onload = initMermaid;
+            document.body.appendChild(s);
         }
     }
 
@@ -195,9 +252,27 @@ document.addEventListener('DOMContentLoaded', () => {
         let currentSlide = 0;
         const totalSlides = slides.length;
 
+        const ensureSlideImageLoaded = (idx) => {
+            if (idx < 0 || idx >= totalSlides) return;
+            const frame = slides[idx];
+            if (!frame) return;
+            const img = frame.querySelector('img[data-slide-src]');
+            if (img) {
+                const targetSrc = img.getAttribute('data-slide-src');
+                if (targetSrc && (!img.getAttribute('src') || img.getAttribute('src') === '')) {
+                    img.setAttribute('src', targetSrc);
+                }
+            }
+        };
+
         const goToSlide = (index) => {
             if (totalSlides === 0) return;
             currentSlide = Math.max(0, Math.min(totalSlides - 1, index));
+
+            // Charger immédiatement la diapositive courante et pré-charger la suivante/précédente
+            ensureSlideImageLoaded(currentSlide);
+            ensureSlideImageLoaded(currentSlide + 1);
+            ensureSlideImageLoaded(currentSlide - 1);
 
             slides.forEach((s, i) => {
                 s.classList.toggle('active', i === currentSlide);
@@ -265,6 +340,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (htmlControls) htmlControls.style.display = 'none';
                 btnEnginePdf.className = 'btn btn-sm btn-primary';
                 btnEngineHtml.className = 'btn btn-sm btn-outline';
+                const pdfIframe = document.getElementById('slide-pdf-iframe');
+                if (pdfIframe) {
+                    const dataSrc = pdfIframe.getAttribute('data-src');
+                    if (dataSrc && pdfIframe.getAttribute('src') !== dataSrc) {
+                        pdfIframe.setAttribute('src', dataSrc);
+                    }
+                }
             });
         }
 
@@ -626,29 +708,34 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ------------------------------------------------------------------------
-    // 14. Rafraîchissement Asynchrone Non-Bloquant du Statut Docker (1 fois / 60s)
+    // 14. Rafraîchissement Manuel du Statut Docker (uniquement sur clic explicite, zéro blocage navigation)
     // ------------------------------------------------------------------------
-    const lastDockerCheck = parseInt(sessionStorage.getItem('lp_docker_checked_at') || '0', 10);
-    if (csrfToken && (Date.now() - lastDockerCheck > 60000)) {
-        sessionStorage.setItem('lp_docker_checked_at', String(Date.now()));
-        fetch('index.php?action=api_docker_status', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-            body: JSON.stringify({ csrf_token: csrfToken })
-        })
-            .then((r) => r.json())
-            .then((data) => {
-                if (!data || !data.status) return;
-                const st = data.status;
-                const dot = document.getElementById('topbar-docker-dot');
-                const txt = document.getElementById('topbar-docker-text');
-                if (dot) {
-                    dot.className = 'status-dot ' + (st.running ? 'online' : 'offline');
-                }
-                if (txt) {
-                    txt.textContent = `🐳 ${st.container_name} (Port ${st.port} : ${st.running ? 'ACTIF' : 'PRÊT'})`;
-                }
+    const refreshDockerBtn = document.getElementById('btn-refresh-docker');
+    if (refreshDockerBtn && csrfToken) {
+        refreshDockerBtn.addEventListener('click', () => {
+            refreshDockerBtn.disabled = true;
+            fetch('index.php?action=api_docker_status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                body: JSON.stringify({ csrf_token: csrfToken })
             })
-            .catch(() => {});
+                .then((r) => r.json())
+                .then((data) => {
+                    refreshDockerBtn.disabled = false;
+                    if (!data || !data.status) return;
+                    const st = data.status;
+                    const dot = document.getElementById('topbar-docker-dot');
+                    const txt = document.getElementById('topbar-docker-text');
+                    if (dot) {
+                        dot.className = 'status-dot ' + (st.running ? 'online' : 'offline');
+                    }
+                    if (txt) {
+                        txt.textContent = `🐳 ${st.container_name} (Port ${st.port} : ${st.running ? 'ACTIF' : 'PRÊT'})`;
+                    }
+                })
+                .catch(() => {
+                    refreshDockerBtn.disabled = false;
+                });
+        });
     }
 });

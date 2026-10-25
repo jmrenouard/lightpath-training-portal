@@ -111,11 +111,22 @@ class DownloadController
         $disp = ($forceDownload && empty($fileInfo['inline'])) ? 'attachment' : 'inline';
         header('Content-Type: ' . $fileInfo['mime']);
         header('Content-Disposition: ' . $disp . '; filename="' . addslashes($fileInfo['filename']) . '"');
-        header('Content-Length: ' . $fileInfo['size']);
         header('X-Content-Type-Options: nosniff');
+
         if ($disp === 'inline') {
-            header('Cache-Control: private, max-age=3600');
+            header('Cache-Control: public, max-age=86400');
+            header('Permissions-Policy: unload=(self)');
+            // Si on affiche un livrable HTML en mode inline (Rendu Web Studio), réécrire les chemins relatifs ../assets/ vers assets/
+            if (str_starts_with((string)$fileInfo['mime'], 'text/html')) {
+                $html = (string)file_get_contents($fileInfo['path']);
+                $html = (string)preg_replace('/(?:\.\.\/)+assets\//', 'assets/', $html);
+                header('Content-Length: ' . strlen($html));
+                echo $html;
+                exit;
+            }
         }
+
+        header('Content-Length: ' . $fileInfo['size']);
         readfile($fileInfo['path']);
         exit;
     }
