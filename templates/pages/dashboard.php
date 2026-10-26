@@ -32,6 +32,12 @@ use LightPath\LMS\Core\Security;
             <a href="index.php?page=documents&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline">
                 📥 Centre de Téléchargement (6 formats)
             </a>
+            <a href="index.php?page=diagnostic&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline">
+                🧭 Diagnostic Initial (15 QCM)
+            </a>
+            <a href="index.php?page=exam&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline">
+                🏆 Examen Final (40 QCM)
+            </a>
         </div>
     </div>
 
@@ -51,6 +57,36 @@ use LightPath\LMS\Core\Security;
 </section>
 
 <!-- CARTES KPI TABULAR-NUMS -->
+<?php
+$lastVisited = $userProgress['last_visited'] ?? null;
+$bookmarksList = $userProgress['bookmarks'] ?? [];
+?>
+<?php if (is_array($lastVisited) && !empty($lastVisited['id'])):
+    $lvType = (string)($lastVisited['type'] ?? 'module');
+    $lvId = (string)$lastVisited['id'];
+    $lvTitle = (string)($lastVisited['title'] ?? $lvId);
+    $lvMode = (string)($lastVisited['mode'] ?? ($lvType === 'lab' ? 'enonce' : 'reader'));
+    $lvUrl = 'index.php?page=' . urlencode($lvType) . '&id=' . urlencode($lvId) . '&mode=' . urlencode($lvMode) . '&course=' . urlencode($currentCourseSlug);
+?>
+<div class="lms-card" style="margin-bottom: 1.5rem; padding: 1rem 1.35rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; border-color: var(--brand-cyan);">
+    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+        <span class="badge-code">▶️ REPRENDRE VOTRE ÉTUDE</span>
+        <strong><?= Security::e($lvTitle) ?></strong>
+        <span style="font-size: 0.8rem; color: var(--text-muted);">
+            (<?= $lvType === 'lab' ? 'Atelier Pratique Docker' : 'Module de Cours' ?>)
+        </span>
+    </div>
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <a href="<?= Security::e($lvUrl) ?>" class="btn btn-primary btn-sm">
+            ▶ Reprendre immédiatement →
+        </a>
+        <a href="index.php?action=export_notes_md&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">
+            📝 Exporter mes notes (.md)
+        </a>
+    </div>
+</div>
+<?php endif; ?>
+
 <div class="kpi-grid">
     <div class="kpi-card">
         <div class="kpi-label">📚 Modules Validés</div>
@@ -73,6 +109,59 @@ use LightPath\LMS\Core\Security;
         <div class="kpi-sub"><?= count($currentCourse['cheatsheets'] ?? []) ?> Cheatsheets + <?= count($currentCourse['tools'] ?? []) ?> Scripts pgscripts</div>
     </div>
 </div>
+
+<!-- GAMIFICATION DBA : BADGES DE COMPÉTENCES, XP & FAVORIS -->
+<section class="lms-card" style="margin-bottom: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+        <div>
+            <span class="badge-code">🏅 GAMIFICATION & CERTIFICATION DE COMPÉTENCES DBA</span>
+            <h2 style="font-size: 1.25rem; margin: 0.3rem 0 0;">
+                Grade : <span style="color: var(--brand-cyan-light);"><?= Security::e($userGamification['rank'] ?? 'Apprenant DBA') ?></span>
+                (<span class="tabular-nums"><?= (int)($userGamification['xp'] ?? 0) ?> XP</span> • Temps actif : <span class="tabular-nums"><?= Security::e($userGamification['learning_hours_formatted'] ?? '0 min') ?></span>)
+            </h2>
+        </div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <a href="index.php?page=attendance&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">
+                ✍️ Émargement (<?= count($userAttendance ?? []) ?>/20)
+            </a>
+            <a href="index.php?page=flashcards&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">
+                🧠 Révision SRS (42 cartes)
+            </a>
+            <a href="index.php?action=export_notes_md&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">
+                📥 Exporter mes notes (.md)
+            </a>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.75rem;">
+        <?php foreach (($userGamification['badges'] ?? []) as $badge): ?>
+            <div style="padding: 0.75rem 0.9rem; border-radius: var(--radius-sm); background: var(--bg-base); border: 1px solid <?= !empty($badge['unlocked']) ? 'rgba(16, 185, 129, 0.45)' : 'var(--border-hairline)' ?>; opacity: <?= !empty($badge['unlocked']) ? '1' : '0.6' ?>;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                    <strong style="font-size: 0.88rem;"><?= Security::e($badge['icon'] . ' ' . $badge['title']) ?></strong>
+                    <?php if (!empty($badge['unlocked'])): ?>
+                        <span class="badge-completed" style="font-size: 0.68rem;">Débloqué</span>
+                    <?php endif; ?>
+                </div>
+                <div style="font-size: 0.76rem; color: var(--text-secondary);"><?= Security::e($badge['description']) ?></div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+
+    <?php if (!empty($bookmarksList)): ?>
+        <div style="margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--border-hairline);">
+            <strong style="font-size: 0.84rem; color: var(--brand-cyan-light);">⭐ Mes Favoris Enregistrés :</strong>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.45rem;">
+                <?php foreach ($bookmarksList as $bm):
+                    $bmUrl = 'index.php?page=' . urlencode((string)($bm['type'] ?? 'module')) . '&id=' . urlencode((string)($bm['id'] ?? '')) . '&course=' . urlencode($currentCourseSlug);
+                ?>
+                    <a href="<?= Security::e($bmUrl) ?>" class="badge-code" style="text-decoration: none;">
+                        ⭐ <?= Security::e((string)($bm['title'] ?? $bm['id'] ?? '')) ?>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+</section>
 
 <!-- LES 4 PARCOURS CERTIFIANTS DE LA FORMATION (DÉCOUPE STRUCTURÉE PAR JOURNÉES & PUBLIC CIBLE) -->
 <section style="margin-bottom: 2.5rem;">

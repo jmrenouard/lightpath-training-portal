@@ -92,11 +92,25 @@ class CourseRepository
             foreach ($cheatsheets as $csId => $cs) {
                 if ($cs['type'] === 'module' && $cs['code'] === $code) {
                     $mod['linked_cheatsheet_id'] = $csId;
+                    $mod['linked_cheatsheet_title'] = $cs['title'];
                     break;
                 }
             }
         }
         unset($mod);
+
+        // Lier chaque Lab à sa Cheatsheet de Lab correspondante (RCA-154)
+        foreach ($labs as $labId => &$lab) {
+            $code = $lab['code'];
+            foreach ($cheatsheets as $csId => $cs) {
+                if ($cs['type'] === 'lab' && $cs['code'] === $code) {
+                    $lab['linked_cheatsheet_id'] = $csId;
+                    $lab['linked_cheatsheet_title'] = $cs['title'];
+                    break;
+                }
+            }
+        }
+        unset($lab);
 
         $payload = [
             'modules' => $modules,
@@ -134,7 +148,7 @@ class CourseRepository
             $root . '/01_programme_et_referentiel',
             $pgScriptsRoot,
         ];
-        $parts = ['v3', md5(json_encode($tracks) ?: '')];
+        $parts = ['v4_rca154', md5(json_encode($tracks) ?: '')];
         foreach ($dirs as $d) {
             $parts[] = is_dir($d) ? (string)@filemtime($d) : '0';
         }
@@ -169,6 +183,110 @@ class CourseRepository
     {
         $course = $this->getCourse($courseSlug);
         return $course['tools'][$toolId] ?? null;
+    }
+
+    /**
+     * Recherche globale plein-texte rapide sur les modules, ateliers pratiques, mémos techniques, référentiels et glossaire PostgreSQL 18.
+     */
+    public function searchContent(string $courseSlug, string $query): array
+    {
+        $q = trim($query);
+        if ($q === '' || strlen($q) < 2) {
+            return [];
+        }
+        $course = $this->getCourse($courseSlug);
+        if ($course === null) {
+            return [];
+        }
+
+        $needle = function_exists('mb_strtolower') ? mb_strtolower($q, 'UTF-8') : strtolower($q);
+        $results = [];
+
+        foreach ($course['modules'] ?? [] as $modId => $mod) {
+            $haystack = ($mod['title'] ?? '') . ' ' . ($mod['summary'] ?? '') . ' ' . ($mod['bloom'] ?? '') . ' ' . ($mod['code'] ?? '');
+            $haystackLower = function_exists('mb_strtolower') ? mb_strtolower($haystack, 'UTF-8') : strtolower($haystack);
+            $matchedInBody = false;
+            $snippet = (string)($mod['summary'] ?? '');
+            if (!str_contains($haystackLower, $needle) && !empty($mod['source_md_path']) && is_file($mod['source_md_path'])) {
+                $raw = (string)@file_get_contents($mod['source_md_path']);
+                $pos = stripos($raw, $q);
+                if ($pos !== false) {
+                    $matchedInBody = true;
+                    $start = max(0, $pos - 60);
+                    $snippet = '…' . trim(preg_replace('/\s+/', ' ', substr($raw, $start, 180)) ?? '') . '…';
+                }
+            }
+            if (str_contains($haystackLower, $needle) || $matchedInBody) {
+                $results[] = [
+                    'type' => 'module',
+                    'badge' => $mod['badge_code'] ?? ('MOD ' . $mod['code']),
+                    'id' => $modId,
+                    'title' => $mod['title'],
+                    'snippet' => $snippet,
+                    'url' => '?page=module&course=' . urlencode($courseSlug) . '&id=' . urlencode($modId),
+                ];
+            }
+        }
+
+        foreach ($course['labs'] ?? [] as $labId => $lab) {
+            $haystack = ($lab['title'] ?? '') . ' ' . ($lab['summary'] ?? '') . ' ' . ($lab['bloom'] ?? '') . ' ' . ($lab['code'] ?? '');
+            $haystackLower = function_exists('mb_strtolower') ? mb_strtolower($haystack, 'UTF-8') : strtolower($haystack);
+            $matchedInBody = false;
+            $snippet = (string)($lab['summary'] ?? '');
+            if (!str_contains($haystackLower, $needle) && !empty($lab['source_md_path']) && is_file($lab['source_md_path'])) {
+                $raw = (string)@file_get_contents($lab['source_md_path']);
+                $pos = stripos($raw, $q);
+                if ($pos !== false) {
+                    $matchedInBody = true;
+                    $start = max(0, $pos - 60);
+                    $snippet = '…' . trim(preg_replace('/\s+/', ' ', substr($raw, $start, 180)) ?? '') . '…';
+                }
+            }
+            if (str_contains($haystackLower, $needle) || $matchedInBody) {
+                $results[] = [
+                    'type' => 'lab',
+                    'badge' => $lab['badge_code'] ?? ('LAB ' . $lab['code']),
+                    'id' => $labId,
+                    'title' => $lab['title'],
+                    'snippet' => $snippet,
+                    'url' => '?page=lab&course=' . urlencode($courseSlug) . '&id=' . urlencode($labId),
+                ];
+            }
+        }
+
+        foreach ($course['cheatsheets'] ?? [] as $csId => $cs) {
+            $haystack = ($cs['title'] ?? '') . ' ' . ($cs['summary'] ?? '') . ' ' . ($cs['code'] ?? '');
+            $haystackLower = function_exists('mb_strtolower') ? mb_strtolower($haystack, 'UTF-8') : strtolower($haystack);
+            if (str_contains($haystackLower, $needle)) {
+                $results[] = [
+                    'type' => 'cheatsheet',
+                    'badge' => 'MÉMO ' . strtoupper((string)($cs['code'] ?? '')),
+                    'id' => $csId,
+                    'title' => $cs['title'],
+                    'snippet' => (string)($cs['summary'] ?? ''),
+                    'url' => '?page=documents&course=' . urlencode($courseSlug) . '&id=' . urlencode($csId),
+                ];
+            }
+        }
+
+        if (class_exists(LmsCatalog::class)) {
+            foreach (LmsCatalog::getGlossary() as $g) {
+                $haystack = ($g['term'] ?? '') . ' ' . ($g['category'] ?? '') . ' ' . ($g['definition'] ?? '');
+                $haystackLower = function_exists('mb_strtolower') ? mb_strtolower($haystack, 'UTF-8') : strtolower($haystack);
+                if (str_contains($haystackLower, $needle)) {
+                    $results[] = [
+                        'type' => 'glossary',
+                        'badge' => 'GLOSSAIRE DBA',
+                        'id' => $g['term'],
+                        'title' => $g['term'] . ' (' . $g['category'] . ')',
+                        'snippet' => $g['definition'],
+                        'url' => '?page=flashcards&course=' . urlencode($courseSlug) . '&tab=glossary&q=' . urlencode($g['term']),
+                    ];
+                }
+            }
+        }
+
+        return array_slice($results, 0, 50);
     }
 
     private function discoverModules(string $root, array $tracks): array
@@ -303,6 +421,8 @@ class CourseRepository
                 'downloads' => $downloads,
                 'linked_module_id' => null,
                 'linked_module_title' => null,
+                'linked_cheatsheet_id' => null,
+                'linked_cheatsheet_title' => null,
             ];
         }
 

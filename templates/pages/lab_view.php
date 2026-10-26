@@ -20,6 +20,15 @@ $parsed = $mdParser->parseLabFile($lab['source_md_path'], $currentCourseSlug);
 $isLabDone = in_array($labId, $userProgress['completed_labs'] ?? [], true);
 $savedNote = (string)($userProgress['notes'][$labId] ?? '');
 $defaultSql = $parsed['sql_snippets'][0]['sql'] ?? "SELECT version(), current_setting('server_version_num'), current_setting('data_checksums');";
+$defaultLabDb = $sqlRunner->detectTargetDatabase($labId);
+$isBookmarked = false;
+foreach (($userProgress['bookmarks'] ?? []) as $bm) {
+    if (($bm['type'] ?? '') === 'lab' && ($bm['id'] ?? '') === $labId) {
+        $isBookmarked = true;
+        break;
+    }
+}
+$discussions = $storage->getDiscussions($currentCourseSlug, $labId);
 
 // Calculer les ateliers du même parcours pour le Stepper de Position
 $trackId = (string)($lab['track_id'] ?? 'cursus-complet');
@@ -102,6 +111,22 @@ $activeLabToc = match ($labMode) {
                 data-completed="<?= $isLabDone ? '1' : '0' ?>">
             <?= $isLabDone ? '✔ Atelier Validé (Cliquer pour annuler)' : '✅ Marquer cet Atelier comme Terminé' ?>
         </button>
+
+        <div style="display: flex; gap: 0.45rem;">
+            <button type="button"
+                    class="btn btn-outline btn-sm btn-toggle-bookmark"
+                    data-type="lab"
+                    data-id="<?= Security::e($labId) ?>"
+                    data-title="<?= Security::e($lab['badge_code'] . ' — ' . $lab['title']) ?>"
+                    style="flex: 1;">
+                <?= $isBookmarked ? '⭐ Favori' : '☆ Favori' ?>
+            </button>
+            <?php if (!empty($lab['linked_cheatsheet_id'])): ?>
+                <a href="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=cheatsheet&id=<?= urlencode((string)$lab['linked_cheatsheet_id']) ?>&format=pdf" class="btn btn-outline btn-sm" style="flex: 1;" title="Télécharger la Fiche Mémo PDF de cet atelier">
+                    📑 Mémo Lab PDF
+                </a>
+            <?php endif; ?>
+        </div>
 
         <div style="display: flex; gap: 0.45rem;">
             <?php if ($prevLabId): ?>
@@ -190,7 +215,17 @@ $activeLabToc = match ($labMode) {
     <!-- Console SQL Interactive -->
     <div class="sql-workbench" style="margin-bottom: 0;">
         <div class="lms-code-toolbar">
-            <span class="lms-code-lang">⚡ CONSOLE SQL INTERACTIVE (CONNECTÉE À VOTRE CONTENEUR DOCKER)</span>
+            <div style="display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap;">
+                <span class="lms-code-lang">⚡ CONSOLE SQL INTERACTIVE (DOCKER PG 18)</span>
+                <label style="font-size: 0.76rem; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 0.35rem;">
+                    <span>Base cible :</span>
+                    <select id="lab-sql-db-select" class="form-control" style="padding: 0.15rem 0.5rem; font-size: 0.78rem; height: auto; width: auto;">
+                        <option value="formation_pg" <?= $defaultLabDb === 'formation_pg' ? 'selected' : '' ?>>formation_pg (Cluster)</option>
+                        <option value="dvdrental" <?= $defaultLabDb === 'dvdrental' ? 'selected' : '' ?>>dvdrental (Sakila)</option>
+                        <option value="postgres" <?= $defaultLabDb === 'postgres' ? 'selected' : '' ?>>postgres (Système)</option>
+                    </select>
+                </label>
+            </div>
             <div class="lms-code-actions">
                 <button type="button" id="btn-execute-sql" class="btn btn-primary btn-sm">
                     ▶ Exécuter la Requête SQL
@@ -198,10 +233,13 @@ $activeLabToc = match ($labMode) {
                 <button type="button" id="btn-run-oracle" class="btn btn-emerald btn-sm" data-lab-id="<?= Security::e($labId) ?>" data-course="<?= Security::e($currentCourseSlug) ?>">
                     🏆 Vérifier mon Lab (Oracle Qualiopi 1-Clic)
                 </button>
+                <button type="button" id="btn-run-lab-solution" class="btn btn-outline-cyan btn-sm" data-lab-id="<?= Security::e($labId) ?>" data-course="<?= Security::e($currentCourseSlug) ?>" title="Exécuter automatiquement les blocs SQL du corrigé officiel et vérifier l'Oracle">
+                    🧪 Tester & Valider le Corrigé Officiel
+                </button>
             </div>
         </div>
         <textarea id="lab-sql-editor" class="sql-editor-textarea" spellcheck="false"><?= Security::e($defaultSql) ?></textarea>
-        <div id="lab-sql-output" class="sql-output-console">Prêt. Cliquez sur n'importe quel bouton « ▶ Exécuter dans le Lab SQL » dans l'énoncé ou le corrigé ci-dessous, ou saisissez votre requête SQL puis cliquez sur « ▶ Exécuter la Requête SQL ».</div>
+        <div id="lab-sql-output" class="sql-output-console">Prêt. Cliquez sur n'importe quel bouton « ▶ Exécuter dans le Lab SQL » dans l'énoncé ou le corrigé ci-dessous, ou cliquez sur « 🧪 Tester & Valider le Corrigé Officiel » pour rejouer le corrigé complet sur Docker.</div>
     </div>
 </section>
 
@@ -275,6 +313,37 @@ $activeLabToc = match ($labMode) {
                 <?php endif; ?>
             </div>
         </div>
+
+        <!-- FORUM D'ENTRAIDE TECHNIQUE & Q&A SUR CET ATELIER -->
+        <section id="discussion-section" class="lms-card" style="margin-top: 1.5rem;">
+            <span class="badge-code">ENTRAIDE TECHNIQUE & ACCOMPAGNEMENT FORMATEUR</span>
+            <h3 style="font-size: 1.15rem; margin: 0.35rem 0 0.75rem;">💬 Questions & Réponses sur cet Atelier (<?= count($discussions) ?>)</h3>
+            <?php if (!empty($discussions)): ?>
+                <div style="display: flex; flex-direction: column; gap: 0.65rem; margin-bottom: 1rem;">
+                    <?php foreach ($discussions as $msg): ?>
+                        <div style="padding: 0.75rem 1rem; border-radius: var(--radius-sm); background: var(--bg-base); border: 1px solid var(--border-hairline);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem; font-size: 0.78rem;">
+                                <span>
+                                    <strong><?= Security::e((string)($msg['user_name'] ?? 'Apprenant')) ?></strong>
+                                    <span class="role-badge role-<?= Security::e((string)($msg['user_role'] ?? 'student')) ?>"><?= Security::e((string)($msg['user_role'] ?? 'student')) ?></span>
+                                </span>
+                                <span style="color: var(--text-muted);" class="tabular-nums"><?= Security::e(substr((string)($msg['created_at'] ?? ''), 0, 16)) ?></span>
+                            </div>
+                            <div style="font-size: 0.86rem; color: var(--text-secondary); white-space: pre-line;"><?= Security::e((string)($msg['message'] ?? '')) ?></div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+            <form method="POST" action="index.php?page=lab&action=post_discussion&course=<?= urlencode($currentCourseSlug) ?>">
+                <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
+                <input type="hidden" name="item_id" value="<?= Security::e($labId) ?>"/>
+                <input type="hidden" name="return_page" value="lab"/>
+                <textarea name="message" class="form-control" rows="2" required placeholder="Posez une question technique ou partagez une astuce SQL sur cet atelier..."></textarea>
+                <div style="margin-top: 0.5rem; text-align: right;">
+                    <button type="submit" class="btn btn-primary btn-sm">💬 Publier ma question / remarque</button>
+                </div>
+            </form>
+        </section>
     </div>
 
     <aside class="reader-sidebar" id="app-right-sidebar">

@@ -7,7 +7,9 @@ use LightPath\LMS\Core\JsonStorage;
 use LightPath\LMS\Core\PdoStorage;
 use LightPath\LMS\Core\Auth;
 use LightPath\LMS\Core\Security;
+use LightPath\LMS\Core\Gamification;
 use LightPath\LMS\Course\CourseRepository;
+use LightPath\LMS\Course\LmsCatalog;
 use LightPath\LMS\Course\MarkdownParser;
 use LightPath\LMS\Course\DownloadController;
 use LightPath\LMS\Docker\DockerManager;
@@ -141,6 +143,91 @@ if ($action === 'course_asset') {
     $downloader->streamFile($resolved, false);
 }
 
+if ($action === 'export_notes_md') {
+    $prog = $storage->getUserProgress($userId, $currentCourseSlug);
+    $notes = $prog['notes'] ?? [];
+    $mdLines = [
+        '# Carnet de Notes & REX Personnel — ' . ($currentCourse['title'] ?? 'PostgreSQL 18'),
+        '',
+        '- **Apprenant :** ' . $currentUser['name'] . ' (' . $currentUser['email'] . ')',
+        '- **Date d\'export :** ' . date('Y-m-d H:i:s'),
+        '',
+        '---',
+        '',
+    ];
+    if (empty($notes)) {
+        $mdLines[] = '_Aucune note enregistrée pour le moment._';
+    } else {
+        foreach ($notes as $itemKey => $noteContent) {
+            $itemTitle = $currentCourse['modules'][$itemKey]['title']
+                ?? $currentCourse['labs'][$itemKey]['title']
+                ?? $itemKey;
+            $mdLines[] = '## ' . $itemTitle . ' (`' . $itemKey . '`)';
+            $mdLines[] = '';
+            $mdLines[] = trim((string)$noteContent);
+            $mdLines[] = '';
+            $mdLines[] = '---';
+            $mdLines[] = '';
+        }
+    }
+    header('Content-Type: text/markdown; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="notes_postgresql_18_' . preg_replace('/[^a-z0-9]/i', '_', strtolower($currentUser['name'])) . '.md"');
+    echo implode("\n", $mdLines);
+    exit;
+}
+
+if ($action === 'export_scorm_manifest') {
+    $manifestXml = LmsCatalog::generateScormManifest($currentCourse ?? []);
+    header('Content-Type: application/xml; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="imsmanifest.xml"');
+    echo $manifestXml;
+    exit;
+}
+
+if ($action === 'export_qualiopi_csv' && $auth->isStaff($currentUser)) {
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="audit_qualiopi_' . $currentCourseSlug . '_' . date('Ymd_His') . '.csv"');
+    $out = fopen('php://output', 'wb');
+    if ($out !== false) {
+        fwrite($out, "\xEF\xBB\xBF");
+        fputcsv($out, [
+            'ID', 'Nom', 'Email', 'Entreprise', 'Role',
+            'Modules_Valides', 'Labs_Docker_Valides', 'Quiz_QCM_Completes',
+            'Diagnostic_Initial_Pct', 'Examen_Final_Best_Pct', 'Certifie_Exam',
+            'Demi_Journees_Emargees', 'Heures_Emargees', 'Temps_Actif_LMS_Min',
+            'Satisfaction_Moyenne_Sur_5', 'NPS_Sur_10',
+        ], ';');
+        foreach ($storage->getUsers() as $u) {
+            $uid = (int)$u['id'];
+            $p = $storage->getUserProgress($uid, $currentCourseSlug);
+            $diag = $storage->getDiagnosticResult($uid, $currentCourseSlug);
+            $exam = $storage->getBestExamAttempt($uid, $currentCourseSlug);
+            $att = $storage->getUserAttendance($uid, $currentCourseSlug);
+            $sat = $storage->getUserSatisfaction($uid, $currentCourseSlug);
+            fputcsv($out, [
+                $uid,
+                $u['name'],
+                $u['email'],
+                $u['company'] ?? '',
+                $u['role'],
+                count($p['completed_modules'] ?? []),
+                count($p['completed_labs'] ?? []),
+                count($p['quiz_scores'] ?? []),
+                $diag !== null ? (int)$diag['percent'] : '',
+                $exam !== null ? (int)$exam['percent'] : '',
+                ($exam !== null && !empty($exam['passed'])) ? 'OUI' : 'NON',
+                count($att),
+                number_format(count($att) * 3.5, 1, '.', ''),
+                (int)round(((int)($p['learning_seconds'] ?? 0)) / 60),
+                $sat !== null ? $sat['average_rating'] : '',
+                $sat !== null ? $sat['nps_score'] : '',
+            ], ';');
+        }
+        fclose($out);
+    }
+    exit;
+}
+
 // ============================================================================
 // 3. ROUTES API JSON INTERACTIVES (Progression, Quiz, Notes, Docker, SQL, Oracle)
 // ============================================================================
@@ -218,18 +305,85 @@ if (str_starts_with($action, 'api_')) {
 
         case 'api_run_sql':
             $sql = (string)($payload['sql'] ?? '');
-            $res = $sqlRunner->executeSql($userId, $sql);
+            $database = (string)($payload['database'] ?? 'formation_pg');
+            $res = $sqlRunner->executeSql($userId, $sql, $database);
             echo json_encode($res);
             exit;
 
         case 'api_run_oracle':
+        case 'api_validate_lab':
             $labId = (string)($payload['lab_id'] ?? '');
-            $res = $sqlRunner->runLabOracle($userId, $labId);
+            $database = isset($payload['database']) && $payload['database'] !== '' ? (string)$payload['database'] : null;
+            $labMeta = $courseRepo->getLab($currentCourseSlug, $labId);
+            $labMdPath = $labMeta['source_md_path'] ?? null;
+            $res = $sqlRunner->validateLabOracle($userId, $labId, $labMdPath, $database);
             if (!empty($res['passed']) && $labId !== '') {
                 $storage->markItemCompleted($userId, $currentCourseSlug, 'lab', $labId, true);
                 $storage->logAuditEvent($currentUser['email'], 'LAB_ORACLE_PASS', "Validation Oracle réussie sur {$labId} ({$res['bloom']})");
             }
             echo json_encode($res);
+            exit;
+
+        case 'api_run_lab_solution':
+            $labId = (string)($payload['lab_id'] ?? '');
+            $database = isset($payload['database']) && $payload['database'] !== '' ? (string)$payload['database'] : null;
+            $labMeta = $courseRepo->getLab($currentCourseSlug, $labId);
+            $labMdPath = $labMeta['source_md_path'] ?? null;
+            $res = $sqlRunner->runLabSolution($userId, $labId, $labMdPath, $database);
+            if (!empty($res['passed']) && $labId !== '') {
+                $storage->markItemCompleted($userId, $currentCourseSlug, 'lab', $labId, true);
+                $storage->logAuditEvent($currentUser['email'], 'LAB_SOLUTION_TEST', "Test et validation du corrigé officiel sur {$labId}");
+            }
+            echo json_encode($res);
+            exit;
+
+        case 'api_heartbeat':
+            $seconds = max(1, min(300, (int)($payload['seconds'] ?? 60)));
+            $totalSec = $storage->recordLearningTime($userId, $currentCourseSlug, $seconds);
+            echo json_encode([
+                'success' => true,
+                'learning_seconds' => $totalSec,
+                'formatted' => Gamification::formatDurationHours($totalSec),
+            ]);
+            exit;
+
+        case 'api_toggle_bookmark':
+            $itemType = (string)($payload['item_type'] ?? 'module');
+            $itemId = (string)($payload['item_id'] ?? '');
+            $title = (string)($payload['title'] ?? $itemId);
+            $res = $storage->toggleBookmark($userId, $currentCourseSlug, $itemType, $itemId, $title);
+            echo json_encode(['success' => true] + $res);
+            exit;
+
+        case 'api_flashcard_rate':
+            $cardId = (string)($payload['card_id'] ?? '');
+            $level = (int)($payload['level'] ?? 2);
+            $storage->saveFlashcardConfidence($userId, $currentCourseSlug, $cardId, $level);
+            echo json_encode(['success' => true, 'card_id' => $cardId, 'level' => $level]);
+            exit;
+
+        case 'api_post_discussion':
+            $itemId = (string)($payload['item_id'] ?? '');
+            $message = (string)($payload['message'] ?? '');
+            $parentId = isset($payload['parent_id']) ? (string)$payload['parent_id'] : null;
+            $entry = $storage->addDiscussionMessage(
+                $currentCourseSlug,
+                $itemId,
+                $userId,
+                $currentUser['name'],
+                $currentUser['role'],
+                $message,
+                $parentId
+            );
+            echo json_encode(['success' => true, 'entry' => $entry]);
+            exit;
+
+        case 'api_search':
+            $q = (string)($payload['q'] ?? ($_GET['q'] ?? ''));
+            echo json_encode([
+                'success' => true,
+                'results' => $courseRepo->searchContent($currentCourseSlug, $q),
+            ]);
             exit;
 
         case 'api_chaos':
@@ -271,6 +425,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $storage->saveUser($currentUser);
         $_SESSION['flash_success'] = 'Votre profil a été mis à jour avec succès.';
         header('Location: index.php?page=profile');
+        exit;
+    }
+
+    if ($action === 'submit_diagnostic') {
+        $answers = is_array($_POST['answers'] ?? null) ? $_POST['answers'] : [];
+        $eval = LmsCatalog::evaluateDiagnostic($answers);
+        $storage->saveDiagnosticResult($userId, $currentCourseSlug, $eval);
+        $storage->logAuditEvent($currentUser['email'], 'DIAGNOSTIC_SUBMIT', "Positionnement Qualiopi : {$eval['percent']}% ({$eval['recommended_track']})");
+        $_SESSION['flash_success'] = "Positionnement Qualiopi enregistré ({$eval['percent']}%) — Parcours recommandé : {$eval['recommended_title']}.";
+        header('Location: index.php?page=diagnostic&course=' . urlencode($currentCourseSlug));
+        exit;
+    }
+
+    if ($action === 'submit_exam') {
+        $answers = is_array($_POST['answers'] ?? null) ? $_POST['answers'] : [];
+        $durationSec = (int)($_POST['duration_seconds'] ?? 0);
+        $eval = LmsCatalog::evaluateFinalExam($answers, $durationSec);
+        $savedAttempt = $storage->saveExamAttempt($userId, $currentCourseSlug, $eval);
+        $storage->logAuditEvent($currentUser['email'], 'FINAL_EXAM_SUBMIT', "Examen Final : {$eval['percent']}% ({$eval['mention']}) — Certificat {$savedAttempt['certificate_id']}");
+        if ($eval['passed']) {
+            $_SESSION['flash_success'] = "Félicitations ! Vous avez réussi l'Examen Final de Certification PostgreSQL 18 avec {$eval['percent']}% ({$eval['mention']}).";
+        } else {
+            $_SESSION['flash_error'] = "Score obtenu : {$eval['percent']}% (seuil requis : 75%). Consultez le détail de vos réponses ci-dessous et réessayez.";
+        }
+        header('Location: index.php?page=exam&course=' . urlencode($currentCourseSlug));
+        exit;
+    }
+
+    if ($action === 'sign_attendance') {
+        $halfDayKey = trim((string)($_POST['half_day_key'] ?? ''));
+        $sigText = trim((string)($_POST['signature_text'] ?? $currentUser['name']));
+        if ($halfDayKey !== '') {
+            $storage->signAttendance($userId, $currentCourseSlug, $halfDayKey, $sigText, (string)($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1'));
+            $storage->logAuditEvent($currentUser['email'], 'ATTENDANCE_SIGN', "Émargement demi-journée {$halfDayKey}");
+            $_SESSION['flash_success'] = "Présence émargée avec succès pour la demi-journée {$halfDayKey}.";
+        }
+        header('Location: index.php?page=attendance&course=' . urlencode($currentCourseSlug));
+        exit;
+    }
+
+    if ($action === 'submit_satisfaction') {
+        $storage->saveSatisfactionSurvey($userId, $currentCourseSlug, $_POST);
+        $storage->logAuditEvent($currentUser['email'], 'SATISFACTION_SUBMIT', "Questionnaire de satisfaction à chaud Qualiopi complété");
+        $_SESSION['flash_success'] = 'Merci ! Votre évaluation de satisfaction Qualiopi a été enregistrée.';
+        header('Location: index.php?page=satisfaction&course=' . urlencode($currentCourseSlug));
+        exit;
+    }
+
+    if ($action === 'post_discussion') {
+        $itemId = trim((string)($_POST['item_id'] ?? ''));
+        $returnPage = trim((string)($_POST['return_page'] ?? 'module'));
+        $message = trim((string)($_POST['message'] ?? ''));
+        $parentId = !empty($_POST['parent_id']) ? trim((string)$_POST['parent_id']) : null;
+        if ($itemId !== '' && $message !== '') {
+            $storage->addDiscussionMessage($currentCourseSlug, $itemId, $userId, $currentUser['name'], $currentUser['role'], $message, $parentId);
+            $_SESSION['flash_success'] = 'Votre question / commentaire technique a été publié.';
+        }
+        header('Location: index.php?page=' . urlencode($returnPage) . '&id=' . urlencode($itemId) . '&course=' . urlencode($currentCourseSlug) . '#discussion-section');
         exit;
     }
 
@@ -373,7 +585,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ============================================================================
 // 5. PRÉPARATION DU CONTEXTE GLOBAL & AFFICHAGE DES PAGES
 // ============================================================================
+if ($page === 'module' && !empty($_GET['id'])) {
+    $mId = (string)$_GET['id'];
+    $mObj = $courseRepo->getModule($currentCourseSlug, $mId);
+    if ($mObj !== null) {
+        $storage->recordLastVisited($userId, $currentCourseSlug, 'module', $mId, $mObj['title'], (string)($_GET['mode'] ?? 'reader'));
+    }
+} elseif ($page === 'lab' && !empty($_GET['id'])) {
+    $lId = (string)$_GET['id'];
+    $lObj = $courseRepo->getLab($currentCourseSlug, $lId);
+    if ($lObj !== null) {
+        $storage->recordLastVisited($userId, $currentCourseSlug, 'lab', $lId, $lObj['title'], (string)($_GET['mode'] ?? 'enonce'));
+    }
+}
+
 $userProgress = $storage->getUserProgress($userId, $currentCourseSlug);
+$userDiagnostic = $storage->getDiagnosticResult($userId, $currentCourseSlug);
+$userBestExam = $storage->getBestExamAttempt($userId, $currentCourseSlug);
+$userAttendance = $storage->getUserAttendance($userId, $currentCourseSlug);
+$userGamification = Gamification::computeUserBadgesAndXp($userProgress, $userDiagnostic, $userBestExam, $userAttendance);
+
 $dockerStatus = ($page === 'docker')
     ? $docker->getUserContainerStatus($userId)
     : $docker->getCachedUserContainerStatus($userId);

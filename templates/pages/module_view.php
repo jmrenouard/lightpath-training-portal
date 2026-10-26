@@ -22,6 +22,14 @@ $totalSlides = count($slides);
 $isDone = in_array($moduleId, $userProgress['completed_modules'] ?? [], true);
 $savedNote = (string)($userProgress['notes'][$moduleId] ?? '');
 $quizScore = $userProgress['quiz_scores'][$moduleId] ?? null;
+$isBookmarked = false;
+foreach (($userProgress['bookmarks'] ?? []) as $bm) {
+    if (($bm['type'] ?? '') === 'module' && ($bm['id'] ?? '') === $moduleId) {
+        $isBookmarked = true;
+        break;
+    }
+}
+$discussions = $storage->getDiscussions($currentCourseSlug, $moduleId);
 
 // Calculer les modules du même parcours pour le Stepper de Position
 $trackId = (string)($mod['track_id'] ?? 'cursus-complet');
@@ -102,6 +110,13 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
                 📑 Fiche Mémo PDF
             </a>
         <?php endif; ?>
+        <button type="button"
+                class="btn btn-outline btn-sm btn-toggle-bookmark"
+                data-type="module"
+                data-id="<?= Security::e($moduleId) ?>"
+                data-title="<?= Security::e($mod['badge_code'] . ' — ' . $mod['title']) ?>">
+            <?= $isBookmarked ? '⭐ Favori' : '☆ Ajouter aux Favoris' ?>
+        </button>
     </div>
 </div>
 
@@ -392,6 +407,37 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
                     <?php endif; ?>
                 </div>
             </div>
+
+            <!-- FORUM D'ENTRAIDE TECHNIQUE & Q&A SUR CE MODULE -->
+            <section id="discussion-section" class="lms-card" style="margin-top: 1.5rem;">
+                <span class="badge-code">ENTRAIDE TECHNIQUE & ACCOMPAGNEMENT FORMATEUR</span>
+                <h3 style="font-size: 1.15rem; margin: 0.35rem 0 0.75rem;">💬 Questions & Réponses sur ce Module (<?= count($discussions) ?>)</h3>
+                <?php if (!empty($discussions)): ?>
+                    <div style="display: flex; flex-direction: column; gap: 0.65rem; margin-bottom: 1rem;">
+                        <?php foreach ($discussions as $msg): ?>
+                            <div style="padding: 0.75rem 1rem; border-radius: var(--radius-sm); background: var(--bg-base); border: 1px solid var(--border-hairline);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem; font-size: 0.78rem;">
+                                    <span>
+                                        <strong><?= Security::e((string)($msg['user_name'] ?? 'Apprenant')) ?></strong>
+                                        <span class="role-badge role-<?= Security::e((string)($msg['user_role'] ?? 'student')) ?>"><?= Security::e((string)($msg['user_role'] ?? 'student')) ?></span>
+                                    </span>
+                                    <span style="color: var(--text-muted);" class="tabular-nums"><?= Security::e(substr((string)($msg['created_at'] ?? ''), 0, 16)) ?></span>
+                                </div>
+                                <div style="font-size: 0.86rem; color: var(--text-secondary); white-space: pre-line;"><?= Security::e((string)($msg['message'] ?? '')) ?></div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+                <form method="POST" action="index.php?page=module&action=post_discussion&course=<?= urlencode($currentCourseSlug) ?>">
+                    <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
+                    <input type="hidden" name="item_id" value="<?= Security::e($moduleId) ?>"/>
+                    <input type="hidden" name="return_page" value="module"/>
+                    <textarea name="message" class="form-control" rows="2" required placeholder="Posez une question technique ou partagez un retour d'expérience sur ce module..."></textarea>
+                    <div style="margin-top: 0.5rem; text-align: right;">
+                        <button type="submit" class="btn btn-primary btn-sm">💬 Publier ma question / remarque</button>
+                    </div>
+                </form>
+            </section>
         </div>
 
         <!-- COLONNE LATÉRALE ÉPURÉE : SOMMAIRE SCROLLSPY + NOTES + PARCOURS REPLIABLE -->

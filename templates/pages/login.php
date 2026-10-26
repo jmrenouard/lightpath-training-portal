@@ -15,11 +15,11 @@ $csrfToken = Security::getCsrfToken();
     <link rel="stylesheet" href="assets/css/app.css"/>
 </head>
 <body>
-<div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem; background: radial-gradient(circle at top right, rgba(0, 176, 240, 0.14), transparent 55%), var(--bg-base);">
-    <div style="max-width: 980px; width: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-elevated);">
+<div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: clamp(0.75rem, 3vw, 2rem); background: radial-gradient(circle at top right, rgba(0, 176, 240, 0.14), transparent 55%), var(--bg-base);">
+    <div style="max-width: 980px; width: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); background: var(--bg-surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-elevated);">
 
         <!-- Colonne Branding LightPath -->
-        <div style="padding: 2.5rem; background: linear-gradient(160deg, #0B1120 0%, #1E293B 100%); display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid var(--border-hairline);">
+        <div style="padding: clamp(1.25rem, 4vw, 2.5rem); background: linear-gradient(160deg, #0B1120 0%, #1E293B 100%); display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid var(--border-hairline); min-width: 0;">
             <div>
                 <div style="display: flex; align-items: center; gap: 0.85rem; margin-bottom: 1.75rem;">
                     <img src="assets/img/lightpath_logo_white_text.png" alt="LightPath SARL" style="height: 44px;"/>
@@ -59,7 +59,7 @@ $csrfToken = Security::getCsrfToken();
         </div>
 
         <!-- Colonne Formulaire -->
-        <div style="padding: 2.5rem;">
+        <div style="padding: clamp(1.25rem, 4vw, 2.5rem); min-width: 0;">
             <?php if ($flashError): ?>
                 <div class="flash-banner flash-error"><?= Security::e($flashError) ?></div>
             <?php endif; ?>
@@ -67,7 +67,7 @@ $csrfToken = Security::getCsrfToken();
                 <div class="flash-banner flash-success"><?= Security::e($flashSuccess) ?></div>
             <?php endif; ?>
 
-            <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-hairline); padding-bottom: 0.75rem;">
+            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-hairline); padding-bottom: 0.75rem;">
                 <a href="index.php?page=login&tab=login" class="btn <?= $activeTab === 'login' ? 'btn-primary' : 'btn-outline' ?> btn-sm">Se Connecter</a>
                 <a href="index.php?page=login&tab=register" class="btn <?= $activeTab === 'register' ? 'btn-primary' : 'btn-outline' ?> btn-sm">Créer un Compte Apprenant</a>
             </div>
@@ -81,11 +81,11 @@ $csrfToken = Security::getCsrfToken();
                     <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
                     <div class="form-group">
                         <label for="login-email">Adresse Email Professionnelle</label>
-                        <input type="email" id="login-email" name="email" class="form-control" required value="jmrenouard@lightpath.fr"/>
+                        <input type="email" id="login-email" name="email" class="form-control" autocomplete="username" required value="jmrenouard@lightpath.fr"/>
                     </div>
                     <div class="form-group">
                         <label for="login-password">Mot de Passe</label>
-                        <input type="password" id="login-password" name="password" class="form-control" required value="LightPath2026!"/>
+                        <input type="password" id="login-password" name="password" class="form-control" autocomplete="current-password" required value="LightPath2026!"/>
                     </div>
                     <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem; padding: 0.75rem;">
                         🚀 Se connecter au Portail LightPath
@@ -100,19 +100,19 @@ $csrfToken = Security::getCsrfToken();
                     <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
                     <div class="form-group">
                         <label>Nom & Prénom</label>
-                        <input type="text" name="name" class="form-control" required placeholder="Ex: Sophie Laurent"/>
+                        <input type="text" name="name" class="form-control" autocomplete="name" required placeholder="Ex: Sophie Laurent"/>
                     </div>
                     <div class="form-group">
                         <label>Adresse Email</label>
-                        <input type="email" name="email" class="form-control" required placeholder="sophie.laurent@entreprise.fr"/>
+                        <input type="email" name="email" class="form-control" autocomplete="email" required placeholder="sophie.laurent@entreprise.fr"/>
                     </div>
                     <div class="form-group">
                         <label>Entreprise / Organisation</label>
-                        <input type="text" name="company" class="form-control" placeholder="Ex: Direction Technique"/>
+                        <input type="text" name="company" class="form-control" autocomplete="organization" placeholder="Ex: Direction Technique"/>
                     </div>
                     <div class="form-group">
                         <label>Mot de passe (6 caractères min.)</label>
-                        <input type="password" name="password" class="form-control" required minlength="6"/>
+                        <input type="password" name="password" class="form-control" autocomplete="new-password" required minlength="6"/>
                     </div>
                     <button type="submit" class="btn btn-emerald" style="width: 100%; margin-top: 0.5rem; padding: 0.75rem;">
                         ✨ Créer mon compte & Démarrer la formation

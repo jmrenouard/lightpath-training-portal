@@ -21,7 +21,7 @@ class JsonStorage implements StorageInterface
         $this->ensureDefaultUsers();
     }
 
-    private function readFile(string $name, array $default = []): array
+    protected function readFile(string $name, array $default = []): array
     {
         $path = $this->dataDir . '/' . $name . '.json';
         if (!is_file($path)) {
@@ -43,7 +43,7 @@ class JsonStorage implements StorageInterface
         return is_array($decoded) ? $decoded : $default;
     }
 
-    private function writeFile(string $name, array $data): void
+    protected function writeFile(string $name, array $data): void
     {
         $path = $this->dataDir . '/' . $name . '.json';
         $tmpPath = $path . '.tmp.' . getmypid() . '.' . mt_rand(1000, 9999);
@@ -293,5 +293,293 @@ class JsonStorage implements StorageInterface
     {
         $logs = $this->readFile('audit_logs', []);
         return array_slice($logs, 0, $limit);
+    }
+
+    // =========================================================================
+    // Fonctionnalités LMS Enterprise & Qualiopi (RCA-153, RCA-154, RCA-155)
+    // =========================================================================
+
+    public function saveDiagnosticResult(int $userId, string $courseSlug, array $result): void
+    {
+        $all = $this->readFile('diagnostics', []);
+        $key = $userId . ':' . $courseSlug;
+        $result['user_id'] = $userId;
+        $result['course_slug'] = $courseSlug;
+        $result['completed_at'] = date('Y-m-d H:i:s');
+        $all[$key] = $result;
+        $this->writeFile('diagnostics', $all);
+    }
+
+    public function getDiagnosticResult(int $userId, string $courseSlug = 'postgresql-18'): ?array
+    {
+        $all = $this->readFile('diagnostics', []);
+        $key = $userId . ':' . $courseSlug;
+        return $all[$key] ?? null;
+    }
+
+    public function getAllDiagnostics(): array
+    {
+        return $this->readFile('diagnostics', []);
+    }
+
+    public function saveExamAttempt(int $userId, string $courseSlug, array $attempt): array
+    {
+        $all = $this->readFile('exams', []);
+        $key = $userId . ':' . $courseSlug;
+        $attempt['user_id'] = $userId;
+        $attempt['course_slug'] = $courseSlug;
+        $attempt['submitted_at'] = date('Y-m-d H:i:s');
+        if (empty($attempt['certificate_id'])) {
+            $attempt['certificate_id'] = sprintf(
+                'LP-PG18-CERT-%d-%s',
+                $userId,
+                strtoupper(substr(md5($userId . ':' . $courseSlug . ':' . microtime(true)), 0, 8))
+            );
+        }
+        $history = $all[$key] ?? [];
+        array_unshift($history, $attempt);
+        $all[$key] = array_slice($history, 0, 20);
+        $this->writeFile('exams', $all);
+        return $attempt;
+    }
+
+    public function getExamAttempts(int $userId, string $courseSlug = 'postgresql-18'): array
+    {
+        $all = $this->readFile('exams', []);
+        $key = $userId . ':' . $courseSlug;
+        return $all[$key] ?? [];
+    }
+
+    public function getBestExamAttempt(int $userId, string $courseSlug = 'postgresql-18'): ?array
+    {
+        $attempts = $this->getExamAttempts($userId, $courseSlug);
+        if (empty($attempts)) {
+            return null;
+        }
+        $best = $attempts[0];
+        foreach ($attempts as $a) {
+            $aPct = (float)($a['percent'] ?? $a['percentage'] ?? 0);
+            $bestPct = (float)($best['percent'] ?? $best['percentage'] ?? 0);
+            if ($aPct > $bestPct) {
+                $best = $a;
+            }
+        }
+        return $best;
+    }
+
+    public function getAllExamAttempts(): array
+    {
+        return $this->readFile('exams', []);
+    }
+
+    public function recordLearningTime(int $userId, string $courseSlug, int $seconds = 60, string $itemId = ''): int
+    {
+        $seconds = max(1, min(600, $seconds));
+        $all = $this->getAllProgress();
+        $key = $userId . ':' . $courseSlug;
+        $prog = $this->getUserProgress($userId, $courseSlug);
+
+        $newTotal = (int)($prog['learning_seconds'] ?? $prog['time_spent_seconds'] ?? 0) + $seconds;
+        $prog['learning_seconds'] = $newTotal;
+        $prog['time_spent_seconds'] = $newTotal;
+        if (!isset($prog['item_time_seconds']) || !is_array($prog['item_time_seconds'])) {
+            $prog['item_time_seconds'] = [];
+        }
+        if ($itemId !== '') {
+            $prog['item_time_seconds'][$itemId] = (int)($prog['item_time_seconds'][$itemId] ?? 0) + $seconds;
+        }
+        $prog['updated_at'] = date('Y-m-d H:i:s');
+        $all[$key] = $prog;
+        $this->writeFile('progress', $all);
+
+        return $newTotal;
+    }
+
+    public function signAttendance(int $userId, string $courseSlug, string $halfDayKey, string $signatureText = '', string $ip = '127.0.0.1'): array
+    {
+        $all = $this->readFile('attendance', []);
+        $key = $userId . ':' . $courseSlug;
+        $userRecords = $all[$key] ?? [];
+        $sig = trim($signatureText) !== '' ? trim($signatureText) : 'Signé numériquement';
+
+        $entry = [
+            'user_id' => $userId,
+            'course_slug' => $courseSlug,
+            'half_day_key' => $halfDayKey,
+            'signature' => $sig,
+            'signature_text' => $sig,
+            'signed_at' => date('Y-m-d H:i:s'),
+            'ip' => $ip !== '' ? $ip : '127.0.0.1',
+            'hash' => substr(hash('sha256', $userId . '|' . $courseSlug . '|' . $halfDayKey . '|' . $sig), 0, 16),
+        ];
+
+        $userRecords[$halfDayKey] = $entry;
+        $all[$key] = $userRecords;
+        $this->writeFile('attendance', $all);
+
+        return $userRecords;
+    }
+
+    public function getUserAttendance(int $userId, string $courseSlug = 'postgresql-18'): array
+    {
+        $all = $this->readFile('attendance', []);
+        $key = $userId . ':' . $courseSlug;
+        return $all[$key] ?? [];
+    }
+
+    public function getAllAttendance(): array
+    {
+        return $this->readFile('attendance', []);
+    }
+
+    public function saveSatisfactionSurvey(int $userId, string $courseSlug, array $survey): array
+    {
+        $all = $this->readFile('satisfaction', []);
+        $key = $userId . ':' . $courseSlug;
+
+        $criteriaKeys = ['content_quality', 'labs_docker', 'trainer_pedagogy', 'lms_ergonomics', 'objectives_met'];
+        $ratings = [];
+        foreach ($criteriaKeys as $ck) {
+            $val = isset($survey['ratings'][$ck]) ? (int)$survey['ratings'][$ck] : (int)($survey[$ck] ?? 5);
+            $ratings[$ck] = max(1, min(5, $val));
+        }
+
+        $survey['user_id'] = $userId;
+        $survey['course_slug'] = $courseSlug;
+        $survey['ratings'] = $ratings;
+        $survey['average_rating'] = round(array_sum($ratings) / count($ratings), 2);
+        $survey['nps_score'] = max(0, min(10, (int)($survey['nps_score'] ?? 10)));
+        $survey['submitted_at'] = date('Y-m-d H:i:s');
+
+        $all[$key] = $survey;
+        $this->writeFile('satisfaction', $all);
+
+        return $survey;
+    }
+
+    public function getUserSatisfaction(int $userId, string $courseSlug = 'postgresql-18'): ?array
+    {
+        $all = $this->readFile('satisfaction', []);
+        $key = $userId . ':' . $courseSlug;
+        if (!isset($all[$key])) {
+            return null;
+        }
+        $row = $all[$key];
+        if (isset($row['average_rating'])) {
+            $row['average_rating'] = (float)$row['average_rating'];
+        }
+        return $row;
+    }
+
+    public function getAllSatisfactionSurveys(): array
+    {
+        return $this->readFile('satisfaction', []);
+    }
+
+    public function toggleBookmark(int $userId, string $courseSlug, string $itemType, string $itemId = '', string $title = ''): array
+    {
+        if ($itemId === '') {
+            $itemId = $itemType;
+            $itemType = 'module';
+        }
+        $all = $this->getAllProgress();
+        $key = $userId . ':' . $courseSlug;
+        $prog = $this->getUserProgress($userId, $courseSlug);
+
+        $bookmarks = $prog['bookmarks'] ?? [];
+        if (!is_array($bookmarks)) {
+            $bookmarks = [];
+        }
+        $bmKey = $itemType . ':' . $itemId;
+        $bookmarked = false;
+        if (isset($bookmarks[$bmKey])) {
+            unset($bookmarks[$bmKey]);
+        } else {
+            $bookmarks[$bmKey] = [
+                'type' => $itemType,
+                'id' => $itemId,
+                'title' => $title !== '' ? $title : $itemId,
+                'created_at' => date('Y-m-d H:i:s'),
+            ];
+            $bookmarked = true;
+        }
+        $prog['bookmarks'] = $bookmarks;
+        $prog['updated_at'] = date('Y-m-d H:i:s');
+        $all[$key] = $prog;
+        $this->writeFile('progress', $all);
+
+        return ['bookmarked' => $bookmarked, 'bookmarks' => $bookmarks];
+    }
+
+    public function recordLastVisited(int $userId, string $courseSlug, string $itemType, string $itemId, string $title, string $mode = 'reader'): void
+    {
+        $all = $this->getAllProgress();
+        $key = $userId . ':' . $courseSlug;
+        $prog = $this->getUserProgress($userId, $courseSlug);
+
+        $prog['last_visited'] = [
+            'type' => $itemType,
+            'id' => $itemId,
+            'title' => $title,
+            'mode' => $mode,
+            'visited_at' => date('Y-m-d H:i:s'),
+        ];
+        $all[$key] = $prog;
+        $this->writeFile('progress', $all);
+    }
+
+    public function saveFlashcardConfidence(int $userId, string $courseSlug, string $cardId, int|string $level): void
+    {
+        $all = $this->getAllProgress();
+        $key = $userId . ':' . $courseSlug;
+        $prog = $this->getUserProgress($userId, $courseSlug);
+
+        if (!isset($prog['flashcards']) || !is_array($prog['flashcards'])) {
+            $prog['flashcards'] = [];
+        }
+        if (!isset($prog['flashcard_confidence']) || !is_array($prog['flashcard_confidence'])) {
+            $prog['flashcard_confidence'] = [];
+        }
+
+        $numLevel = is_numeric($level) ? max(1, min(3, (int)$level)) : ($level === 'mastered' ? 3 : ($level === 'review' ? 1 : 2));
+        $prog['flashcard_confidence'][$cardId] = [
+            'level' => $numLevel,
+            'updated_at' => date('Y-m-d H:i:s'),
+        ];
+        $prog['flashcards'][$cardId] = $prog['flashcard_confidence'][$cardId];
+        $all[$key] = $prog;
+        $this->writeFile('progress', $all);
+    }
+
+    public function addDiscussionMessage(string $courseSlug, string $itemId, int $userId, string $userName, string $userRole, string $message, ?string $parentId = null): array
+    {
+        $all = $this->readFile('discussions', []);
+        $key = $courseSlug . ':' . $itemId;
+        $list = $all[$key] ?? [];
+        $entry = [
+            'id' => uniqid('msg_', false),
+            'course_slug' => $courseSlug,
+            'item_id' => $itemId,
+            'user_id' => $userId,
+            'user_name' => $userName,
+            'user_role' => $userRole,
+            'message' => trim($message),
+            'parent_id' => $parentId,
+            'created_at' => date('Y-m-d H:i:s'),
+        ];
+        $list[] = $entry;
+        $all[$key] = $list;
+        $this->writeFile('discussions', $all);
+        return $entry;
+    }
+
+    public function getDiscussions(string $courseSlug, string $itemId = ''): array
+    {
+        $all = $this->readFile('discussions', []);
+        if ($itemId === '') {
+            return $all[$courseSlug] ?? [];
+        }
+        $key = $courseSlug . ':' . $itemId;
+        return $all[$key] ?? ($all[$itemId] ?? []);
     }
 }

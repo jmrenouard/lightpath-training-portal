@@ -14,7 +14,7 @@ return [
 
     // Driver de stockage : 'json' (Flat-File Atomique Zéro-Config par défaut) ou 'pdo' (PostgreSQL / MySQL / SQLite)
     'storage_driver' => getenv('LMS_STORAGE_DRIVER') ?: 'json',
-    'storage_path' => __DIR__ . '/../storage/data',
+    'storage_path' => getenv('LMS_DATA_DIR') ?: (__DIR__ . '/../storage/data'),
 
     // Configuration PDO optionnelle pour hébergement web en production
     'pdo' => [
