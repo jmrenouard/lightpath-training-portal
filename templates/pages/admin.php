@@ -29,7 +29,17 @@ $auditLogs = $storage->getAuditLogs(40);
 
 <?php if ($adminTab === 'cohort'): ?>
     <!-- 1. SUIVI DE COHORTE & PROGRESSION QUALIOPI -->
-    <h2 style="font-size: 1.3rem; margin-bottom: 1rem;">📊 Matrice de Suivi Pédagogique de la Cohorte (<?= Security::e($currentCourse['short_title']) ?>)</h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+        <h2 style="font-size: 1.3rem; margin: 0;">📊 Matrice de Suivi Pédagogique de la Cohorte (<?= Security::e($currentCourse['short_title']) ?>)</h2>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <a href="index.php?action=export_qualiopi_csv&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald btn-sm">
+                📊 Exporter Audit Qualiopi (CSV)
+            </a>
+            <a href="index.php?action=export_scorm_manifest&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline-cyan btn-sm">
+                📦 Exporter Manifeste SCORM 1.2 (imsmanifest.xml)
+            </a>
+        </div>
+    </div>
     <div class="lms-table-wrap">
         <table class="lms-table">
             <thead>
@@ -40,7 +50,8 @@ $auditLogs = $storage->getAuditLogs(40);
                     <th>Rôle</th>
                     <th>Modules Validés</th>
                     <th>Labs Docker Validés</th>
-                    <th>Quiz Réussis</th>
+                    <th>Quiz / Examen</th>
+                    <th>Émargement & Temps</th>
                     <th>Port Docker Dédié</th>
                     <th>Action Docker</th>
                 </tr>
@@ -52,6 +63,9 @@ $auditLogs = $storage->getAuditLogs(40);
                     $uMods = count($uProg['completed_modules'] ?? []);
                     $uLabs = count($uProg['completed_labs'] ?? []);
                     $uQuiz = count($uProg['quiz_scores'] ?? []);
+                    $uDiag = $storage->getDiagnosticResult($uid, $currentCourseSlug);
+                    $uExam = $storage->getBestExamAttempt($uid, $currentCourseSlug);
+                    $uAtt = $storage->getUserAttendance($uid, $currentCourseSlug);
                     $uPort = $docker->getUserPort($uid);
                     $uContainer = $docker->getContainerName($uid);
                 ?>
@@ -65,7 +79,19 @@ $auditLogs = $storage->getAuditLogs(40);
                         <td><span class="role-badge role-<?= Security::e($u['role']) ?>"><?= Security::e($u['role']) ?></span></td>
                         <td class="tabular-nums"><strong><?= $uMods ?></strong> / <?= $totalModules ?></td>
                         <td class="tabular-nums"><strong><?= $uLabs ?></strong> / <?= $totalLabs ?></td>
-                        <td class="tabular-nums"><strong><?= $uQuiz ?></strong> / <?= $totalModules ?></td>
+                        <td class="tabular-nums">
+                            Quiz: <strong><?= $uQuiz ?></strong>/<?= $totalModules ?>
+                            <?php if ($uDiag !== null): ?>
+                                <div style="font-size: 0.74rem; color: var(--text-secondary);">Diag: <?= (int)$uDiag['percent'] ?>%</div>
+                            <?php endif; ?>
+                            <?php if ($uExam !== null): ?>
+                                <div style="font-size: 0.74rem; color: <?= !empty($uExam['passed']) ? '#34D399' : '#FBBF24' ?>;">Exam: <?= (int)$uExam['percent'] ?>%</div>
+                            <?php endif; ?>
+                        </td>
+                        <td class="tabular-nums">
+                            <strong><?= count($uAtt) ?></strong>/20 demi-j.
+                            <div style="font-size: 0.74rem; color: var(--text-muted);"><?= (int)round(((int)($uProg['learning_seconds'] ?? 0)) / 60) ?> min LMS</div>
+                        </td>
                         <td><code><?= Security::e($uContainer) ?> (<?= $uPort ?>)</code></td>
                         <td>
                             <button type="button" class="btn btn-emerald btn-sm btn-docker-cmd" data-cmd="start" data-user-id="<?= $uid ?>">
@@ -122,11 +148,11 @@ $auditLogs = $storage->getAuditLogs(40);
                                                 <input type="hidden" name="user_id" value="<?= $uid ?>"/>
                                                 <div class="form-group">
                                                     <label>Nom</label>
-                                                    <input type="text" name="name" class="form-control" value="<?= Security::e($u['name']) ?>" required/>
+                                                    <input type="text" name="name" class="form-control" autocomplete="name" value="<?= Security::e($u['name']) ?>" required/>
                                                 </div>
                                                 <div class="form-group">
                                                     <label>Entreprise</label>
-                                                    <input type="text" name="company" class="form-control" value="<?= Security::e($u['company'] ?? '') ?>"/>
+                                                    <input type="text" name="company" class="form-control" autocomplete="organization" value="<?= Security::e($u['company'] ?? '') ?>"/>
                                                 </div>
                                                 <div class="form-group">
                                                     <label>Rôle</label>
@@ -138,7 +164,7 @@ $auditLogs = $storage->getAuditLogs(40);
                                                 </div>
                                                 <div class="form-group">
                                                     <label>Nouveau mot de passe (optionnel)</label>
-                                                    <input type="password" name="reset_password" class="form-control" placeholder="Laisser vide pour conserver"/>
+                                                    <input type="password" name="reset_password" class="form-control" autocomplete="new-password" placeholder="Laisser vide pour conserver"/>
                                                 </div>
                                                 <div class="form-group">
                                                     <label><input type="checkbox" name="active" value="1" <?= !empty($u['active']) ? 'checked' : '' ?>/> Compte actif</label>
@@ -170,15 +196,15 @@ $auditLogs = $storage->getAuditLogs(40);
                 <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
                 <div class="form-group">
                     <label>Nom Complet</label>
-                    <input type="text" name="name" class="form-control" required placeholder="Ex: Marc Lefèvre"/>
+                    <input type="text" name="name" class="form-control" autocomplete="name" required placeholder="Ex: Marc Lefèvre"/>
                 </div>
                 <div class="form-group">
                     <label>Email Professionnel</label>
-                    <input type="email" name="email" class="form-control" required placeholder="marc.lefevre@client.fr"/>
+                    <input type="email" name="email" class="form-control" autocomplete="email" required placeholder="marc.lefevre@client.fr"/>
                 </div>
                 <div class="form-group">
                     <label>Entreprise / Équipe</label>
-                    <input type="text" name="company" class="form-control" placeholder="Ex: Équipe SRE / DBA"/>
+                    <input type="text" name="company" class="form-control" autocomplete="organization" placeholder="Ex: Équipe SRE / DBA"/>
                 </div>
                 <div class="form-group">
                     <label>Rôle</label>
@@ -190,7 +216,7 @@ $auditLogs = $storage->getAuditLogs(40);
                 </div>
                 <div class="form-group">
                     <label>Mot de Passe Initial</label>
-                    <input type="text" name="password" class="form-control" required value="LightPath2026!"/>
+                    <input type="text" name="password" class="form-control" autocomplete="new-password" required value="LightPath2026!"/>
                 </div>
                 <button type="submit" class="btn btn-emerald" style="width: 100%;">
                     ➕ Créer le Compte Utilisateur

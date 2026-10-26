@@ -1,0 +1,38 @@
+{
+  "browser": {
+    "browserName": "chromium",
+    "isolated": true,
+    "launchOptions": {
+      "channel": "chrome",
+      "headless": true
+    },
+    "contextOptions": {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      }
+    }
+  },
+  "console": {
+    "level": "debug"
+  },
+  "network": {
+    "allowedOrigins": [
+      "http://localhost:*",
+      "http://127.0.0.1:*"
+    ]
+  },
+  "timeouts": {
+    "action": 5000,
+    "navigation": 30000,
+    "settle": 300
+  },
+  "imageResponses": "allow",
+  "filePaths": "relative",
+  "snapshot": {
+    "mode": "full",
+    "boxes": true
+  },
+  "allowUnrestrictedFileAccess": false,
+  "codegen": "none"
+}

@@ -67,7 +67,7 @@ class MarkdownParser
             ];
         }
         $mtime = (int)@filemtime($mdPath);
-        $cacheKey = md5('lab_v6_rca146:' . $courseSlug . ':' . $mdPath . ':' . $mtime);
+        $cacheKey = md5('lab_v7_rca151:' . $courseSlug . ':' . $mdPath . ':' . $mtime);
         $cacheFile = $this->cacheDir . '/' . $cacheKey . '.json';
         if (is_file($cacheFile)) {
             $cached = @json_decode((string)@file_get_contents($cacheFile), true);
@@ -104,17 +104,17 @@ class MarkdownParser
      * - `enonce_md` : Métadonnées, Prérequis, Mise en Situation, Travail Pas-à-Pas, Résultats Attendus et Challenges (avec solutions repliées en spoiler `<details>`).
      * - `corrige_md` : Solutions des Challenges Fast-Track + Corrigé Détaillé + Oracle de Validation Automatisé Qualiopi + Grille d'Évaluation (DoD) + Débriefing & REX Expert.
      */
-    private function splitLabEnonceAndCorrige(string $raw): array
+    public function splitLabEnonceAndCorrige(string $raw): array
     {
-        // Encapsuler les blocs "* **Requête Solution :**" suivis d'un bloc de code dans un <details> spoiler
+        // Encapsuler tous les marqueurs de solutions de challenges suivis d'un bloc de code dans un <details> spoiler
         $challengeSolutions = [];
         $processedRaw = preg_replace_callback(
-            '/(?:^\s*[\*\-]\s*\*\*Requête\s+Solution\s*:\*\*\s*\R+)(```[a-zA-Z0-9_-]*\R.*?\R```)/imsu',
+            '/(?:^\s*[\*\-]\s*\*\*(?:Requête\s+Solution|Commandes?\s+Solutions?|Solutions?\s+Analytiques?|Configurations?\s+Solutions?|Requêtes?\s+Démonstrations?|Corrigés?\s+Techniques?|Corrigés?\s+SQL)\s*:\*\*\s*\R+)(```[a-zA-Z0-9_-]*\R.*?\R```)/imsu',
             static function (array $m) use (&$challengeSolutions): string {
                 $codeBlock = trim($m[1]);
                 $idx = count($challengeSolutions) + 1;
                 $challengeSolutions[] = "### 💡 Solution du Challenge Fast-Track #{$idx}\n\n" . $codeBlock;
-                return "<details>\n<summary>👁️ Afficher la Requête Solution (Challenge #{$idx})</summary>\n\n" . $codeBlock . "\n</details>\n";
+                return "<details>\n<summary>👁️ Afficher la Solution du Challenge (#{$idx})</summary>\n\n" . $codeBlock . "\n</details>\n";
             },
             $raw
         ) ?? $raw;
@@ -129,6 +129,11 @@ class MarkdownParser
             // Retirer un séparateur horizontal final "---" éventuel en fin d'énoncé
             $enoncePart = preg_replace('/\R+---\s*$/u', '', $enoncePart) ?? $enoncePart;
             $corrigePart = ltrim(substr($processedRaw, $splitOffset));
+
+            // Si un bloc "Pour Aller Plus Loin" se trouve après le H2 de validation dans un document brut, le préserver aussi dans l'énoncé
+            if (!str_contains($enoncePart, 'Pour Aller Plus Loin') && preg_match('/(^#{2,3}\s+🌟\s*Pour Aller Plus Loin.*?)(?=^##\s+|\z)/imsu', $corrigePart, $pm)) {
+                $enoncePart .= "\n\n---\n\n" . trim($pm[1]);
+            }
         }
 
         $corrigeBlocks = [];

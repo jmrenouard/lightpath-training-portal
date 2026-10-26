@@ -3,7 +3,7 @@ declare(strict_types=1);
 use LightPath\LMS\Core\Security;
 ?>
 
-<div class="no-print" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+<div class="no-print" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.5rem;">
     <div>
         <span class="badge-code">TRAÇABILITÉ QUALIOPI & TAXONOMIE DE BLOOM</span>
         <h1 style="font-size: 1.65rem; margin: 0.35rem 0 0;">🎓 Attestation de Compétences & Relevé Qualiopi</h1>
@@ -13,8 +13,8 @@ use LightPath\LMS\Core\Security;
     </button>
 </div>
 
-<div style="background: var(--bg-surface); border: 2px solid var(--brand-cyan); border-radius: var(--radius-lg); padding: 3rem; box-shadow: var(--shadow-elevated); max-width: 1050px; margin: 0 auto;">
-    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-hairline); padding-bottom: 1.5rem; margin-bottom: 2rem;">
+<div style="background: var(--bg-surface); border: 2px solid var(--brand-cyan); border-radius: var(--radius-lg); padding: clamp(1rem, 4vw, 3rem); box-shadow: var(--shadow-elevated); max-width: 1050px; margin: 0 auto;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; border-bottom: 2px solid var(--border-hairline); padding-bottom: 1.5rem; margin-bottom: 2rem;">
         <div style="display: flex; align-items: center; gap: 1rem;">
             <img src="assets/img/lightpath_logo_white_text.png"
                  data-dark-src="assets/img/lightpath_logo_white_text.png"
@@ -36,29 +36,39 @@ use LightPath\LMS\Core\Security;
     </div>
 
     <div style="text-align: center; margin-bottom: 2rem;">
-        <div class="badge-code" style="font-size: 0.82rem;">ATTESTATION D'ACQUISITION DE COMPÉTENCES PROFESSIONNELLES</div>
+        <div class="badge-code" style="font-size: 0.82rem;">ATTESTATION D'ACQUISITION DE COMPÉTENCES PROFESSIONNELLES • DURÉE : <?= Security::e(strtoupper((string)($currentCourse['duration'] ?? '70 HEURES (10 JOURS)'))) ?></div>
         <h2 style="font-size: 1.85rem; margin: 0.75rem 0 0.35rem;"><?= Security::e($currentCourse['title']) ?></h2>
         <p style="color: var(--text-secondary); margin: 0;">
             Délivrée à <strong style="color: var(--text-primary); font-size: 1.15rem;"><?= Security::e($currentUser['name']) ?></strong>
             (<?= Security::e($currentUser['email']) ?><?= !empty($currentUser['company']) ? ' — ' . Security::e($currentUser['company']) : '' ?>)
         </p>
+        <?php if (!empty($userBestExam['certificate_id'])): ?>
+            <div style="margin-top: 0.5rem;">
+                <span class="badge-completed tabular-nums">Réf. Certificat : <?= Security::e((string)$userBestExam['certificate_id']) ?> • <?= Security::e((string)($userBestExam['mention'] ?? '')) ?></span>
+            </div>
+        <?php endif; ?>
     </div>
 
     <div class="kpi-grid" style="margin-bottom: 2rem;">
         <div class="kpi-card">
             <div class="kpi-label">Taux d'Accomplissement Global</div>
-            <div class="kpi-value" style="color: var(--brand-cyan-light);"><?= $globalCompletionPct ?>%</div>
-            <div class="kpi-sub">Progression certifiée LMS</div>
+            <div class="kpi-value tabular-nums" style="color: var(--brand-cyan-light);"><?= $globalCompletionPct ?>%</div>
+            <div class="kpi-sub">Progression certifiée LMS (<?= Security::e($currentCourse['duration'] ?? '70h') ?>)</div>
         </div>
         <div class="kpi-card">
             <div class="kpi-label">Modules Théoriques Validés</div>
-            <div class="kpi-value"><?= $doneModules ?> / <?= $totalModules ?></div>
+            <div class="kpi-value tabular-nums"><?= $doneModules ?> / <?= $totalModules ?></div>
             <div class="kpi-sub">Taxonomie de Bloom C01–C29</div>
         </div>
         <div class="kpi-card">
             <div class="kpi-label">Ateliers Docker Validés</div>
-            <div class="kpi-value"><?= $doneLabs ?> / <?= $totalLabs ?></div>
+            <div class="kpi-value tabular-nums"><?= $doneLabs ?> / <?= $totalLabs ?></div>
             <div class="kpi-sub">Oracles d'exécution PostgreSQL 18</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Examen Sommatif & Assiduité</div>
+            <div class="kpi-value tabular-nums"><?= $userBestExam !== null ? ((int)$userBestExam['percent'] . '%') : 'En attente' ?></div>
+            <div class="kpi-sub tabular-nums"><?= count($userAttendance ?? []) ?>/20 demi-journées • <?= (int)($userGamification['unlocked_count'] ?? 0) ?>/8 Badges DBA</div>
         </div>
     </div>
 
@@ -96,7 +106,7 @@ use LightPath\LMS\Core\Security;
         </table>
     </div>
 
-    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-hairline); font-size: 0.85rem;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1rem; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-hairline); font-size: 0.85rem;">
         <div>
             <strong>Date d'émission :</strong> <?= date('d/m/Y') ?><br/>
             <strong>Vérification :</strong> <?= Security::e($appConfig['website']) ?> | <?= Security::e($appConfig['contact_email']) ?>

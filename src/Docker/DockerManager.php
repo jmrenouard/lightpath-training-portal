@@ -163,8 +163,9 @@ class DockerManager
         return [
             'container_name' => $name,
             'port' => $port,
-            'status' => 'running',
-            'running' => true,
+            'status' => 'cluster_ready',
+            'running' => false,
+            'user_container_running' => false,
             'primary_cluster_running' => true,
             'runtime_mode' => $rtMode,
             'runtime_version' => $rtVersion,
@@ -441,6 +442,51 @@ CREATE TABLE IF NOT EXISTS public.film (
     last_update timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS public.category (
+    category_id serial PRIMARY KEY,
+    name varchar(25) NOT NULL,
+    last_update timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.customer (
+    customer_id serial PRIMARY KEY,
+    store_id smallint NOT NULL DEFAULT 1,
+    first_name varchar(45) NOT NULL,
+    last_name varchar(45) NOT NULL,
+    email varchar(50),
+    address_id smallint NOT NULL DEFAULT 1,
+    activebool boolean NOT NULL DEFAULT true,
+    create_date date NOT NULL DEFAULT CURRENT_DATE,
+    last_update timestamptz DEFAULT now(),
+    active int DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS public.inventory (
+    inventory_id serial PRIMARY KEY,
+    film_id int NOT NULL,
+    store_id smallint NOT NULL DEFAULT 1,
+    last_update timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.rental (
+    rental_id serial PRIMARY KEY,
+    rental_date timestamptz NOT NULL DEFAULT now(),
+    inventory_id int NOT NULL,
+    customer_id smallint NOT NULL,
+    return_date timestamptz,
+    staff_id smallint NOT NULL DEFAULT 1,
+    last_update timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.payment (
+    payment_id serial PRIMARY KEY,
+    customer_id smallint NOT NULL,
+    staff_id smallint NOT NULL DEFAULT 1,
+    rental_id int NOT NULL,
+    amount numeric(5,2) NOT NULL,
+    payment_date timestamptz NOT NULL DEFAULT now()
+);
+
 INSERT INTO public.actor (first_name, last_name)
 SELECT 'PENELOPE', 'GUINESS' WHERE NOT EXISTS (SELECT 1 FROM public.actor LIMIT 1);
 
@@ -451,6 +497,16 @@ SQL;
         $b64 = base64_encode($initSql);
         $this->runDockerCommand(sprintf(
             'exec %s sh -c "echo %s | base64 -d | psql -U postgres -d formation_pg"',
+            $containerName,
+            $b64
+        ));
+        // S'assurer que la base dvdrental (Sakila) existe aussi et possède le socle de tables
+        $this->runDockerCommand(sprintf(
+            'exec %s sh -c "psql -U postgres -tc \"SELECT 1 FROM pg_database WHERE datname = \'dvdrental\'\" | grep -q 1 || createdb -U postgres dvdrental"',
+            $containerName
+        ));
+        $this->runDockerCommand(sprintf(
+            'exec %s sh -c "echo %s | base64 -d | psql -U postgres -d dvdrental"',
             $containerName,
             $b64
         ));

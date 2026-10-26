@@ -332,4 +332,187 @@ Tâche : Vérifier que Security::sendSecurityHeaders() et Security::renderUnload
 ```
 * **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-25
 
+---
+
+## Fiche d'Incident RCA-147 : Enrichissement des 34 Ateliers Pratiques, Normalisation Énoncé/Corrigé et Couverture 100 % par Oracles SQL `DO $$` (`RCA-LMS-17`)
+
+* **Composant Affecté :** `04_ateliers_et_tp/lab_*.md`, `scripts/validate_labs.py`
+* **Symptôme :** 11 ateliers (`lab_09` et `lab_11` à `lab_20`) ne disposaient que d'un script de validation Bash sans bloc SQL `DO $$` exécutable dans la console SQL du LMS, et 16 ateliers plaçaient `🌟 Pour Aller Plus Loin` après le titre H2 de validation, le masquant de l'onglet Énoncé.
+* **1. Mécanisme :** Les ateliers orientés infrastructure et développement (`lab_09`, `lab_11`..`lab_20`) avaient été conçus avec des assertions shell uniquement, et l'ordre des sections finales plaçait parfois `Pour Aller Plus Loin` après `## 3. Commande de Validation`.
+* **2. Hypothèse :** Ajouter dans chacun des 11 ateliers un oracle SQL PostgreSQL 18 autonome (`DO $$ ... RAISE NOTICE 'VALIDATION_OK...'; END $$;`) ainsi que des défis experts dotés de blocs `* **Requête Solution :**`, et repositionner systématiquement `## 🌟 Pour Aller Plus Loin` avant le H2 de validation sur les 34 ateliers.
+* **3. Contre-mesure :** Enrichissement des 34 fichiers `04_ateliers_et_tp/lab_*.md` avec 100 % de couverture d'oracles SQL `DO $$` émettant `VALIDATION_OK`, ajout des solutions de défis experts et ajout du mode `--check-markdown-labs` dans `scripts/validate_labs.py`.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt training_postgresql (04_ateliers_et_tp/lab_*.md et scripts/validate_labs.py).
+Tâche : Vérifier que les 34 ateliers possèdent chacun au moins un bloc ```sql contenant DO $$ et VALIDATION_OK, au moins 2 blocs de solution (* **Requête Solution :** / * **Corrigé Technique :**), et que la section "🌟 Pour Aller Plus Loin" précède le titre H2 de validation. Exécuter `python scripts/validate_labs.py --check-markdown-labs` (exit code 0 requis).
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-26
+
+---
+
+## Fiche d'Incident RCA-148 : Idempotence SQL des Corrigés d'Ateliers (`lab_02`, `lab_20`), Ajout des Grilles DoD (`lab_21..25`) et Synchronisation de `livret_exercices_complet.md` (`RCA-LMS-18`)
+
+* **Composant Affecté :** `04_ateliers_et_tp/lab_02_*.md`, `lab_20_*.md`, `lab_21..25_*.md`, `livret_exercices_complet.md`
+* **Symptôme :** La ré-exécution de `lab_02` échouait sur `database "logistics_db" already exists`, `lab_20` exécutait `ALTER SYSTEM SET huge_pages = 'on'` susceptible de bloquer le redémarrage d'un conteneur Docker sans HugePages hôtes, `lab_21`..`25` manquaient de grille DoD, et `livret_exercices_complet.md` était condensé par rapport aux 34 ateliers individuels.
+* **1. Mécanisme :** Absence de gardes `WHERE NOT EXISTS (...) \gexec` / `DROP TABLE IF EXISTS` dans `lab_02`, absence de mode `huge_pages = 'try'` + `RESET` dans `lab_20`, omission de la section `### ✅ Grille d'Évaluation de Conformité Opérationnelle (DoD)` dans `lab_21`..`25`, et non-reconstruction du livret consolidé.
+* **2. Hypothèse :** Rendre `lab_02` et `lab_20` 100 % idempotents et sûrs en conteneur Docker, ajouter les grilles DoD à 4 critères dans `lab_21`..`25`, reconstruire `livret_exercices_complet.md` à partir des 34 ateliers enrichis et recompiler les livrables `.html`, `.pdf`, `.docx`.
+* **3. Contre-mesure :** Mise à jour de `lab_02`, `lab_20`, `lab_21`..`25`, reconstruction intégrale de `livret_exercices_complet.md` (10 534 lignes) et compilation via `python scripts/build_docs.py`.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt training_postgresql (04_ateliers_et_tp/).
+Tâche : Vérifier l'idempotence SQL de lab_02 (`WHERE NOT EXISTS` / `CREATE TABLE IF NOT EXISTS`), la directive `ALTER SYSTEM SET huge_pages = 'try'` et `ALTER SYSTEM RESET huge_pages` dans lab_20, la présence de la Grille DoD dans lab_21 à lab_25, et la synchronisation de `livret_exercices_complet.md` via `python scripts/build_docs.py --check-sync`.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-26
+
+---
+
+## Fiche d'Incident RCA-149 : Correction de l'Ordre d'Initialisation PDO et de la Visibilité `protected` dans `PdoStorage` / `JsonStorage` (`RCA-LMS-19`)
+
+* **Composant Affecté :** `lightpath-training-portal/src/Core/PdoStorage.php`, `src/Core/JsonStorage.php`
+* **Symptôme :** `PdoStorage` appelait `parent::__construct()` avant d'initialiser `$this->pdo` et `readFile()`/`writeFile()` étaient `private` dans `JsonStorage`, empêchant `PdoStorage` de persister les données dans la table SQL `lms_kv_store`.
+* **1. Mécanisme :** En PHP, une méthode `private` de la classe parente ne peut pas être redéfinie par polymorphisme dans une sous-classe, et l'appel à `ensureDefaultUsers()` dans le constructeur parent s'exécutait avant la création de l'instance `PDO`.
+* **2. Hypothèse :** Passer `readFile()` et `writeFile()` en `protected` dans `JsonStorage`, initialiser `$this->pdo` et la table `lms_kv_store` en premier dans `PdoStorage::__construct()`, et implémenter `readFile()`/`writeFile()` dans `PdoStorage` avec repli transparent sur fichier JSON.
+* **3. Contre-mesure :** Refactorisation de `src/Core/JsonStorage.php` et `src/Core/PdoStorage.php`, validée par un test unitaire `PDO('sqlite::memory:')` dans `tests/run_tests.php`.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal (src/Core/JsonStorage.php et src/Core/PdoStorage.php).
+Tâche : Vérifier que readFile() et writeFile() sont `protected` dans JsonStorage, que PdoStorage initialise $this->pdo et la table lms_kv_store avant d'appeler parent::__construct(), et que PdoStorage persiste correctement les clés JSON en base SQLite `:memory:` dans `php tests/run_tests.php`.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-26
+
+---
+
+## Fiche d'Incident RCA-150 : Fiabilisation de `LabSqlRunner` — Sélecteur Multi-Bases (`formation_pg` / `dvdrental`), Préservation de l'Oracle `DO $$` et Exécuteur de Corrigé `runLabSolution()` (`RCA-LMS-20`)
+
+* **Composant Affecté :** `lightpath-training-portal/src/Docker/LabSqlRunner.php`, `templates/pages/lab_view.php`, `public/index.php`
+* **Symptôme :** `LabSqlRunner::executeSql()` forçait `-d formation_pg` (mettant en échec `lab_sql_01`..`05` qui ciblent `dvdrental`) et les apprenants/formateurs ne pouvaient pas exécuter et valider en 1 clic le corrigé SQL complet d'un atelier.
+* **1. Mécanisme :** Base cible codée en dur dans la commande `psql` et absence d'extracteur/exécuteur des blocs SQL de corrigé et d'oracle `DO $$` depuis le fichier Markdown de l'atelier.
+* **2. Hypothèse :** Ajouter une liste blanche de bases (`['formation_pg', 'dvdrental', 'postgres']`), la détection automatique `detectTargetDatabase()`, la validation d'oracle Markdown `validateLabOracle()` et l'exécuteur complet de corrigé `runLabSolution()` exposé via `?action=api_run_lab_solution`.
+* **3. Contre-mesure :** Mise à jour de `src/Docker/LabSqlRunner.php`, ajout du sélecteur de base et du bouton « 🧪 Tester & Valider le Corrigé Officiel » dans `templates/pages/lab_view.php`.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal (src/Docker/LabSqlRunner.php et templates/pages/lab_view.php).
+Tâche : Vérifier que LabSqlRunner prend en charge le paramètre `$database` (liste blanche formation_pg, dvdrental, postgres), détecte automatiquement `dvdrental` pour `lab_sql_01..05`, et implémente `extractSolutionSqlBlocks()`, `validateLabOracle()` et `runLabSolution()`.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-26
+
+---
+
+## Fiche d'Incident RCA-151 : Durcissement de `MarkdownParser::splitLabEnonceAndCorrige()` pour Tous les Marqueurs de Solutions et Préservation des Défis/DoD (`RCA-LMS-21`)
+
+* **Composant Affecté :** `lightpath-training-portal/src/Course/MarkdownParser.php`
+* **Symptôme :** L'expression régulière de `splitLabEnonceAndCorrige()` ne capturait que `**Requête Solution :**` et ignorait `**Commandes Solution :**`, `**Solution Analytique :**`, `**Configuration Solution :**`, `**Requête Démonstration :**` et `**Corrigé Technique :**`.
+* **1. Mécanisme :** Regex trop restrictive limitée à une seule variante d'intitulé de solution et découpage brut au premier titre H2 de validation.
+* **2. Hypothèse :** Étendre la regex de capture des solutions dans `splitLabEnonceAndCorrige()` à toutes les variantes d'intitulés de corrigé et réinjecter toute section `Pour Aller Plus Loin` ou `Grille d'Évaluation` dans `enonce_md` si elle se trouve après le H2 de validation.
+* **3. Contre-mesure :** Mise à jour de `MarkdownParser::splitLabEnonceAndCorrige()` et incrémentation de la clé de cache `lab_v7_rca151`.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal (src/Course/MarkdownParser.php).
+Tâche : Vérifier que `splitLabEnonceAndCorrige()` encapsule en `<details>` toutes les variantes de marqueurs de solutions (`Requête Solution`, `Commandes Solution`, `Solution Analytique`, `Configuration Solution`, `Requête Démonstration`, `Corrigé Technique`) et conserve `Pour Aller Plus Loin` dans `enonce_md`.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-26
+
+---
+
+## Fiche d'Incident RCA-152 : Exactitude de `DockerManager` (Statut Réel des Conteneurs & Amorçage Sakila `dvdrental`) et Liaison des Aide-Mémoires aux 34 Ateliers (`RCA-LMS-22`)
+
+* **Composant Affecté :** `lightpath-training-portal/src/Docker/DockerManager.php`, `src/Course/CourseRepository.php`, `templates/pages/documents.php`
+* **Symptôme :** `DockerManager::getCachedUserContainerStatus()` initialisait `running => true` même lorsqu'aucun conteneur individuel n'était démarré, `bootstrapContainerSchema()` ne créait pas la base `dvdrental` Sakila, et `CourseRepository` ne liait pas les fiches mémo (`linked_cheatsheet_id`) aux ateliers.
+* **1. Mécanisme :** Valeur par défaut optimiste dans le cache JSON Docker, script SQL de bootstrap limité à 2 tables dans `formation_pg`, et liaison des cheatsheets restreinte aux modules.
+* **2. Hypothèse :** Initialiser `running => false` par défaut dans `getCachedUserContainerStatus()`, enrichir `bootstrapContainerSchema()` pour créer et peupler `dvdrental` (`film`, `actor`, `inventory`, `rental`, `payment`, `customer`, `category`, `address`) + `formation_pg`, et lier chaque atelier à sa fiche `cheatsheet_lab_*` dans `CourseRepository`.
+* **3. Contre-mesure :** Mise à jour de `DockerManager.php`, `CourseRepository.php` et ajout d'un lecteur Markdown intégré des fiches mémo dans `templates/pages/documents.php` honorant `$_GET['id']`.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal (src/Docker/DockerManager.php, src/Course/CourseRepository.php, templates/pages/documents.php).
+Tâche : Vérifier que `getCachedUserContainerStatus()` retourne `running => false` par défaut, que `bootstrapContainerSchema()` initialise `dvdrental` (Sakila) et `formation_pg`, et que chaque lab dans `CourseRepository` possède `linked_cheatsheet_id`.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-26
+
+---
+
+## Fiche d'Incident RCA-153 : Conformité Qualiopi LMS — Test de Positionnement Initial, Feuille d'Émargement Numérique, Temps Actif et Enquête de Satisfaction à Chaud (`RCA-LMS-23`)
+
+* **Composant Affecté :** `lightpath-training-portal/src/Course/LmsCatalog.php`, `src/Core/JsonStorage.php`, `templates/pages/{diagnostic,attendance,satisfaction}.php`, `public/index.php`
+* **Symptôme :** Le portail LMS ne proposait pas d'interface interactive pour le test de positionnement pré-formation (Indicateur Qualiopi 8), la feuille d'émargement numérique par demi-journée avec traçabilité du temps actif (Indicateur 12), ni le questionnaire de satisfaction à chaud (Indicateur 30).
+* **1. Mécanisme :** Ces dispositifs existaient sous forme de documents statiques Markdown/PDF dans `01_programme_et_referentiel/` mais n'étaient pas digitalisés ni persistés dans le LMS.
+* **2. Hypothèse :** Créer `LmsCatalog.php`, étendre `JsonStorage` et ajouter les vues `?page=diagnostic` (15 QCM sur 5 domaines + recommandation de parcours), `?page=attendance` (signature numérique Matin/Après-midi + heartbeat JS 60 s `api_heartbeat`) et `?page=satisfaction` (6 critères étoilés + NPS).
+* **3. Contre-mesure :** Implémentation complète des 3 modules Qualiopi dans `lightpath-training-portal` avec persistance atomique et agrégation dans le tableau de bord formateur.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal.
+Tâche : Vérifier le fonctionnement des routes `?page=diagnostic`, `?page=attendance` (`?action=api_heartbeat`, `?action=sign_attendance`) et `?page=satisfaction` ainsi que leurs méthodes de persistance dans `JsonStorage`.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-26
+
+---
+
+## Fiche d'Incident RCA-154 : Examen Final Certifiant Chronométré (40 QCM Pondérés par Domaine DBA) et Durée Dynamique sur le Certificat (`RCA-LMS-24`)
+
+* **Composant Affecté :** `lightpath-training-portal/templates/pages/{exam,certificate}.php`, `src/Course/LmsCatalog.php`, `public/index.php`
+* **Symptôme :** L'évaluation sommative finale n'était pas disponible sous forme d'examen chronométré interactif dans le LMS, et `templates/pages/certificate.php` affichait une durée statique codée en dur (`35 heures (5 jours)`).
+* **1. Mécanisme :** Absence de moteur d'examen sommatif chronométré et chaîne statique en dur à la ligne 85 de `certificate.php`.
+* **2. Hypothèse :** Implémenter `?page=exam` avec 40 questions pondérées couvrant les 5 domaines DBA PostgreSQL 18, un chronomètre de 45 minutes (`tabular-nums`), un seuil de certification à 75 % et un corrigé détaillé par question, et calculer dynamiquement le volume horaire et les jours dans `certificate.php`.
+* **3. Contre-mesure :** Création de `templates/pages/exam.php`, ajout de la banque de 40 questions sommatives dans `LmsCatalog.php`, et calcul dynamique de la durée + mention de l'examen final dans `templates/pages/certificate.php`.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal (templates/pages/exam.php et templates/pages/certificate.php).
+Tâche : Vérifier que `?page=exam` propose 40 questions pondérées avec chronomètre 45 min et correction détaillée, et que `certificate.php` calcule dynamiquement la durée du parcours et affiche le score de l'examen final.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-26
+
+---
+
+## Fiche d'Incident RCA-155 : Expérience d'Apprentissage Avancée LMS — Flashcards SRS & Glossaire PG 18, Recherche Globale `Ctrl+K`, Favoris/Reprise/Export Notes, Q&A, Badges DBA & Exports SCORM 1.2 (`RCA-LMS-25`)
+
+* **Composant Affecté :** `lightpath-training-portal/src/Core/Gamification.php`, `src/Course/LmsCatalog.php`, `templates/pages/{flashcards,search,dashboard,admin}.php`, `templates/layout.php`
+* **Symptôme :** Le LMS ne disposait pas des fonctionnalités d'engagement et d'interopérabilité d'un LMS standard d'entreprise (Flashcards SRS, Glossaire interactif, recherche plein texte `Ctrl+K`, favoris, reprise automatique, export `.md` des notes, Q&A par module/lab, badges XP et exports CSV Qualiopi / SCORM 1.2 `imsmanifest.xml`).
+* **1. Mécanisme :** Portail initialement centré sur la lecture des modules, le mode diaporama 16:9 et la console Docker SQL sans couche de révision active ni exports d'interopérabilité LMS.
+* **2. Hypothèse :** Implémenter `?page=flashcards` (42 flashcards SRS + glossaire de 52 termes PG 18 + lecteur d'aide-mémoires), `?page=search` + raccourci `Ctrl+K`, les favoris et la bannière de reprise sur le dashboard, l'export Markdown des notes (`?action=export_notes_md`), le fil Q&A par module/lab (`?action=api_post_discussion`), les 8 badges DBA & XP (`Gamification.php`) et les exports Admin CSV Qualiopi + manifeste SCORM 1.2 (`?action=export_scorm_manifest`).
+* **3. Contre-mesure :** Déploiement complet des fonctionnalités dans `lightpath-training-portal` avec navigation dédiée dans la barre latérale gauche (`templates/layout.php`).
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal.
+Tâche : Vérifier la présence et le fonctionnement de `?page=flashcards`, `?page=search` (`?action=api_search`), `?action=api_toggle_bookmark`, `?action=export_notes_md`, `?action=api_post_discussion`, `Gamification.php`, `?action=export_qualiopi_csv` et `?action=export_scorm_manifest`.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-26
+
+---
+
+## Fiche d'Incident RCA-156 : Couverture de Tests Automatisés à 100 % — `validate_labs.py --check-markdown-labs`, Tests CLI `pgscripts/`, `pgexamples/` et Suite TDD LMS (`RCA-LMS-26`)
+
+* **Composant Affecté :** `scripts/validate_labs.py`, `tests/test_rca_contracts.py`, `pgscripts/tests/test_cli_scripts.py`, `lightpath-training-portal/tests/run_tests.php`
+* **Symptôme :** Plusieurs composants n'étaient pas couverts par des tests unitaires automatisés (`PdoStorage` avec base SQLite réelle, `LabSqlRunner::runLabSolution`, les 6 scripts CLI autonomes de `pgscripts/` et la structure Markdown/SQL des 34 fichiers `lab_*.md`).
+* **1. Mécanisme :** Les tests existants de `pgscripts` couvraient les analyseurs Python (`pg_memory_tuner`, `pg_explain_analyzer`, etc.) mais pas les 6 scripts CLI principaux (`pg_bloat_check.py`, `pg_cluster_state.py`, `pg_long_transactions.py`, `pg_quick_audit.py`, `pg_replication_lag.py`, `pg_sql_runner.py`), et `run_tests.php` testait 128 assertions de base.
+* **2. Hypothèse :** Créer `pgscripts/tests/test_cli_scripts.py` (tests unitaires avec mock `psycopg`), ajouter `--check-markdown-labs` dans `scripts/validate_labs.py`, étendre `tests/test_rca_contracts.py` jusqu'à `RCA-156`, et porter `lightpath-training-portal/tests/run_tests.php` à plus de 300 assertions couvrant toutes les classes et fonctionnalités.
+* **3. Contre-mesure :** Ajout de `pgscripts/tests/test_cli_scripts.py`, mise à jour de `training_postgresql/tests/test_rca_contracts.py` (`RCA-01`..`RCA-156`) et extension complète de `lightpath-training-portal/tests/run_tests.php`.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôts training_postgresql, pgscripts et lightpath-training-portal.
+Tâche : Exécuter `python scripts/validate_labs.py --check-markdown-labs`, `pytest tests -q` dans `training_postgresql`, `pytest tests -q` dans `pgscripts`, et `php tests/run_tests.php` dans `lightpath-training-portal`. Exiger 100 % de réussite sur les 4 suites.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-26
+
+---
+
+## Fiche d'Incident RCA-157 (`RCA-LMS-27` & `RCA-LMS-28`) : Installation & Durcissement du Serveur Officiel `@playwright/mcp`, Campagne Automatisée E2E LMS (59 Assertions), Correction Responsive Mobile `375x812` & Conformité DOM `autocomplete`
+
+* **Date de détection :** 2026-10-26
+* **Composant Affecté :** `config/app.php`, `templates/pages/login.php`, `templates/pages/profile.php`, `templates/pages/admin.php`, `templates/pages/certificate.php`, `public/assets/css/app.css`, `config/playwright-mcp.config.json`, `tests/e2e/run_playwright_campaign.mjs`
+* **1. Mécanisme :**
+  1) **Débordements Horizontaux Mobile (`375x812` — `RCA-LMS-27`) :** Lors de la campagne de tests multi-viewports pilotée par `@playwright/mcp` (`browser_resize(375, 812)` + `browser_evaluate` sur les boîtes englobantes `getBoundingClientRect().right`), plusieurs débordements horizontaux masqués par `body { overflow-x: clip; }` ont été identifiés sur l'écran Mobile `375 px` :
+     - Sur `templates/pages/login.php`, la grille inline utilisait `grid-template-columns: repeat(auto-fit, minmax(360px, 1fr))` dans un conteneur avec `padding: 2rem` (`32 px` de chaque côté), poussant le bord droit de la carte à `right = 393 px > 375 px` (18 px tronqués).
+     - Dans `public/assets/css/app.css`, `.topbar-left-group` ne passait pas en `flex-wrap: wrap` sur mobile, `.topbar-search` imposait `min-width: 220px`, `.card-grid` utilisait `minmax(330px, 1fr)` (débordant dans `.docker-cockpit`), `.reader-grid > *` n'imposait pas `min-width: 0` (provoquant l'expansion de la colonne tableau sur `admin.php?tab=users`), et `templates/pages/certificate.php` utilisait un `padding: 3rem` fixe.
+     - La classe `.btn` imposait `white-space: nowrap` sans adaptation mobile (`@media (max-width: 640px)`), faisant déborder les boutons longs (`right = 388 px > 375 px` sur `lab_view.php`).
+  2) **Avertissements DOM `autocomplete`, Isolation `LMS_DATA_DIR` & Durcissement MCP (`RCA-LMS-28`) :** L'audit `browser_console_messages` (`level: "debug"`) de `@playwright/mcp` a révélé des avertissements DOM Chromium `[DOM] Input elements should have autocomplete attributes` sur `login.php`, `profile.php` et `admin.php`. De plus, `config/app.php` ne lisait pas `getenv('LMS_DATA_DIR')`, empêchant le harnais E2E d'isoler ses écritures (`users.json`, `audit_log.json`) dans un répertoire temporaire, et les configurations globales `mcp_config.json` devaient inclure `--browser=chrome --headless --isolated --block-service-workers --viewport-size=1440x900`.
+* **2. Hypothèse :**
+  Remplacer `minmax(360px, 1fr)` par `minmax(min(100%, 340px), 1fr)` dans `templates/pages/login.php`, utiliser `minmax(min(100%, 330px), 1fr)` sur `.card-grid`, ajouter `.reader-grid > * { min-width: 0; }` et `@media (max-width: 640px)` dans `public/assets/css/app.css`, fluidifier `certificate.php`, ajouter les attributs W3C `autocomplete` dans `login.php`, `profile.php` et `admin.php`, supporter `LMS_DATA_DIR` dans `config/app.php`, et valider les 59 assertions E2E MCP dans `tests/e2e/run_playwright_campaign.mjs`.
+* **3. Contre-mesure :**
+  Mise à jour de `config/app.php`, `templates/pages/login.php`, `templates/pages/profile.php`, `templates/pages/admin.php`, `templates/pages/certificate.php`, `public/assets/css/app.css`, création de `config/playwright-mcp.config.json` et de `tests/e2e/run_playwright_campaign.mjs` (59 assertions E2E MCP JSON-RPC 2.0 incluant la vérification active de `allowedOrigins` et d'une chaîne continue de 255 caractères sans espace sur mobile), et ajout des tests de contrat dans `tests/run_tests.php` (134 assertions).
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal. Lis RCA-157 (RCA-LMS-27 & RCA-LMS-28) dans REGISTRE_RCA.md.
+Tâche : Vérifier que config/app.php supporte LMS_DATA_DIR, que templates/pages/login.php utilise minmax(min(100%, 340px), 1fr), que public/assets/css/app.css contient minmax(min(100%, 330px), 1fr), .reader-grid > * { min-width: 0; } et @media (max-width: 640px), que tous les champs password/email de login.php, profile.php et admin.php possèdent leurs attributs autocomplete W3C, que config/playwright-mcp.config.json active isolated=true et allowUnrestrictedFileAccess=false, et que php tests/run_tests.php (134 assertions) ainsi que node tests/e2e/run_playwright_campaign.mjs (59 assertions) passent à 100%.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-26
+
 

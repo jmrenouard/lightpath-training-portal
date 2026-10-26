@@ -141,6 +141,32 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
                 <span class="nav-badge">Bloom</span>
             </a>
 
+            <div class="nav-section-title" style="margin-top: 0.85rem;">🎯 Évaluations & Outils Qualiopi</div>
+            <a href="index.php?page=diagnostic&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'diagnostic' ? 'active' : '' ?>">
+                <span>🧭 Positionnement Initial</span>
+                <span class="nav-badge tabular-nums"><?= $userDiagnostic !== null ? ((int)$userDiagnostic['percent'] . '%') : '15 QCM' ?></span>
+            </a>
+            <a href="index.php?page=exam&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'exam' ? 'active' : '' ?>">
+                <span>🏆 Examen Final Certifiant</span>
+                <span class="nav-badge tabular-nums"><?= $userBestExam !== null ? ((int)$userBestExam['percent'] . '%') : '40 QCM' ?></span>
+            </a>
+            <a href="index.php?page=attendance&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'attendance' ? 'active' : '' ?>">
+                <span>✍️ Émargement & Assiduité</span>
+                <span class="nav-badge tabular-nums"><?= count($userAttendance ?? []) ?>/20</span>
+            </a>
+            <a href="index.php?page=flashcards&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'flashcards' ? 'active' : '' ?>">
+                <span>🧠 Cartes SRS & Glossaire</span>
+                <span class="nav-badge">42 SRS</span>
+            </a>
+            <a href="index.php?page=satisfaction&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'satisfaction' ? 'active' : '' ?>">
+                <span>⭐ Satisfaction Qualiopi</span>
+                <span class="nav-badge">Avis</span>
+            </a>
+            <a href="index.php?page=search&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'search' ? 'active' : '' ?>">
+                <span>🔍 Recherche Plein-Texte</span>
+                <span class="nav-badge">Ctrl+K</span>
+            </a>
+
             <!-- NAVIGATION DIRECTE PAR PARCOURS ET PAR MODULE (M01..M29, SQL-01..SQL-05) -->
             <div class="nav-section-title" style="margin-top: 0.9rem; display: flex; justify-content: space-between; align-items: center;">
                 <span>Navigation Directe (34 Modules)</span>
@@ -280,6 +306,10 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
                     </span>
                 </a>
 
+                <span class="badge-code tabular-nums" title="<?= Security::e($userGamification['rank'] ?? 'DBA PostgreSQL 18') ?>">
+                    ⚡ <?= (int)($userGamification['xp'] ?? 0) ?> XP • 🏅 <?= (int)($userGamification['unlocked_count'] ?? 0) ?>/<?= (int)($userGamification['total_badges'] ?? 8) ?>
+                </span>
+
                 <button type="button" id="btn-toggle-theme" class="btn btn-outline btn-sm" title="Basculer Thème Sombre / Clair">
                     🌗 Thème
                 </button>
@@ -306,6 +336,12 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
                 'lab' => __DIR__ . '/pages/lab_view.php',
                 'documents', 'cheatsheets' => __DIR__ . '/pages/documents.php',
                 'certificate' => __DIR__ . '/pages/certificate.php',
+                'diagnostic' => __DIR__ . '/pages/diagnostic.php',
+                'exam' => __DIR__ . '/pages/exam.php',
+                'attendance' => __DIR__ . '/pages/attendance.php',
+                'satisfaction' => __DIR__ . '/pages/satisfaction.php',
+                'flashcards' => __DIR__ . '/pages/flashcards.php',
+                'search' => __DIR__ . '/pages/search.php',
                 'admin' => $auth->isStaff($currentUser) ? (__DIR__ . '/pages/admin.php') : (__DIR__ . '/pages/dashboard.php'),
                 'profile' => __DIR__ . '/pages/profile.php',
                 default => __DIR__ . '/pages/dashboard.php',

@@ -12,7 +12,7 @@ use LightPath\LMS\Core\Security;
             <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
             <div class="form-group">
                 <label>Adresse Email (Identifiant unique)</label>
-                <input type="email" class="form-control" value="<?= Security::e($currentUser['email']) ?>" disabled/>
+                <input type="email" class="form-control" autocomplete="username" value="<?= Security::e($currentUser['email']) ?>" disabled/>
             </div>
             <div class="form-group">
                 <label>Rôle sur la plateforme</label>
@@ -20,15 +20,15 @@ use LightPath\LMS\Core\Security;
             </div>
             <div class="form-group">
                 <label>Nom & Prénom (affiché sur l'Attestation Qualiopi)</label>
-                <input type="text" name="name" class="form-control" value="<?= Security::e($currentUser['name']) ?>" required/>
+                <input type="text" name="name" class="form-control" autocomplete="name" value="<?= Security::e($currentUser['name']) ?>" required/>
             </div>
             <div class="form-group">
                 <label>Entreprise / Organisation</label>
-                <input type="text" name="company" class="form-control" value="<?= Security::e($currentUser['company'] ?? '') ?>"/>
+                <input type="text" name="company" class="form-control" autocomplete="organization" value="<?= Security::e($currentUser['company'] ?? '') ?>"/>
             </div>
             <div class="form-group">
                 <label>Nouveau Mot de Passe (laisser vide pour ne pas modifier)</label>
-                <input type="password" name="new_password" class="form-control" minlength="6" placeholder="Minimum 6 caractères"/>
+                <input type="password" name="new_password" class="form-control" autocomplete="new-password" minlength="6" placeholder="Minimum 6 caractères"/>
             </div>
             <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
                 💾 Enregistrer mes Modifications

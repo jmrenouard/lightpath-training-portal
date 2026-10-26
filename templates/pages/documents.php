@@ -4,7 +4,34 @@ use LightPath\LMS\Core\Security;
 
 $defaultDocTab = (($page ?? '') === 'cheatsheets') ? 'cheatsheets' : 'all';
 $docTab = (string)($_GET['tab'] ?? $defaultDocTab);
+$selectedDocId = trim((string)($_GET['id'] ?? ''));
+$selectedDoc = null;
+if ($selectedDocId !== '') {
+    $selectedDoc = $currentCourse['cheatsheets'][$selectedDocId]
+        ?? $currentCourse['referentiel'][$selectedDocId]
+        ?? null;
+}
 ?>
+
+<?php if ($selectedDoc !== null && !empty($selectedDoc['source_md_path']) && is_file($selectedDoc['source_md_path'])):
+    $renderedDoc = $mdParser->renderMarkdown((string)file_get_contents($selectedDoc['source_md_path']), $currentCourseSlug, false);
+?>
+<div class="lms-card" style="margin-bottom: 1.75rem; border-color: var(--brand-cyan);">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-hairline);">
+        <div>
+            <span class="badge-code">LECTEUR DOCUMENTAIRE INTÉGRÉ</span>
+            <h2 style="font-size: 1.35rem; margin: 0.35rem 0 0;"><?= Security::e($selectedDoc['title']) ?></h2>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <?= renderDownloadStrip($currentCourseSlug, isset($currentCourse['cheatsheets'][$selectedDocId]) ? 'cheatsheet' : 'referentiel', $selectedDocId, $selectedDoc['downloads'] ?? []) ?>
+            <a href="index.php?page=documents&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">✕ Fermer l'aperçu</a>
+        </div>
+    </div>
+    <article class="reader-article markdown-body">
+        <?= $renderedDoc['html'] ?>
+    </article>
+</div>
+<?php endif; ?>
 
 <div class="hero-banner" style="padding: 1.5rem 2rem;">
     <div>

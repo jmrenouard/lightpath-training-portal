@@ -616,6 +616,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 card.style.display = (q === '' || text.includes(q)) ? '' : 'none';
             });
         });
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const q = searchInput.value.trim();
+                if (q !== '') {
+                    e.preventDefault();
+                    window.location.href = `index.php?page=search&q=${encodeURIComponent(q)}`;
+                }
+            }
+        });
     }
 
     // ------------------------------------------------------------------------
@@ -803,8 +812,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ------------------------------------------------------------------------
-    // 12. Console SQL Interactive & Oracle Qualiopi 1-Clic
+    // 12. Console SQL Interactive, Sélecteur de Base & Oracles Qualiopi 1-Clic
     // ------------------------------------------------------------------------
+    const getSelectedLabDb = () => {
+        const sel = document.getElementById('lab-sql-db-select');
+        return sel ? sel.value : 'formation_pg';
+    };
+
     const execSqlBtn = document.getElementById('btn-execute-sql');
     if (execSqlBtn) {
         execSqlBtn.addEventListener('click', async () => {
@@ -812,20 +826,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const outBox = document.getElementById('lab-sql-output');
             if (!editor || !outBox) return;
 
+            const db = getSelectedLabDb();
             execSqlBtn.disabled = true;
-            outBox.innerText = '⏳ Exécution SQL sur votre instance PostgreSQL 18...';
+            outBox.innerText = `⏳ Exécution SQL sur votre instance PostgreSQL 18 (base : ${db})...`;
 
             const res = await fetch('index.php?action=api_run_sql', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
                 body: JSON.stringify({
                     csrf_token: csrfToken,
-                    sql: editor.value
+                    sql: editor.value,
+                    database: db
                 })
             });
             const data = await res.json();
             execSqlBtn.disabled = false;
-            outBox.innerText = `[Instance: ${data.container || 'N/A'} | Durée: ${data.duration_ms || 0} ms]\n\n` + (data.output || '');
+            outBox.innerText = `[Instance: ${data.container || 'N/A'} | Base: ${data.database || db} | Durée: ${data.duration_ms || 0} ms]\n\n` + (data.output || '');
         });
     }
 
@@ -835,6 +851,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const labId = oracleBtn.getAttribute('data-lab-id');
             const course = oracleBtn.getAttribute('data-course') || 'postgresql-18';
             const outBox = document.getElementById('lab-sql-output');
+            const db = getSelectedLabDb();
 
             oracleBtn.disabled = true;
             const origText = oracleBtn.innerText;
@@ -845,7 +862,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
                 body: JSON.stringify({
                     csrf_token: csrfToken,
-                    lab_id: labId
+                    lab_id: labId,
+                    database: db
                 })
             });
             const data = await res.json();
@@ -853,7 +871,7 @@ document.addEventListener('DOMContentLoaded', () => {
             oracleBtn.innerText = origText;
 
             if (outBox) {
-                outBox.innerText = `[ORACLE QUALIOPI — ${data.bloom} : ${data.title}]\n`
+                outBox.innerText = `[ORACLE QUALIOPI — ${data.bloom} : ${data.title} | Base: ${data.database || db}]\n`
                     + `Statut : ${data.passed ? '✅ VALIDÉ (Compétence acquise !)' : '❌ ÉCHEC OU INSTANCE ARRÊTÉE'}\n\n`
                     + (data.output || '');
             }
@@ -861,6 +879,106 @@ document.addEventListener('DOMContentLoaded', () => {
                 setTimeout(() => window.location.reload(), 1500);
             }
         });
+    }
+
+    const runSolutionBtn = document.getElementById('btn-run-lab-solution');
+    if (runSolutionBtn) {
+        runSolutionBtn.addEventListener('click', async () => {
+            const labId = runSolutionBtn.getAttribute('data-lab-id');
+            const course = runSolutionBtn.getAttribute('data-course') || 'postgresql-18';
+            const outBox = document.getElementById('lab-sql-output');
+            const db = getSelectedLabDb();
+
+            runSolutionBtn.disabled = true;
+            const origText = runSolutionBtn.innerText;
+            runSolutionBtn.innerText = '⏳ Exécution du corrigé officiel...';
+
+            const res = await fetch(`index.php?action=api_run_lab_solution&course=${encodeURIComponent(course)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                body: JSON.stringify({
+                    csrf_token: csrfToken,
+                    lab_id: labId,
+                    database: db
+                })
+            });
+            const data = await res.json();
+            runSolutionBtn.disabled = false;
+            runSolutionBtn.innerText = origText;
+
+            if (outBox) {
+                outBox.innerText = `[TEST DU CORRIGÉ OFFICIEL — ${data.steps_executed || 0} bloc(s) SQL exécuté(s) | Base: ${data.database || db}]\n`
+                    + `Statut Oracle : ${data.passed ? '✅ CORRIGÉ & ORACLE VALIDÉS (VALIDATION_OK)' : '⚠️ VÉRIFICATION PARTIELLE'}\n\n`
+                    + (data.output || '');
+            }
+            if (data.passed) {
+                setTimeout(() => window.location.reload(), 1600);
+            }
+        });
+    }
+
+    // ------------------------------------------------------------------------
+    // 12b. Favoris (Bookmarks), Cartes Mémo SRS & Heartbeat Temps d'Étude Qualiopi
+    // ------------------------------------------------------------------------
+    document.querySelectorAll('.btn-toggle-bookmark').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const itemType = btn.getAttribute('data-type') || 'module';
+            const itemId = btn.getAttribute('data-id') || '';
+            const title = btn.getAttribute('data-title') || itemId;
+            btn.disabled = true;
+            try {
+                const res = await fetch('index.php?action=api_toggle_bookmark', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                    body: JSON.stringify({
+                        csrf_token: csrfToken,
+                        item_type: itemType,
+                        item_id: itemId,
+                        title: title
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    btn.innerText = data.bookmarked ? '⭐ Favori' : '☆ Favori';
+                }
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    });
+
+    document.querySelectorAll('.btn-fc-rate').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const cardId = btn.getAttribute('data-card-id') || '';
+            const level = parseInt(btn.getAttribute('data-level') || '2', 10);
+            const cardBox = btn.closest('.flashcard-box');
+            const badge = cardBox ? cardBox.querySelector('.fc-status-badge') : null;
+            const res = await fetch('index.php?action=api_flashcard_rate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                body: JSON.stringify({
+                    csrf_token: csrfToken,
+                    card_id: cardId,
+                    level: level
+                })
+            });
+            const data = await res.json();
+            if (data.success && badge) {
+                badge.textContent = level === 3 ? '🟢 Maîtrisé' : (level === 2 ? '🟡 En acquisition' : '🔴 À revoir');
+            }
+        });
+    });
+
+    if (csrfToken) {
+        setInterval(() => {
+            if (document.visibilityState === 'visible') {
+                fetch('index.php?action=api_heartbeat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                    body: JSON.stringify({ csrf_token: csrfToken, seconds: 60 })
+                }).catch(() => {});
+            }
+        }, 60000);
     }
 
     // ------------------------------------------------------------------------

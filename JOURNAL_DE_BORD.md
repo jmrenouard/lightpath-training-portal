@@ -70,4 +70,84 @@
   6. **Durcissement sécurité, shim `unload` (`chext_loader.js`) & règle Issue GitHub (`RCA-LMS-16`) :** En-têtes HTTP de sécurité, interception JS `unload -> pagehide` éliminant toute erreur console d'extension Chrome, implémentation de `Security::isPathInside()` (appelée par `admin_add_course`), bornage strict `[1024..65535]` dans `DockerManager::getUserPort()`, assainissement de `$slug` dans `bin/sync-course.php`, routage sécurisé des liens `cheatsheets` et blocage des schémas URI exécutables dans `MarkdownParser::formatInline()`, centrage précis par `getBoundingClientRect` (`centerElementInScrollBox`) dans `app.js`, repli harmonisé `<details class="toc-box">` du stepper dans `lab_view.php`, et codification dans `AGENTS.md` de l'ouverture/fermeture commentée d'une Issue GitHub par tâche sur les deux dépôts (`lightpath-training-portal#6`, `#8` & `training_postgresql#80`, `#82`).
 * **Tests post-correction :** ✅ 128 / 128 assertions passées dans `php tests/run_tests.php` (0 régression)
 
+---
+
+### Correction RCA-147 — Enrichissement des 34 ateliers pratiques, normalisation Énoncé/Corrigé et couverture 100 % par oracles SQL `DO $$` (`RCA-LMS-17`)
+* **Date :** 2026-10-26 20:40
+* **Fichiers modifiés :** `04_ateliers_et_tp/lab_*.md`, `scripts/validate_labs.py`
+* **Nature de la correction :** Ajout des corrigés pas-à-pas et des oracles SQL `DO $$ ... RAISE NOTICE 'VALIDATION_OK%'; END $$;` dans les 11 ateliers (`lab_09`, `lab_11`..`lab_20`), repositionnement de `🌟 Pour Aller Plus Loin` avant le H2 de validation sur l'ensemble des 34 ateliers, et ajout de `--check-markdown-labs` dans `scripts/validate_labs.py`.
+* **Tests post-correction :** ✅ 34 / 34 ateliers Markdown validés (0 régression)
+
+### Correction RCA-148 — Idempotence SQL des corrigés d'ateliers (`lab_02`, `lab_20`), ajout des grilles DoD (`lab_21..25`) et synchronisation de `livret_exercices_complet.md` (`RCA-LMS-18`)
+* **Date :** 2026-10-26 20:42
+* **Fichiers modifiés :** `04_ateliers_et_tp/lab_02_getting_started_databases_clusters.md`, `04_ateliers_et_tp/lab_20_tuning_systeme_linux_postgresql.md`, `04_ateliers_et_tp/lab_21..25_*.md`, `04_ateliers_et_tp/livret_exercices_complet.md`
+* **Nature de la correction :** Idempotence DDL de `lab_02`, sécurité conteneur `huge_pages = 'try'` + `RESET` dans `lab_20`, ajout des grilles DoD dans `lab_21`..`25`, reconstruction de `livret_exercices_complet.md` et recompilation multi-formats.
+* **Tests post-correction :** ✅ 100 % des livrables synchronisés (`build_docs.py --check-sync`)
+
+### Correction RCA-149 — Ordre d'initialisation PDO et visibilité `protected` dans `PdoStorage` / `JsonStorage` (`RCA-LMS-19`)
+* **Date :** 2026-10-26 20:45
+* **Fichiers modifiés :** `lightpath-training-portal/src/Core/JsonStorage.php`, `lightpath-training-portal/src/Core/PdoStorage.php`
+* **Nature de la correction :** Passage de `readFile()` et `writeFile()` en `protected` dans `JsonStorage`, initialisation de `$this->pdo` et de la table `lms_kv_store` avant `parent::__construct()` dans `PdoStorage`, et implémentation de la persistance clé-valeur SQL avec fallback JSON.
+* **Tests post-correction :** ✅ Validé sur instance `PDO('sqlite::memory:')` sans régression
+
+### Correction RCA-150 — Fiabilisation de `LabSqlRunner` : sélecteur multi-bases (`formation_pg` / `dvdrental`) et exécuteur de corrigé `runLabSolution()` (`RCA-LMS-20`)
+* **Date :** 2026-10-26 20:46
+* **Fichiers modifiés :** `lightpath-training-portal/src/Docker/LabSqlRunner.php`, `lightpath-training-portal/templates/pages/lab_view.php`, `lightpath-training-portal/public/index.php`
+* **Nature de la correction :** Prise en charge multi-bases (`formation_pg`, `dvdrental`, `postgres`), détection automatique `detectTargetDatabase()`, validation stricte d'oracle `validateLabOracle()` et exécution séquentielle du corrigé officiel `runLabSolution()`.
+* **Tests post-correction :** ✅ 34 / 34 oracles et corrigés de labs pris en charge
+
+### Correction RCA-151 — Durcissement de `MarkdownParser::splitLabEnonceAndCorrige()` pour tous les marqueurs de solutions (`RCA-LMS-21`)
+* **Date :** 2026-10-26 20:47
+* **Fichiers modifiés :** `lightpath-training-portal/src/Course/MarkdownParser.php`
+* **Nature de la correction :** Extension de la regex des solutions aux variantes (`Requête Solution`, `Commandes Solution`, `Solution Analytique`, `Configuration Solution`, `Requête Démonstration`, `Corrigé Technique`) et préservation des défis/DoD dans l'énoncé.
+* **Tests post-correction :** ✅ 100 % des tests de découpage Énoncé/Corrigé passés
+
+### Correction RCA-152 — Exactitude de `DockerManager` (statut réel & amorçage Sakila `dvdrental`) et liaison des aide-mémoires aux 34 ateliers (`RCA-LMS-22`)
+* **Date :** 2026-10-26 20:48
+* **Fichiers modifiés :** `lightpath-training-portal/src/Docker/DockerManager.php`, `lightpath-training-portal/src/Course/CourseRepository.php`, `lightpath-training-portal/templates/pages/documents.php`
+* **Nature de la correction :** Statut initial `running => false` dans `getCachedUserContainerStatus()`, amorçage automatique du schéma Sakila `dvdrental` dans `bootstrapContainerSchema()`, liaison `linked_cheatsheet_id` sur les 34 ateliers et lecteur Markdown intégré des fiches mémo.
+* **Tests post-correction :** ✅ 34 / 34 ateliers liés à leur aide-mémoire
+
+### Correction RCA-153 — Conformité Qualiopi LMS : test de positionnement initial, émargement numérique, temps actif et satisfaction à chaud (`RCA-LMS-23`)
+* **Date :** 2026-10-26 20:49
+* **Fichiers modifiés :** `lightpath-training-portal/src/Course/LmsCatalog.php`, `lightpath-training-portal/templates/pages/diagnostic.php`, `lightpath-training-portal/templates/pages/attendance.php`, `lightpath-training-portal/templates/pages/satisfaction.php`
+* **Nature de la correction :** Ajout du test de positionnement initial (15 QCM sur 5 domaines), de la feuille d'émargement numérique Qualiopi par demi-journée avec suivi du temps actif (`api_heartbeat`), et du questionnaire de satisfaction à chaud.
+* **Tests post-correction :** ✅ 100 % des tests Qualiopi passés
+
+### Correction RCA-154 — Examen final certifiant chronométré (40 QCM pondérés) et durée dynamique sur le certificat (`RCA-LMS-24`)
+* **Date :** 2026-10-26 20:50
+* **Fichiers modifiés :** `lightpath-training-portal/templates/pages/exam.php`, `lightpath-training-portal/templates/pages/certificate.php`, `lightpath-training-portal/src/Course/LmsCatalog.php`
+* **Nature de la correction :** Implémentation de l'examen final chronométré (40 QCM, 45 min, seuil 75 %, bilan par domaine DBA) et calcul dynamique de la durée du cursus/parcours sur le certificat.
+* **Tests post-correction :** ✅ Notation pondérée et certificat dynamique validés
+
+### Correction RCA-155 — Expérience d'apprentissage avancée : Flashcards SRS & Glossaire PG 18, recherche `Ctrl+K`, favoris/reprise/notes, Q&A, badges DBA & exports SCORM 1.2 (`RCA-LMS-25`)
+* **Date :** 2026-10-26 20:51
+* **Fichiers modifiés :** `lightpath-training-portal/src/Core/Gamification.php`, `lightpath-training-portal/templates/pages/flashcards.php`, `lightpath-training-portal/templates/pages/search.php`, `lightpath-training-portal/templates/pages/dashboard.php`, `lightpath-training-portal/templates/pages/admin.php`, `lightpath-training-portal/templates/layout.php`
+* **Nature de la correction :** Ajout des 42 flashcards SRS, du glossaire de 52 termes PG 18, du moteur de recherche plein texte `Ctrl+K`, des favoris/bannière de reprise/export `.md` des notes, du fil d'entraide Q&A, des 8 badges DBA & XP et des exports Admin CSV Qualiopi / SCORM 1.2 `imsmanifest.xml`.
+* **Tests post-correction :** ✅ 100 % des nouvelles routes et fonctionnalités testées
+
+### Correction RCA-156 — Couverture de tests automatisés à 100 % (`validate_labs.py`, `pgscripts`, `pgexamples`, `test_rca_contracts.py` et `run_tests.php`) (`RCA-LMS-26`)
+* **Date :** 2026-10-26 20:52
+* **Fichiers modifiés :** `scripts/validate_labs.py`, `tests/test_rca_contracts.py`, `pgscripts/tests/test_cli_scripts.py`, `lightpath-training-portal/tests/run_tests.php`
+* **Nature de la correction :** Extension des tests de contrats jusqu'à `RCA-156`, ajout des tests unitaires CLI pour les 6 scripts de `pgscripts/` et extension de la suite TDD PHP du portail LMS.
+* **Tests post-correction :** ✅ 100 % des suites Pytest et PHP TDD passées (0 régression)
+
+---
+
+### Correction RCA-157 (`RCA-LMS-27` & `RCA-LMS-28`) — Installation & Durcissement du Serveur MCP Officiel Microsoft `@playwright/mcp`, Campagne Automatisée E2E sur les 18 Routes LMS, Correction Responsive Mobile `375x812` & Conformité DOM `autocomplete`
+* **Date :** 2026-10-26 20:53
+* **Issues GitHub associées :** `lightpath-training-portal#11`
+* **Fichiers modifiés :**
+  - `config/playwright-mcp.config.json` (configuration durcie du serveur MCP officiel Microsoft `@playwright/mcp` : `isolated: true`, `headless: true`, `channel: "chrome"`, `allowedOrigins: ["http://localhost:*", "http://127.0.0.1:*"]`, `allowUnrestrictedFileAccess: false`)
+  - `config/app.php` (support de la variable d'environnement `LMS_DATA_DIR` permettant d'isoler intégralement le stockage JSON lors des campagnes E2E)
+  - `tests/e2e/run_playwright_campaign.mjs` (harnais automatisé de campagne E2E pilotant `@playwright/mcp` en JSON-RPC 2.0 via `stdio` sur 59 assertions : handshake MCP, test actif du blocage d'origine externe `ERR_BLOCKED_BY_CLIENT`, isolation `LMS_DATA_DIR`, en-têtes HTTP de sécurité, edge cases d'authentification/CSRF/Path Traversal, audit des 18 routes LMS, diaporama Studio 16:9 de 58 slides, bascule HTML/PDF, barres latérales repliables, thème Dark/Light, audit responsive multi-viewports `375x812`, `768x1024`, `1440x900` avec vérification des boîtes englobantes sur 9 routes + page login + chaîne continue de 255 caractères sans espace)
+  - `templates/pages/login.php`, `templates/pages/profile.php`, `templates/pages/admin.php`, `templates/pages/certificate.php` (grille fluide `minmax(min(100%, 340px), 1fr)`, padding fluide `clamp(...)` sur l'attestation et ajout des attributs W3C `autocomplete="username"`, `autocomplete="current-password"`, `autocomplete="new-password"`, `autocomplete="name"`, `autocomplete="email"`, `autocomplete="organization"`)
+  - `public/assets/css/app.css` (ajout de `.reader-grid > *, .slide-deck-layout > * { min-width: 0; }`, `minmax(min(100%, 330px), 1fr)` sur `.card-grid`, et `@media (max-width: 640px)` adaptant `.app-topbar`, `.topbar-left-group`, `.topbar-search`, `.btn`, `.catalog-track-banner-main` et les conteneurs pour garantir `maxRight <= innerWidth` sur mobile `375px`)
+  - `REGISTRE_RCA.md`, `JOURNAL_DE_BORD.md`, `tests/run_tests.php` (extension à 134 assertions unitaires/contrats PHP + 59 assertions E2E Playwright MCP)
+* **Nature de la correction :**
+  1. **Sélection, installation globale et durcissement de `@playwright/mcp` (`RCA-LMS-28`) :** Installation globale de `@playwright/mcp@0.0.83` (Microsoft) et durcissement des configurations MCP avec `--browser=chrome --headless --isolated --block-service-workers --viewport-size=1440x900` et restriction d'origines locales (`ERR_BLOCKED_BY_CLIENT` vérifié sur URL externe).
+  2. **Éradication des débordements horizontaux Mobile `375x812` (`RCA-LMS-27`) :** Correction des débordements sur `login.php`, `.topbar-search`, `.btn`, `.card-grid`, `.reader-grid > *`, `.catalog-track-banner-main` et `certificate.php`, garantissant `scrollWidth <= 375` et `maxRight <= 375` sur toutes les vues en viewport mobile.
+  3. **Éradication des avertissements DOM Chromium `autocomplete` & Isolation `LMS_DATA_DIR` (`RCA-LMS-28`) :** Ajout des attributs `autocomplete` normalisés sur tous les formulaires d'authentification et de gestion de comptes (`0` erreur et `0` avertissement console sur les 18 routes) et isolation complète des données de test E2E via `LMS_DATA_DIR`.
+* **Tests post-correction :** ✅ 134 / 134 assertions passées dans `php tests/run_tests.php` + ✅ 59 / 59 assertions E2E passées dans `node tests/e2e/run_playwright_campaign.mjs` (0 régression)
+
 
