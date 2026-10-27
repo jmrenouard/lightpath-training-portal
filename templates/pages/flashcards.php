@@ -21,7 +21,7 @@ $masteredCount = count(array_filter($userFcRatings, static fn($lvl) => (int)$lvl
         </div>
         <h1 style="font-size: 1.6rem; margin-bottom: 0.35rem;">🧠 Cartes Mémo SRS (Spaced Repetition) & Glossaire DBA</h1>
         <p style="color: var(--text-secondary); margin: 0; font-size: 0.9rem;">
-            Révisez activement les concepts critiques de PostgreSQL 18 (MVCC, AIO, `pg_stat_io`, Indexation, Patroni, `pgBackRest`, Kernel Linux Module 20) et auto-évaluez votre niveau de maîtrise.
+            Révisez activement les concepts critiques de PostgreSQL 18 (MVCC, AIO, <code>pg_stat_io</code>, Indexation, Patroni, <code>pgBackRest</code>, Kernel Linux Module 20) et auto-évaluez votre niveau de maîtrise.
         </p>
     </div>
 
@@ -50,10 +50,10 @@ $masteredCount = count(array_filter($userFcRatings, static fn($lvl) => (int)$lvl
                             <span class="badge-code"><?= Security::e($item['category']) ?></span>
                         </div>
                         <h3 style="font-size: 1.05rem; margin-bottom: 0.4rem; color: var(--brand-cyan-light);">
-                            <?= Security::e($item['term']) ?>
+                            <?= Security::formatInlineText($item['term']) ?>
                         </h3>
                         <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;">
-                            <?= Security::e($item['definition']) ?>
+                            <?= Security::formatInlineText($item['definition']) ?>
                         </p>
                     </div>
                 </article>
@@ -97,12 +97,12 @@ $masteredCount = count(array_filter($userFcRatings, static fn($lvl) => (int)$lvl
                         <span class="badge-phase fc-status-badge"><?= $statusLabel ?></span>
                     </div>
                     <h3 style="font-size: 1rem; margin-bottom: 0.65rem; color: var(--text-primary);">
-                        ❓ <?= Security::e($fc['front']) ?>
+                        ❓ <?= Security::formatInlineText($fc['front']) ?>
                     </h3>
                     <details class="lms-details" style="margin-bottom: 0.75rem;">
                         <summary class="lms-summary">👁️ Retourner la carte (Voir la réponse)</summary>
                         <div class="lms-details-body" style="font-size: 0.86rem; color: var(--text-secondary); white-space: pre-line;">
-                            <?= Security::e($fc['back']) ?>
+                            <?= Security::formatInlineText($fc['back']) ?>
                         </div>
                     </details>
                 </div>

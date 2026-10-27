@@ -420,7 +420,23 @@ foreach ($diagQs as $dq) {
 }
 $diagEval = LmsCatalog::evaluateDiagnostic($diagPerfectAnswers);
 $t->assertEquals(100, $diagEval['percent'], "RCA-155 : Évaluation diagnostique parfaite = 100%");
-$t->assertEquals('dba-avance', $diagEval['recommended_track'], "RCA-155 : Un score de 100% recommande le parcours 'dba-avance'");
+$t->assertEquals('performance-tuning', $diagEval['recommended_track'], "RCA-155 / RCA-159 : Un score de 100% recommande le parcours valide 'performance-tuning'");
+$t->assertEquals('performance-tuning', $diagEval['recommended_course_id'], "RCA-159 : recommended_course_id est aligné sur 'performance-tuning'");
+$t->assertEquals('performance-tuning', $diagEval['recommended_course_slug'], "RCA-159 : recommended_course_slug est aligné sur 'performance-tuning'");
+$t->assertTrue(isset($pgCourse['tracks'][$diagEval['recommended_track']]), "RCA-159 : Le slug recommandé pour 100% ('performance-tuning') existe dans config/courses.php");
+
+// RCA-159 : Validation exhaustive des 3 paliers de recommandation de parcours
+$diagLowEval = LmsCatalog::evaluateDiagnostic([]);
+$t->assertEquals(0, $diagLowEval['percent'], "RCA-159 : Évaluation diagnostique vide = 0%");
+$t->assertEquals('fondamentaux-sql', $diagLowEval['recommended_track'], "RCA-159 : Un score < 45% recommande le parcours 'fondamentaux-sql'");
+$t->assertTrue(isset($pgCourse['tracks'][$diagLowEval['recommended_track']]), "RCA-159 : Le slug 'fondamentaux-sql' existe dans config/courses.php");
+
+$midAnswers = array_slice($diagPerfectAnswers, 0, 8, true); // 8 / 15 = 53%
+$diagMidEval = LmsCatalog::evaluateDiagnostic($midAnswers);
+$t->assertEquals(53, $diagMidEval['percent'], "RCA-159 : 8/15 réponses correctes = 53%");
+$t->assertEquals('cursus-complet', $diagMidEval['recommended_track'], "RCA-159 : Un score entre 45% et 75% recommande le parcours 'cursus-complet'");
+$t->assertTrue(isset($pgCourse['tracks'][$diagMidEval['recommended_track']]), "RCA-159 : Le slug 'cursus-complet' existe dans config/courses.php");
+
 $pdoStorage->saveDiagnosticResult(3, 'postgresql-18', $diagEval);
 $t->assertEquals(100, $pdoStorage->getDiagnosticResult(3, 'postgresql-18')['percent'] ?? 0, "RCA-155 : Persistance du diagnostic initial fonctionnelle");
 
@@ -465,6 +481,81 @@ $gamif = Gamification::computeUserBadgesAndXp(
 );
 $t->assertEquals(8, count($gamif['badges'] ?? []), "RCA-156 : Gamification calcule les 8 badges de compétences DBA et les XP (XP={$gamif['xp']})");
 
+// 13. Tests Contrats RCA-158 : Formatage Inline Code, Extraction Métadonnées Exacte (Module 10, Durées, Bloom), Tableaux avec Pipes Échappés & Zéro Backtick Brut sur les 152 Documents LMS
+echo "\n--- 13. Tests Contrats RCA-158 (Formatage Inline Code, Métadonnées Module 10 / Durées / Bloom, Pipes Échappés & Zéro Backtick Brut) ---\n";
+
+$formattedInline = Security::formatInlineText('Paramètre `shared_buffers` et **AIO** <script>alert(1)</script>');
+$t->assertTrue(
+    str_contains($formattedInline, '<code class="lms-inline-code">shared_buffers</code>')
+    && str_contains($formattedInline, '<strong>AIO</strong>')
+    && str_contains($formattedInline, '&lt;script&gt;'),
+    "RCA-158 : Security::formatInlineText() convertit `code` et **gras** tout en échappant le HTML XSS"
+);
+
+$mod10 = $repo->getModule('postgresql-18', 'module_10_integrating_postgresql_with_applications');
+$t->assertEquals(
+    '🔌 Module 10 : Intégration Applicative, ORM & Connection Pooling',
+    $mod10['title'] ?? '',
+    "RCA-158 : Le titre H1 du Module 10 n'est pas écrasé par les commentaires Python '# ...' des blocs de code"
+);
+
+$invalidDurations = 0;
+$figureSummaries = 0;
+$missingBloomModules = 0;
+foreach ($pgCourse['modules'] as $mKey => $mInfo) {
+    $dur = $mInfo['duration'] ?? '';
+    if (!preg_match('/^[1-4](?:[\.,]\d+)?(?:h|\s*heure)/iu', $dur) || strlen($dur) > 90) {
+        $invalidDurations++;
+    }
+    if (str_starts_with($mInfo['summary'] ?? '', '*Figure')) {
+        $figureSummaries++;
+    }
+    if (empty($mInfo['bloom'])) {
+        $missingBloomModules++;
+    }
+}
+$t->assertEquals(0, $invalidDurations, "RCA-158 : 34 / 34 modules possèdent une durée normalisée exacte (zéro capture de phrase interne)");
+$t->assertEquals(0, $figureSummaries, "RCA-158 : 0 / 34 modules avec légende '*Figure :' capturée comme résumé");
+$t->assertEquals(0, $missingBloomModules, "RCA-158 : 34 / 34 modules possèdent leur niveau de compétence Bloom extrait");
+
+$rawBacktickDocs = 0;
+foreach ($pgCourse['modules'] as $mKey => $mInfo) {
+    $pm = $parser->parseModuleFile($mInfo['source_md_path']);
+    $textOnly = preg_replace('/<(pre|code)\b[^>]*>.*?<\/\1>/isu', '', $pm['html']) ?? $pm['html'];
+    if (str_contains($textOnly, '`')) {
+        $rawBacktickDocs++;
+        echo "  [WARN] Backtick brut hors <code> détecté dans module {$mKey}\n";
+    }
+}
+foreach ($pgCourse['labs'] as $lKey => $lInfo) {
+    $pl = $parser->parseLabFile($lInfo['source_md_path']);
+    foreach (['html', 'enonce_html', 'corrige_html'] as $part) {
+        $textOnly = preg_replace('/<(pre|code)\b[^>]*>.*?<\/\1>/isu', '', $pl[$part] ?? '') ?? '';
+        if (str_contains($textOnly, '`')) {
+            $rawBacktickDocs++;
+            echo "  [WARN] Backtick brut hors <code> détecté dans lab {$lKey} ({$part})\n";
+        }
+    }
+}
+foreach ($pgCourse['cheatsheets'] as $cKey => $cInfo) {
+    $pc = $parser->parseModuleFile($cInfo['source_md_path']);
+    $textOnly = preg_replace('/<(pre|code)\b[^>]*>.*?<\/\1>/isu', '', $pc['html']) ?? $pc['html'];
+    if (str_contains($textOnly, '`')) {
+        $rawBacktickDocs++;
+        echo "  [WARN] Backtick brut hors <code> détecté dans cheatsheet {$cKey}\n";
+    }
+}
+foreach ($pgCourse['referentiel'] as $rKey => $rInfo) {
+    $pr = $parser->parseModuleFile($rInfo['source_md_path']);
+    $textOnly = preg_replace('/<(pre|code)\b[^>]*>.*?<\/\1>/isu', '', $pr['html']) ?? $pr['html'];
+    if (str_contains($textOnly, '`')) {
+        $rawBacktickDocs++;
+        echo "  [WARN] Backtick brut hors <code> détecté dans referentiel {$rKey}\n";
+    }
+}
+$t->assertEquals(0, $rawBacktickDocs, "RCA-158 : 0 backtick brut hors <code>/<pre> sur l'ensemble des 34 modules, 34 labs, 69 cheatsheets et 15 documents de référentiel");
+
 exit($t->summary());
+
 
 

@@ -515,4 +515,50 @@ Tâche : Vérifier que config/app.php supporte LMS_DATA_DIR, que templates/pages
 ```
 * **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-26
 
+---
+
+## Fiche d'Incident RCA-158 : Rendu Markdown Inline Sécurisé, Extraction Précise des Métadonnées Pédagogiques (Module 10, Durées, Bloom) & Éradication des Backticks Bruts sur les 152 Documents LMS
+
+* **Date de détection :** 2026-10-26
+* **Composant Affecté :** `src/Core/Security.php`, `src/Course/CourseRepository.php`, `src/Course/MarkdownParser.php`, `templates/pages/{catalog,diagnostic,documents,exam,flashcards,module_view,search}.php`, `tests/run_tests.php`
+* **1. Mécanisme :**
+  1) Le titre H1 du Module 10 était masqué ou pollué par les commentaires Python `# ...` présents dans les blocs de code en tête de fichier.
+  2) Les durées des modules capturaient parfois des phrases textuelles issues du corps Markdown plutôt qu'une valeur normalisée (`Xh`).
+  3) Les niveaux de compétence Bloom n'étaient pas extraits de manière déterministe pour tous les modules.
+  4) Plusieurs documents Markdown contenaient des backticks bruts non interprétés dans les tableaux ou textes inline sans balise `<code>`.
+* **2. Hypothèse :**
+  Implémenter `Security::formatInlineText()` pour transformer en toute sécurité `code` et `**gras**` avec échappement XSS, durcir les regex d'extraction du titre H1, de la durée et du niveau Bloom dans `CourseRepository.php`, et enrichir `MarkdownParser.php` pour parser correctement les tableaux avec pipes échappés et neutraliser les backticks orphelins.
+* **3. Contre-mesure :**
+  Ajout de `Security::formatInlineText()`, refonte de l'extraction des métadonnées dans `CourseRepository.php`, sécurisation du parsing des tableaux et suppression des backticks bruts dans `MarkdownParser.php`.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal. Lis RCA-158 dans REGISTRE_RCA.md.
+Tâche : Vérifier que Security::formatInlineText() est utilisé sur les vues de contenu, que CourseRepository extrait correctement les durées et niveaux Bloom sans pollution de titre, et que 0 backtick brut ne subsiste hors <code>/<pre> sur les 152 documents LMS. Valide avec php tests/run_tests.php.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-27
+
+---
+
+## Fiche d'Incident RCA-159 (`RCA-LMS-29`) : Alignement des Slugs de Recommandation de Parcours du Diagnostic Qualiopi avec `config/courses.php`
+
+* **Date de détection :** 2026-10-26
+* **Composant Affecté :** `src/Course/LmsCatalog.php`, `templates/pages/diagnostic.php`, `tests/run_tests.php`
+* **1. Mécanisme :**
+  Dans `src/Course/LmsCatalog.php::evaluateDiagnostic()`, les clés de parcours retournées dans `$recommendedTrack` étaient `sql-debutant`, `dba-exploitation`, et `dba-avance`. Or, dans `config/courses.php`, les 4 parcours certifiants portent les identifiants officiels `fondamentaux-sql`, `cursus-complet`, `performance-tuning`, et `ingenierie-specialisee`. Lorsque l'apprenant complétait son positionnement initial et cliquait sur le bouton "Accéder au Parcours Recommandé" (`?page=catalog&track=...`), le catalogue filtrait sur une clé inexistante, affichant un catalogue vide. De plus, `tests/run_tests.php` testait uniquement l'égalité avec l'ancienne valeur `dba-avance` sans vérifier l'existence de la clé dans le catalogue.
+* **2. Hypothèse :**
+  Mapper les 3 tranches de score du diagnostic sur les identifiants officiels de parcours :
+  - Score `< 45%` : `recommended_track = 'fondamentaux-sql'`, titre `'Parcours 4 : Fondamentaux & Pratique Approfondie du Langage SQL:2023 (Modules SQL 01 à 05)'`.
+  - Score `45% à 74%` : `recommended_track = 'cursus-complet'`, titre `'Parcours 1 : Cursus Complet PostgreSQL 18 — Administration, Cloud, DevOps & Dév (Modules 01 à 20)'`.
+  - Score `>= 75%` : `recommended_track = 'performance-tuning'`, titre `'Parcours 2 : Spécialisation Performance Tuning & Internals — Protocole RALPH (Modules 21 à 25)'`.
+  Fournir également les clés de compatibilité `recommended_course_id` et `recommended_course_slug`, et tester exhaustivement les 3 scénarios dans `tests/run_tests.php` en affirmant l'appartenance à `array_keys($pgCourse['tracks'])`.
+* **3. Contre-mesure :**
+  Modification de `src/Course/LmsCatalog.php` (lignes 265-295) pour assigner les identifiants et titres officiels, ajout de `recommended_course_id` et `recommended_course_slug`, et extension des tests dans `tests/run_tests.php` pour couvrir les 3 paliers et garantir la résolution de parcours dans le catalogue.
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal. Lis RCA-159 dans REGISTRE_RCA.md.
+Tâche : Vérifier dans src/Course/LmsCatalog.php que evaluateDiagnostic() retourne 'fondamentaux-sql' (<45%), 'cursus-complet' (<75%) et 'performance-tuning' (>=75%), avec recommended_course_id et recommended_course_slug alignés. Vérifier dans tests/run_tests.php que les 3 slugs existent dans config/courses.php. Valide avec php tests/run_tests.php.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-27
+
+
 

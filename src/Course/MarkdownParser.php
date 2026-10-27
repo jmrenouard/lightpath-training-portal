@@ -29,7 +29,7 @@ class MarkdownParser
         $moduleId = pathinfo($mdPath, PATHINFO_FILENAME);
         $manifestPath = dirname(__DIR__, 2) . '/public/assets/slides_cache/' . $moduleId . '/manifest.json';
         $manifestMtime = is_file($manifestPath) ? (int)@filemtime($manifestPath) : 0;
-        $cacheKey = md5('mod_v6_rca146:' . $courseSlug . ':' . $mdPath . ':' . $mtime . ':' . $manifestMtime);
+        $cacheKey = md5('mod_v8_rca158:' . $courseSlug . ':' . $mdPath . ':' . $mtime . ':' . $manifestMtime);
         $cacheFile = $this->cacheDir . '/' . $cacheKey . '.json';
         if (is_file($cacheFile)) {
             $cached = @json_decode((string)@file_get_contents($cacheFile), true);
@@ -67,7 +67,7 @@ class MarkdownParser
             ];
         }
         $mtime = (int)@filemtime($mdPath);
-        $cacheKey = md5('lab_v7_rca151:' . $courseSlug . ':' . $mdPath . ':' . $mtime);
+        $cacheKey = md5('lab_v9_rca158:' . $courseSlug . ':' . $mdPath . ':' . $mtime);
         $cacheFile = $this->cacheDir . '/' . $cacheKey . '.json';
         if (is_file($cacheFile)) {
             $cached = @json_decode((string)@file_get_contents($cacheFile), true);
@@ -168,7 +168,7 @@ class MarkdownParser
                 if (preg_match_all('/^\s*[\*\-]\s*\*\*([A-D])\.?\*\*\s*(.+)$/imu', $body, $optMatches, PREG_SET_ORDER)) {
                     foreach ($optMatches as $om) {
                         $letter = strtoupper(trim($om[1]));
-                        $options[$letter] = trim(str_replace(['**', '`'], ['', ''], $om[2]));
+                        $options[$letter] = trim(str_replace(['**'], [''], $om[2]));
                     }
                 }
 
@@ -635,8 +635,8 @@ class MarkdownParser
                 continue;
             }
 
-            // Titres H1..H4
-            if (preg_match('/^(#{1,4})\s+(.+)$/', $trimmed, $hm)) {
+            // Titres H1..H6
+            if (preg_match('/^(#{1,6})\s+(.+)$/', $trimmed, $hm)) {
                 $flushList();
                 $level = strlen($hm[1]);
                 $titleText = trim($hm[2]);
@@ -841,8 +841,9 @@ class MarkdownParser
                 }
             }
             $bodyLines = array_values($bodyLines);
-        } elseif (preg_match('/^\*\*((?:(?!\*\*).)+)\*\*$/u', $first, $tm)) {
-            $alertTitle = $this->formatInline($tm[1], $courseSlug);
+        } elseif (preg_match('/^(?:\*\*((?:(?!\*\*).)+)\*\*|#{1,6}\s+(.+))$/u', $first, $tm)) {
+            $rawTitle = ($tm[1] ?? '') !== '' ? $tm[1] : ($tm[2] ?? '');
+            $alertTitle = $this->formatInline(trim($rawTitle), $courseSlug);
             foreach ($bodyLines as $k => $v) {
                 if (trim($v) !== '') {
                     unset($bodyLines[$k]);
@@ -852,7 +853,7 @@ class MarkdownParser
             $bodyLines = array_values($bodyLines);
         }
 
-        // Parser les lignes internes (paragraphes + listes * / - / 1.)
+        // Parser les lignes internes (paragraphes + sous-titres + listes * / - / 1.)
         $innerParts = [];
         $inCalloutList = false;
         $calloutListTag = 'ul';
@@ -871,7 +872,10 @@ class MarkdownParser
                 continue;
             }
 
-            if (preg_match('/^([\*\-]|\d+\.)\s+(.+)$/', $bTrim, $lm)) {
+            if (preg_match('/^#{1,6}\s+(.+)$/', $bTrim, $hm)) {
+                $closeCalloutList();
+                $innerParts[] = '<h4 class="lms-callout-subtitle" style="margin:0.45rem 0 0.25rem;font-size:0.95rem;">' . $this->formatInline(trim($hm[1]), $courseSlug) . '</h4>';
+            } elseif (preg_match('/^([\*\-]|\d+\.)\s+(.+)$/', $bTrim, $lm)) {
                 $tag = is_numeric(rtrim($lm[1], '.')) ? 'ol' : 'ul';
                 if (!$inCalloutList || $calloutListTag !== $tag) {
                     $closeCalloutList();
@@ -897,9 +901,38 @@ class MarkdownParser
 
     private function splitTableRow(string $row): array
     {
-        $trimmed = trim($row, '| ');
-        $parts = explode('|', $trimmed);
-        return array_map('trim', $parts);
+        $trimmed = trim($row);
+        if (str_starts_with($trimmed, '|')) {
+            $trimmed = substr($trimmed, 1);
+        }
+        if (str_ends_with($trimmed, '|') && !str_ends_with($trimmed, '\|')) {
+            $trimmed = substr($trimmed, 0, -1);
+        }
+        $cells = [];
+        $current = '';
+        $inBacktick = false;
+        $len = strlen($trimmed);
+        for ($i = 0; $i < $len; $i++) {
+            $ch = $trimmed[$i];
+            if ($ch === '\\' && ($i + 1) < $len && $trimmed[$i + 1] === '|') {
+                $current .= '|';
+                $i++;
+                continue;
+            }
+            if ($ch === '`') {
+                $inBacktick = !$inBacktick;
+                $current .= $ch;
+                continue;
+            }
+            if ($ch === '|' && !$inBacktick) {
+                $cells[] = trim($current);
+                $current = '';
+                continue;
+            }
+            $current .= $ch;
+        }
+        $cells[] = trim($current);
+        return $cells;
     }
 
     private function resolveAssetUrl(string $rawPath, string $courseSlug): string
@@ -918,6 +951,38 @@ class MarkdownParser
         return '?action=course_asset&course=' . urlencode($courseSlug) . '&path=' . urlencode($clean);
     }
 
+    /**
+     * Résout un chemin relatif vers un fichier ou répertoire compagnon dans training_postgresql.
+     */
+    private function resolveRelativeRepoPath(string $rawHref): ?string
+    {
+        $pathPart = explode('#', explode('?', $rawHref, 2)[0], 2)[0];
+        $clean = preg_replace('#^(?:\./|\.\./)+#', '', str_replace('\\', '/', trim($pathPart))) ?? '';
+        $clean = rtrim($clean, '/');
+        if ($clean === '' || str_contains($clean, '..')) {
+            return null;
+        }
+        $root = rtrim($this->sourceRoot, '/\\');
+        $prefixes = [
+            '',
+            '04_ateliers_et_tp/',
+            '01_programme_et_referentiel/',
+            '03_supports_de_cours/',
+            '05_cheatsheets/',
+        ];
+        foreach ($prefixes as $pfx) {
+            $cand = $pfx . $clean;
+            $abs = $root . '/' . $cand;
+            if (is_file($abs)) {
+                return $cand;
+            }
+            if (is_dir($abs) && is_file($abs . '/README.md')) {
+                return $cand . '/README.md';
+            }
+        }
+        return null;
+    }
+
     private function formatInline(string $text, string $courseSlug = 'postgresql-18', bool $allowRawPrefix = false): string
     {
         $prefix = '';
@@ -930,10 +995,11 @@ class MarkdownParser
         $codePlaceholders = [];
         $text = preg_replace_callback('/`([^`]+)`/', static function (array $m) use (&$codePlaceholders): string {
             $key = '%%CODE_' . count($codePlaceholders) . '%%';
-            $codePlaceholders[$key] = '<code class="lms-inline-code">' . Security::e($m[1]) . '</code>';
+            $codePlaceholders[$key] = '<code class="lms-inline-code">' . Security::e(str_replace('\|', '|', $m[1])) . '</code>';
             return $key;
         }, $text) ?? $text;
 
+        $text = str_replace('\|', '|', $text);
         $escaped = Security::e($text);
 
         // 2. Restaurer quelques balises inline sûres (<br/>, <b>, <i>, <sup>, <sub>)
@@ -958,23 +1024,29 @@ class MarkdownParser
                 return '<span>' . $label . '</span>';
             }
 
-            // Router directement vers les vues internes du LMS pour les modules, labs et cheatsheets
-            if (preg_match('/(module_(?:sql_\d{2}|\d{2})_[a-z0-9_]+)\.(?:md|html|pdf)/i', $href, $mm)) {
+            // Router directement vers les vues internes du LMS pour les modules, labs, cheatsheets et référentiel
+            if (preg_match('/(module_(?:sql_\d{2}|\d{2})_[a-z0-9_]+)\.(?:md|html|pdf)(#.*)?$/i', $href, $mm)) {
                 $url = 'index.php?page=module&course=' . urlencode($courseSlug) . '&id=' . urlencode($mm[1]);
                 return '<a href="' . Security::e($url) . '" class="lms-link">' . $label . '</a>';
             }
-            if (preg_match('/(lab_(?:sql_\d{2}|\d{2})_[a-z0-9_]+)\.(?:md|html|pdf)/i', $href, $lm)) {
+            if (preg_match('/(lab_(?:sql_\d{2}|\d{2})_[a-z0-9_]+)\.(?:md|html|pdf)(#.*)?$/i', $href, $lm)) {
                 $url = 'index.php?page=lab&course=' . urlencode($courseSlug) . '&id=' . urlencode($lm[1]);
                 return '<a href="' . Security::e($url) . '" class="lms-link">' . $label . '</a>';
             }
-            if (preg_match('/(cheatsheet_[a-z0-9_]+)\.(?:md|html|pdf)/i', $href, $cm)) {
+            if (preg_match('/(cheatsheet_[a-z0-9_]+)\.(?:md|html|pdf)(#.*)?$/i', $href, $cm)) {
                 $url = 'index.php?page=documents&tab=cheatsheets&course=' . urlencode($courseSlug) . '&id=' . urlencode($cm[1]);
                 return '<a href="' . Security::e($url) . '" class="lms-link">' . $label . '</a>';
             }
-            if (str_ends_with($href, '.pdf') || str_ends_with($href, '.html') || str_ends_with($href, '.md') || str_ends_with($href, '.png')) {
-                $clean = preg_replace('#^(\.\./)+#', '', str_replace('\\', '/', $href)) ?? $href;
-                $url = '?action=course_asset&course=' . urlencode($courseSlug) . '&path=' . urlencode($clean);
-                return '<a href="' . Security::e($url) . '" class="lms-link" target="_blank" rel="noopener">' . $label . '</a>';
+            if (preg_match('/(GUIDE_PARCOURS|grille_evaluation_satisfaction_chaud_froid|guide_formateur_runbook_animation|modele_attestation_et_suivi_competences|programme_formation_postgresql_18|programme_specifique_[a-z0-9_]+|questionnaire_diagnostic_pre_formation|referentiel_competences_bloom|sujet_examen_evaluation_sommative|plan_formation|syllabus_detaille|timing|handbook|livret_exercices_complet)\.(?:md|html)(#.*)?$/i', $href, $rm)) {
+                $url = 'index.php?page=documents&tab=referentiel&course=' . urlencode($courseSlug) . '&id=' . urlencode($rm[1]);
+                return '<a href="' . Security::e($url) . '" class="lms-link">' . $label . '</a>';
+            }
+            if (!preg_match('/^(?:https?:|mailto:|tel:|#|\?|index\.php)/i', $href)) {
+                $resolvedRel = $this->resolveRelativeRepoPath($href);
+                if ($resolvedRel !== null) {
+                    $url = '?action=course_asset&course=' . urlencode($courseSlug) . '&path=' . urlencode($resolvedRel);
+                    return '<a href="' . Security::e($url) . '" class="lms-link" target="_blank" rel="noopener">' . $label . '</a>';
+                }
             }
             return '<a href="' . Security::e($href) . '" class="lms-link" target="_blank" rel="noopener">' . $label . '</a>';
         }, $escaped) ?? $escaped;

@@ -189,7 +189,7 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
                 <select id="slide-jump-select" class="slide-jump-select tabular-nums" aria-label="Choisir une diapositive">
                     <?php foreach ($slides as $s): ?>
                         <option value="<?= (int)$s['index'] - 1 ?>">
-                            Slide <?= sprintf('%02d', (int)$s['index']) ?>/<?= sprintf('%02d', $totalSlides) ?> — <?= Security::e(CourseRepository::truncateUtf8($s['title'], 56)) ?>
+                            Slide <?= sprintf('%02d', (int)$s['index']) ?>/<?= sprintf('%02d', $totalSlides) ?> — <?= Security::e(CourseRepository::truncateUtf8(str_replace(['`', '**'], '', (string)$s['title']), 56)) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -237,8 +237,8 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
                                 </div>
                                 <footer class="lms-studio-caption-bar">
                                     <div class="lms-studio-caption-main">
-                                        <span class="lms-slide-badge"><?= Security::e($s['badge']) ?></span>
-                                        <strong class="lms-studio-caption-title"><?= Security::e($s['title']) ?></strong>
+                                        <span class="lms-slide-badge"><?= Security::formatInlineText($s['badge']) ?></span>
+                                        <strong class="lms-studio-caption-title"><?= Security::formatInlineText($s['title']) ?></strong>
                                         <span class="lms-slide-counter tabular-nums" style="margin-left: auto;">
                                             DIAPO <?= sprintf('%02d', (int)$s['index']) ?> / <?= sprintf('%02d', $totalSlides) ?>
                                         </span>
@@ -246,7 +246,7 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
                                     <?php if ($slideNotes !== '' || $slidePreview !== ''): ?>
                                         <div class="lms-studio-speaker-notes">
                                             <strong>🎙️ Notes & Points Clés :</strong>
-                                            <?= Security::e($slideNotes !== '' ? $slideNotes : $slidePreview) ?>
+                                            <?= Security::formatInlineText($slideNotes !== '' ? $slideNotes : $slidePreview) ?>
                                         </div>
                                     <?php endif; ?>
                                 </footer>
@@ -254,8 +254,8 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
                                 <header class="lms-slide-header">
                                     <div style="display: flex; align-items: center; gap: 0.6rem; min-width: 0;">
                                         <img src="assets/img/postgresql_elephant_dark.png" alt="PG18" style="width: 24px; height: 24px;"/>
-                                        <span class="lms-slide-badge"><?= Security::e($s['badge']) ?></span>
-                                        <span class="lms-slide-chapter"><?= Security::e($s['chapter']) ?></span>
+                                        <span class="lms-slide-badge"><?= Security::formatInlineText($s['badge']) ?></span>
+                                        <span class="lms-slide-chapter"><?= Security::formatInlineText($s['chapter']) ?></span>
                                     </div>
                                     <div class="lms-slide-counter tabular-nums">
                                         DIAPO <?= sprintf('%02d', (int)$s['index']) ?> / <?= sprintf('%02d', $totalSlides) ?>
@@ -263,7 +263,7 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
                                 </header>
 
                                 <div class="lms-slide-body">
-                                    <h2 class="lms-slide-title"><?= Security::e($s['title']) ?></h2>
+                                    <h2 class="lms-slide-title"><?= Security::formatInlineText($s['title']) ?></h2>
                                     <div class="lms-slide-content markdown-body">
                                         <?= $s['html'] ?>
                                     </div>
@@ -315,7 +315,7 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
                                     data-slide-jump="<?= $idx ?>"
                                     title="Diapositive <?= sprintf('%02d', (int)$s['index']) ?> — <?= Security::e($s['title']) ?>">
                                 <span class="slide-outline-num tabular-nums"><?= sprintf('%02d', (int)$s['index']) ?></span>
-                                <span class="slide-outline-text"><?= Security::e($s['title']) ?></span>
+                                <span class="slide-outline-text"><?= Security::formatInlineText($s['title']) ?></span>
                             </button>
                         <?php endforeach; ?>
                     </div>
@@ -361,17 +361,17 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
                         <?php foreach ($parsed['quiz'] as $q): ?>
                             <div class="quiz-question-box" data-correct="<?= Security::e($q['correct']) ?>">
                                 <div style="font-weight: 700; margin-bottom: 0.65rem; color: var(--text-primary);">
-                                    <?= Security::e($q['question']) ?>
+                                    <?= Security::formatInlineText($q['question']) ?>
                                 </div>
                                 <?php foreach ($q['options'] as $letter => $optText): ?>
                                     <label class="quiz-option-label">
                                         <input type="radio" name="q_<?= (int)$q['index'] ?>" value="<?= Security::e($letter) ?>" required style="margin-top: 0.25rem;"/>
-                                        <span><strong><?= Security::e($letter) ?>.</strong> <?= Security::e($optText) ?></span>
+                                        <span><strong><?= Security::e($letter) ?>.</strong> <?= Security::formatInlineText($optText) ?></span>
                                     </label>
                                 <?php endforeach; ?>
                                 <div class="quiz-feedback" style="display: none; margin-top: 0.85rem; padding: 0.75rem; border-radius: var(--radius-sm); background: rgba(16, 185, 129, 0.1); border-left: 3px solid var(--accent-emerald); font-size: 0.84rem;">
                                     <strong>✔ Réponse attendue : <?= Security::e($q['correct']) ?></strong><br/>
-                                    <?= Security::e($q['explanation']) ?>
+                                    <?= Security::formatInlineText($q['explanation']) ?>
                                 </div>
                             </div>
                         <?php endforeach; ?>

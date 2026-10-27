@@ -150,4 +150,20 @@
   3. **Éradication des avertissements DOM Chromium `autocomplete` & Isolation `LMS_DATA_DIR` (`RCA-LMS-28`) :** Ajout des attributs `autocomplete` normalisés sur tous les formulaires d'authentification et de gestion de comptes (`0` erreur et `0` avertissement console sur les 18 routes) et isolation complète des données de test E2E via `LMS_DATA_DIR`.
 * **Tests post-correction :** ✅ 134 / 134 assertions passées dans `php tests/run_tests.php` + ✅ 59 / 59 assertions E2E passées dans `node tests/e2e/run_playwright_campaign.mjs` (0 régression)
 
+---
+
+### Correction RCA-158 — Rendu Inline Sécurisé, Extraction Métadonnées Pédagogiques Exactes & Zéro Backtick Brut sur les 152 Documents LMS
+* **Date :** 2026-10-27 00:50
+* **Fichiers modifiés :** `src/Core/Security.php`, `src/Course/CourseRepository.php`, `src/Course/MarkdownParser.php`, `src/Course/DownloadController.php`, `templates/pages/catalog.php`, `templates/pages/diagnostic.php`, `templates/pages/documents.php`, `templates/pages/exam.php`, `templates/pages/flashcards.php`, `templates/pages/module_view.php`, `templates/pages/search.php`, `tests/run_tests.php`
+* **Nature de la correction :** Introduction de `Security::formatInlineText()` pour le rendu sécurisé du code inline et du gras sans vulnérabilité XSS, isolation du titre H1 du Module 10 contre les commentaires Python, normalisation de la durée et extraction systématique des niveaux Bloom, parsing des tableaux avec pipes échappés et éradication de tout backtick orphelin hors balises code/pre sur l'ensemble des 152 documents LMS.
+* **Tests post-correction :** ✅ 170 / 170 passés dans `php tests/run_tests.php` (0 régression)
+
+### Correction RCA-159 — Alignement des Slugs de Recommandation de Parcours du Diagnostic Qualiopi avec `config/courses.php`
+* **Date :** 2026-10-27 01:00
+* **Issue GitHub associée :** `lightpath-training-portal#13`
+* **Fichiers modifiés :** `src/Course/LmsCatalog.php`, `tests/run_tests.php`
+* **Nature de la correction :** Alignement des identifiants et libellés de parcours retournés par `LmsCatalog::evaluateDiagnostic()` sur les clés officielles déclarées dans `config/courses.php` (`fondamentaux-sql` pour score < 45 %, `cursus-complet` pour score 45-74 %, `performance-tuning` pour score >= 75 %). Ajout des champs de compatibilité `recommended_course_id` et `recommended_course_slug`, et renforcement des assertions dans `tests/run_tests.php` pour valider l'existence effective du parcours dans le catalogue sur l'ensemble des tranches de score.
+* **Tests post-correction :** ✅ 179 / 179 passés dans `php tests/run_tests.php` + ✅ 68 / 68 passés dans `node tests/e2e/run_playwright_campaign.mjs` (0 régression)
+
+
 

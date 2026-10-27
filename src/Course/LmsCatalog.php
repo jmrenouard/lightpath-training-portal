@@ -266,19 +266,19 @@ class LmsCatalog
 
         if ($percent < 45) {
             $level = 'Débutant / Initiation SQL & Fondamentaux';
-            $recommendedTrack = 'sql-debutant';
-            $recommendedTitle = 'Parcours 4 : SQL pour Débutants & Fondamentaux (3 jours — 21h)';
-            $recommendationText = 'Nous vous recommandons de démarrer par le Parcours SQL Fondamentaux (Modules SQL 01 à 05 + M01-M03) afin de consolider le modèle relationnel et l\'architecture PostgreSQL 18.';
+            $recommendedTrack = 'fondamentaux-sql';
+            $recommendedTitle = 'Parcours 4 : Fondamentaux & Pratique Approfondie du Langage SQL:2023 (Modules SQL 01 à 05)';
+            $recommendationText = 'Nous vous recommandons de démarrer par le Parcours 4 : Fondamentaux & Pratique Approfondie du Langage SQL:2023 (Modules SQL 01 à 05) afin d\'acquérir une solide maîtrise déclarative, DML et DDL sur PostgreSQL 18.';
         } elseif ($percent < 75) {
             $level = 'Intermédiaire / DBA Exploitation & Production';
-            $recommendedTrack = 'dba-exploitation';
-            $recommendedTitle = 'Parcours 2 : DBA Exploitation & Production (5 jours — 35h)';
-            $recommendationText = 'Vous maîtrisez les bases SQL. Le Parcours DBA Exploitation (M01 à M10 + M16-M18) vous permettra d\'approfondir MVCC, la sécurité SCRAM/RLS, pgBackRest et la réplication.';
+            $recommendedTrack = 'cursus-complet';
+            $recommendedTitle = 'Parcours 1 : Cursus Complet PostgreSQL 18 — Administration, Cloud, DevOps & Dév (Modules 01 à 20)';
+            $recommendationText = 'Vous disposez d\'un bon socle initial. Le Parcours 1 : Cursus Complet (Modules 01 à 20) vous permettra d\'approfondir l\'architecture interne, MVCC, la sécurité SCRAM/RLS, pgBackRest, Patroni et le durcissement noyau Linux.';
         } else {
-            $level = 'Avancé / Architecte & Expert Performance PostgreSQL 18';
-            $recommendedTrack = 'dba-avance';
-            $recommendedTitle = 'Parcours 3 : DBA Avancé, Haute Disponibilité & Kernel Linux (5 jours — 35h)';
-            $recommendationText = 'Excellent socle technique ! Vous pouvez cibler directement le Parcours DBA Avancé (M09 à M20 : Patroni, CBO, Partitionnement, AIO et Tuning Kernel Linux Module 20) ou le Cursus Complet.';
+            $level = 'Avancé / Architecte & Spécialiste Performance PostgreSQL 18';
+            $recommendedTrack = 'performance-tuning';
+            $recommendedTitle = 'Parcours 2 : Spécialisation Performance Tuning & Internals — Protocole RALPH (Modules 21 à 25)';
+            $recommendationText = 'Excellent niveau technique ! Vous pouvez vous orienter directement vers le Parcours 2 : Spécialisation Performance Tuning & Internals — Protocole RALPH (Modules 21 à 25 : CBO, statistiques multivariées, internals d\'indexation et analyse des contentions) ou vers le Parcours 3 : Ingénierie Spécialisée.';
         }
 
         return [
@@ -287,6 +287,8 @@ class LmsCatalog
             'percent' => $percent,
             'level' => $level,
             'recommended_track' => $recommendedTrack,
+            'recommended_course_id' => $recommendedTrack,
+            'recommended_course_slug' => $recommendedTrack,
             'recommended_title' => $recommendedTitle,
             'recommendation_text' => $recommendationText,
             'domains' => $byDomain,

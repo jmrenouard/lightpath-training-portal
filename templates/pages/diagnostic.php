@@ -92,20 +92,20 @@ $showRetake = isset($_GET['retake']) && $_GET['retake'] === '1';
                 <span class="badge-phase"><?= Security::e(LmsCatalog::DOMAINS[$q['domain']] ?? $q['domain']) ?></span>
             </div>
             <div style="font-weight: 700; margin-bottom: 0.65rem; color: var(--text-primary);">
-                <?= Security::e($q['question']) ?>
+                <?= Security::formatInlineText($q['question']) ?>
             </div>
             <?php foreach ($q['options'] as $letter => $optText):
                 $checked = ($prevDetail !== null && ($prevDetail['given'] ?? '') === $letter);
             ?>
                 <label class="quiz-option-label">
                     <input type="radio" name="answers[<?= Security::e($qid) ?>]" value="<?= Security::e($letter) ?>" <?= $checked ? 'checked' : '' ?> required style="margin-top: 0.25rem;"/>
-                    <span><strong><?= Security::e($letter) ?>.</strong> <?= Security::e($optText) ?></span>
+                    <span><strong><?= Security::e($letter) ?>.</strong> <?= Security::formatInlineText($optText) ?></span>
                 </label>
             <?php endforeach; ?>
 
             <?php if ($prevDetail !== null && !$showRetake): ?>
                 <div style="margin-top: 0.75rem; padding: 0.65rem 0.9rem; border-radius: var(--radius-sm); background: <?= !empty($prevDetail['is_correct']) ? 'rgba(16, 185, 129, 0.12)' : 'rgba(244, 63, 94, 0.12)' ?>; border-left: 3px solid <?= !empty($prevDetail['is_correct']) ? '#10B981' : '#F43F5E' ?>; font-size: 0.84rem;">
-                    <strong><?= !empty($prevDetail['is_correct']) ? '✔ Réponse exacte' : '✘ Réponse attendue : ' . Security::e($q['correct']) ?></strong> — <?= Security::e($q['explanation']) ?>
+                    <strong><?= !empty($prevDetail['is_correct']) ? '✔ Réponse exacte' : '✘ Réponse attendue : ' . Security::e($q['correct']) ?></strong> — <?= Security::formatInlineText($q['explanation']) ?>
                 </div>
             <?php endif; ?>
         </div>
