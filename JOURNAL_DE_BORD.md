@@ -165,5 +165,20 @@
 * **Nature de la correction :** Alignement des identifiants et libellés de parcours retournés par `LmsCatalog::evaluateDiagnostic()` sur les clés officielles déclarées dans `config/courses.php` (`fondamentaux-sql` pour score < 45 %, `cursus-complet` pour score 45-74 %, `performance-tuning` pour score >= 75 %). Ajout des champs de compatibilité `recommended_course_id` et `recommended_course_slug`, et renforcement des assertions dans `tests/run_tests.php` pour valider l'existence effective du parcours dans le catalogue sur l'ensemble des tranches de score.
 * **Tests post-correction :** ✅ 179 / 179 passés dans `php tests/run_tests.php` + ✅ 68 / 68 passés dans `node tests/e2e/run_playwright_campaign.mjs` (0 régression)
 
+---
+
+### Régularisation Gouvernance Git — Clôture Formelle de l'Issue #11 & Validation Forensique
+* **Date :** 2026-10-27 02:25
+* **Issue GitHub associée :** `lightpath-training-portal#11` (Clôturée) / `lightpath-training-portal#17`
+* **Pull Request associée :** `lightpath-training-portal#12`
+* **Fichiers modifiés :** `JOURNAL_DE_BORD.md`
+* **Nature de la régularisation :**
+  - Clôture formelle de l'Issue #11 (`feat(lms-qa): Durcissement du serveur MCP @playwright/mcp, Campagne de Tests E2E LMS (18 routes, 3 viewports) et correctifs RCA-LMS-17/18`) conformément à la Règle 7 d'AGENTS.md.
+  - L'implémentation associée avait été mergée via la Pull Request #12 mais l'issue n'avait pas été formellement fermée avec son commentaire d'attestation.
+  - Clôture enregistrée avec le commentaire d'attestation : *"Résolu et validé via la fusion de la Pull Request #12. Audit E2E Playwright MCP 100% conforme (68 assertions passées, 0 débordement mobile 375px, autocomplete DOM conforme)."*
+  - Vérification de l'absence totale d'issues orphelines ouvertes sur le dépôt (`gh issue list --state open`).
+* **Tests post-régularisation :** ✅ 179 / 179 tests passés dans `php tests/run_tests.php` + ✅ 68 / 68 passés dans `node tests/e2e/run_playwright_campaign.mjs` (0 régression)
+
+
 
 
