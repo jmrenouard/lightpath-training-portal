@@ -33,7 +33,7 @@ $results = $searchQuery !== '' ? $courseRepo->searchContent($currentCourseSlug, 
 
     <?php if (empty($results)): ?>
         <div class="lms-card">
-            <p style="margin: 0; color: var(--text-secondary);">Aucun résultat trouvé pour ce terme. Essayez un mot-clé SQL ou un concept PostgreSQL 18 (`VACUUM`, `BRIN`, `WAL`, `Patroni`, `sysctl`).</p>
+            <p style="margin: 0; color: var(--text-secondary);">Aucun résultat trouvé pour ce terme. Essayez un mot-clé SQL ou un concept PostgreSQL 18 (<code>VACUUM</code>, <code>BRIN</code>, <code>WAL</code>, <code>Patroni</code>, <code>sysctl</code>).</p>
         </div>
     <?php else: ?>
         <div class="card-grid">
@@ -46,11 +46,11 @@ $results = $searchQuery !== '' ? $courseRepo->searchContent($currentCourseSlug, 
                         </div>
                         <h3 style="font-size: 1.05rem; margin-bottom: 0.4rem;">
                             <a href="index.php<?= Security::e($r['url']) ?>" style="color: var(--text-primary);">
-                                <?= Security::e($r['title']) ?>
+                                <?= Security::formatInlineText($r['title']) ?>
                             </a>
                         </h3>
                         <p style="font-size: 0.84rem; color: var(--text-secondary); margin-bottom: 0.85rem;">
-                            <?= Security::e($r['snippet']) ?>
+                            <?= Security::formatInlineText($r['snippet']) ?>
                         </p>
                     </div>
                     <a href="index.php<?= Security::e($r['url']) ?>" class="btn btn-outline btn-sm" style="width: 100%;">

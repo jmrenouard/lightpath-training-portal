@@ -148,7 +148,7 @@ class CourseRepository
             $root . '/01_programme_et_referentiel',
             $pgScriptsRoot,
         ];
-        $parts = ['v4_rca154', md5(json_encode($tracks) ?: '')];
+        $parts = ['v6_rca158', md5(json_encode($tracks) ?: '')];
         foreach ($dirs as $d) {
             $parts[] = is_dir($d) ? (string)@filemtime($d) : '0';
         }
@@ -544,6 +544,24 @@ class CourseRepository
             }
         }
 
+        $livretPath = $root . '/04_ateliers_et_tp/livret_exercices_complet.md';
+        if (is_file($livretPath)) {
+            $meta = $this->extractMarkdownSummary($livretPath, 'livret_exercices_complet');
+            $docs['livret_exercices_complet'] = [
+                'id' => 'livret_exercices_complet',
+                'category' => 'Livret Stagiaire',
+                'title' => $meta['title'],
+                'summary' => $meta['summary'],
+                'source_md_path' => $livretPath,
+                'downloads' => $this->collectDownloads($root . '/04_ateliers_et_tp/livret_exercices_complet', [
+                    'pdf' => ['ext' => '.pdf', 'label' => 'PDF'],
+                    'md' => ['ext' => '.md', 'label' => 'Markdown'],
+                    'html' => ['ext' => '.html', 'label' => 'HTML'],
+                    'docx' => ['ext' => '.docx', 'label' => 'DOCX'],
+                ]),
+            ];
+        }
+
         return $docs;
     }
 
@@ -594,22 +612,72 @@ class CourseRepository
         $duration = '1h30';
         $summary = '';
 
+        $titleFound = false;
+        $bloomFound = false;
+        $awaitingNextBloomLine = false;
+        $durationFound = false;
+        $inCodeBlock = false;
+
         $fp = @fopen($mdPath, 'rb');
         if ($fp !== false) {
             $linesRead = 0;
-            while (($line = fgets($fp)) !== false && $linesRead < 55) {
+            while (($line = fgets($fp)) !== false && $linesRead < 65) {
                 $linesRead++;
                 $trimmed = trim($line);
                 if ($trimmed === '') {
+                    $awaitingNextBloomLine = false;
                     continue;
                 }
-                if (str_starts_with($trimmed, '# ')) {
+                if (str_starts_with($trimmed, '```') || str_starts_with($trimmed, '~~~')) {
+                    $inCodeBlock = !$inCodeBlock;
+                    $awaitingNextBloomLine = false;
+                    continue;
+                }
+                if ($inCodeBlock) {
+                    continue;
+                }
+                if ($awaitingNextBloomLine) {
+                    $bLine = trim(ltrim($trimmed, '> '));
+                    if ($bLine !== '') {
+                        $bloom = trim($bloom . ' — ' . strip_tags(str_replace(['**', '*', '`'], '', $bLine)));
+                        $bloomFound = true;
+                    }
+                    $awaitingNextBloomLine = false;
+                    continue;
+                }
+                if (!$titleFound && str_starts_with($trimmed, '# ')) {
                     $title = trim(str_replace(['**', '`'], '', substr($trimmed, 2)));
-                } elseif (preg_match('/Compétence[^:]*:\*?\*?\s*(.+)$/iu', $trimmed, $m)) {
-                    $bloom = trim(strip_tags(str_replace(['**', '*', '`'], '', $m[1])));
-                } elseif (preg_match('/Durée[^:]*:\*?\*?\s*(.+)$/iu', $trimmed, $m)) {
+                    $titleFound = true;
+                } elseif (!$durationFound && preg_match('/^\|\s*[^|]*Durée[^|]*\|\s*([^|]+)\|/iu', $trimmed, $m)) {
                     $duration = trim(strip_tags(str_replace(['**', '*', '`'], '', $m[1])));
-                } elseif ($summary === '' && !str_starts_with($trimmed, '#') && !str_starts_with($trimmed, '>') && !str_starts_with($trimmed, '!') && !str_starts_with($trimmed, '---') && !str_starts_with($trimmed, '|') && !str_starts_with($trimmed, '```') && strlen($trimmed) > 35) {
+                    $durationFound = true;
+                } elseif (!$durationFound && preg_match('/^(?:>\s*|\*\s*)?[^:]*?\bDurée[^:]*:\*?\*?\s*(.+)$/iu', $trimmed, $m)) {
+                    $duration = trim(strip_tags(str_replace(['**', '*', '`'], '', $m[1])));
+                    $durationFound = true;
+                } elseif (!$bloomFound && preg_match('/^\|\s*[^|]*(?:Compétence|Bloom)[^|]*\|\s*([^|]+)\|/iu', $trimmed, $m)) {
+                    $bloom = trim(strip_tags(str_replace(['**', '*', '`'], '', $m[1])));
+                    $bloomFound = true;
+                } elseif (!$bloomFound && preg_match('/^(?:>\s*|\*\s*)?[^:]*?(?:Compétence[^:]*|Objectif\s+Pédagogique\s*\(([^)]+)\))\s*:\*?\*?\s*(.*)$/iu', $trimmed, $m)) {
+                    $bloomTag = trim((string)($m[1] ?? ''));
+                    $bloomDesc = trim(strip_tags(str_replace(['**', '*', '`'], '', (string)($m[2] ?? ''))));
+                    if ($bloomDesc !== '') {
+                        $bloom = $bloomTag !== '' ? ($bloomTag . ' — ' . $bloomDesc) : $bloomDesc;
+                        $bloomFound = true;
+                    } elseif ($bloomTag !== '') {
+                        $bloom = $bloomTag;
+                        $awaitingNextBloomLine = true;
+                    }
+                } elseif (
+                    $summary === ''
+                    && !str_starts_with($trimmed, '#')
+                    && !str_starts_with($trimmed, '>')
+                    && !str_starts_with($trimmed, '!')
+                    && !str_starts_with($trimmed, '---')
+                    && !str_starts_with($trimmed, '|')
+                    && !str_starts_with($trimmed, '<!--')
+                    && !preg_match('/^[\*_]\s*(?:Figure|Illustration|Schéma)\s*:/iu', $trimmed)
+                    && strlen($trimmed) > 35
+                ) {
                     $cleanLine = preg_replace('/^[\*\-\d\.]+\s+/', '', $trimmed) ?? $trimmed;
                     $cleanLine = preg_replace('/\[([^\]]+)\]\([^)]+\)/', '$1', $cleanLine) ?? $cleanLine;
                     $summary = trim(strip_tags(str_replace(['**', '*', '`'], '', $cleanLine)));

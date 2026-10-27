@@ -3,6 +3,10 @@ declare(strict_types=1);
 use LightPath\LMS\Core\Security;
 
 $activeTab = (string)($_GET['tab'] ?? 'modules');
+if (in_array($activeTab, ['cheatsheets', 'referentiel', 'tools'], true)) {
+    require __DIR__ . '/documents.php';
+    return;
+}
 $selectedTrack = (string)($_GET['track'] ?? 'all');
 $tracks = $currentCourse['tracks'] ?? [];
 $allModules = $currentCourse['modules'] ?? [];

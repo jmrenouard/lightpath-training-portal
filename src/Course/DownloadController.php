@@ -18,6 +18,13 @@ class DownloadController
         'sql' => 'application/sql; charset=UTF-8',
         'py' => 'text/x-python; charset=UTF-8',
         'sh' => 'text/x-shellscript; charset=UTF-8',
+        'yml' => 'text/yaml; charset=UTF-8',
+        'yaml' => 'text/yaml; charset=UTF-8',
+        'php' => 'text/plain; charset=UTF-8',
+        'go' => 'text/plain; charset=UTF-8',
+        'txt' => 'text/plain; charset=UTF-8',
+        'js' => 'application/javascript; charset=UTF-8',
+        'ico' => 'image/x-icon',
         'png' => 'image/png',
         'jpg' => 'image/jpeg',
         'jpeg' => 'image/jpeg',
@@ -55,6 +62,7 @@ class DownloadController
             }
             $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
             return [
+                'course' => $courseSlug,
                 'path' => $path,
                 'filename' => basename($path),
                 'mime' => self::MIME_TYPES[$ext] ?? 'application/octet-stream',
@@ -69,6 +77,7 @@ class DownloadController
 
         $ext = strtolower(pathinfo($dl['path'], PATHINFO_EXTENSION));
         return [
+            'course' => $courseSlug,
             'path' => $dl['path'],
             'filename' => $dl['filename'],
             'mime' => self::MIME_TYPES[$ext] ?? 'application/octet-stream',
@@ -98,11 +107,12 @@ class DownloadController
 
         $ext = strtolower(pathinfo($candidate, PATHINFO_EXTENSION));
         return [
+            'course' => $courseSlug,
             'path' => $candidate,
             'filename' => basename($candidate),
             'mime' => self::MIME_TYPES[$ext] ?? 'application/octet-stream',
             'size' => (int)filesize($candidate),
-            'inline' => in_array($ext, ['png', 'jpg', 'jpeg', 'svg', 'html', 'pdf'], true),
+            'inline' => in_array($ext, ['png', 'jpg', 'jpeg', 'svg', 'ico', 'html', 'pdf', 'md', 'yml', 'yaml', 'py', 'sql', 'sh', 'php', 'go', 'txt'], true),
         ];
     }
 
@@ -119,10 +129,34 @@ class DownloadController
         if ($disp === 'inline') {
             header('Cache-Control: public, max-age=86400');
             // Si on affiche un livrable HTML en mode inline (Rendu Web Studio), réécrire les chemins relatifs ../assets/ vers assets/
-            // et injecter le shim unload -> pagehide pour bloquer toute erreur d'extension navigateur (chext_loader.js)
+            // et les liens relatifs documentaires vers index.php?action=course_asset, puis injecter le shim unload -> pagehide
             if (str_starts_with((string)$fileInfo['mime'], 'text/html')) {
                 $html = (string)file_get_contents($fileInfo['path']);
                 $html = (string)preg_replace('/(?:\.\.\/)+assets\//', 'assets/', $html);
+                $courseSlug = (string)($fileInfo['course'] ?? 'postgresql-18-mastery');
+                $course = $this->repo->getCourse($courseSlug);
+                $root = $course !== null ? realpath((string)$course['source_root']) : false;
+                $fileDir = dirname((string)$fileInfo['path']);
+                if ($root !== false && is_dir($fileDir)) {
+                    $html = (string)preg_replace_callback(
+                        '/\b(href|src)="([^"#?]+)(#[^"]*)?"/i',
+                        static function (array $m) use ($root, $fileDir, $courseSlug): string {
+                            $attr = $m[1];
+                            $relUrl = $m[2];
+                            $anchor = $m[3] ?? '';
+                            if (preg_match('/^(https?:\/\/|mailto:|data:|javascript:|index\.php|\?|\/|assets\/)/i', $relUrl)) {
+                                return $m[0];
+                            }
+                            $resolved = realpath($fileDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relUrl));
+                            if ($resolved !== false && str_starts_with($resolved, $root) && is_file($resolved)) {
+                                $relToRoot = ltrim(str_replace('\\', '/', substr($resolved, strlen($root))), '/');
+                                return $attr . '="index.php?action=course_asset&course=' . urlencode($courseSlug) . '&path=' . urlencode($relToRoot) . $anchor . '"';
+                            }
+                            return $m[0];
+                        },
+                        $html
+                    );
+                }
                 $shim = Security::renderUnloadShimScript();
                 if (stripos($html, '<head>') !== false) {
                     $html = (string)preg_replace('/<head>/i', '<head>' . $shim, $html, 1);

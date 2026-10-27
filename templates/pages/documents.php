@@ -6,10 +6,14 @@ $defaultDocTab = (($page ?? '') === 'cheatsheets') ? 'cheatsheets' : 'all';
 $docTab = (string)($_GET['tab'] ?? $defaultDocTab);
 $selectedDocId = trim((string)($_GET['id'] ?? ''));
 $selectedDoc = null;
+$selectedTool = null;
 if ($selectedDocId !== '') {
     $selectedDoc = $currentCourse['cheatsheets'][$selectedDocId]
         ?? $currentCourse['referentiel'][$selectedDocId]
         ?? null;
+    if ($selectedDoc === null && isset($currentCourse['tools'][$selectedDocId])) {
+        $selectedTool = $currentCourse['tools'][$selectedDocId];
+    }
 }
 ?>
 
@@ -29,6 +33,27 @@ if ($selectedDocId !== '') {
     </div>
     <article class="reader-article markdown-body">
         <?= $renderedDoc['html'] ?>
+    </article>
+</div>
+<?php elseif ($selectedTool !== null && !empty($selectedTool['path']) && is_file($selectedTool['path'])):
+    $toolExt = strtolower(pathinfo((string)$selectedTool['filename'], PATHINFO_EXTENSION));
+    $toolLang = $toolExt === 'py' ? 'python' : ($toolExt === 'sql' ? 'sql' : 'bash');
+    $toolMd = "```" . $toolLang . "\n" . (string)file_get_contents($selectedTool['path']) . "\n```";
+    $renderedTool = $mdParser->renderMarkdown($toolMd, $currentCourseSlug, false);
+?>
+<div class="lms-card" style="margin-bottom: 1.75rem; border-color: var(--brand-cyan);">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-hairline);">
+        <div>
+            <span class="badge-code">APERÇU CODE SOURCE DBA • <?= Security::e($selectedTool['category']) ?></span>
+            <h2 style="font-size: 1.35rem; margin: 0.35rem 0 0;"><code><?= Security::e($selectedTool['filename']) ?></code></h2>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <a href="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=tool&id=<?= urlencode($selectedDocId) ?>&format=raw" class="dl-pill dl-md">⬇ Télécharger <?= Security::e($selectedTool['filename']) ?></a>
+            <a href="index.php?page=documents&tab=tools&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">✕ Fermer l'aperçu</a>
+        </div>
+    </div>
+    <article class="reader-article markdown-body">
+        <?= $renderedTool['html'] ?>
     </article>
 </div>
 <?php endif; ?>
@@ -70,7 +95,9 @@ if ($selectedDocId !== '') {
                     <tr data-searchable="<?= Security::e($doc['category'] . ' ' . $doc['title'] . ' ' . $docId) ?>">
                         <td><span class="badge-code"><?= Security::e($doc['category']) ?></span></td>
                         <td>
-                            <strong style="color: var(--text-primary);"><?= Security::e($doc['title']) ?></strong>
+                            <a href="index.php?page=documents&tab=referentiel&id=<?= urlencode($docId) ?>&course=<?= urlencode($currentCourseSlug) ?>" style="font-weight: 700; color: var(--text-primary);">
+                                <?= Security::e($doc['title']) ?>
+                            </a>
                             <div style="font-size: 0.78rem; color: var(--text-muted);"><?= Security::e($docId) ?></div>
                         </td>
                         <td><?= renderDownloadStrip($currentCourseSlug, 'referentiel', $docId, $doc['downloads'] ?? []) ?></td>
@@ -158,7 +185,9 @@ if ($selectedDocId !== '') {
                     <tr data-searchable="<?= Security::e($cs['title'] . ' ' . $csId) ?>">
                         <td><span class="badge-code"><?= strtoupper(Security::e($cs['type'])) ?></span></td>
                         <td>
-                            <strong style="color: var(--text-primary);"><?= Security::e($cs['title']) ?></strong>
+                            <a href="index.php?page=documents&tab=cheatsheets&id=<?= urlencode($csId) ?>&course=<?= urlencode($currentCourseSlug) ?>" style="font-weight: 700; color: var(--text-primary);">
+                                <?= Security::e($cs['title']) ?>
+                            </a>
                             <div style="font-size: 0.76rem; color: var(--text-muted);"><?= Security::e($csId) ?></div>
                         </td>
                         <td><?= renderDownloadStrip($currentCourseSlug, 'cheatsheet', $csId, $cs['downloads'] ?? []) ?></td>
@@ -171,7 +200,7 @@ if ($selectedDocId !== '') {
 
 <!-- 5. BOÎTE À OUTILS DBA PGSCRIPTS (PYTHON & SQL) -->
 <?php if ($docTab === 'all' || $docTab === 'tools'): ?>
-    <h2 style="font-size: 1.3rem; margin-bottom: 0.85rem;">🛠️ Boîte à Outils Production DBA (`pgscripts` Python & 23 Scripts SQL)</h2>
+    <h2 style="font-size: 1.3rem; margin-bottom: 0.85rem;">🛠️ Boîte à Outils Production DBA (<code>pgscripts</code> Python & 23 Scripts SQL)</h2>
     <div class="lms-table-wrap">
         <table class="lms-table">
             <thead>
@@ -187,13 +216,22 @@ if ($selectedDocId !== '') {
                 <?php foreach (($currentCourse['tools'] ?? []) as $tId => $tool): ?>
                     <tr data-searchable="<?= Security::e($tool['filename'] . ' ' . $tool['category']) ?>">
                         <td><span class="badge-code"><?= Security::e($tool['category']) ?></span></td>
-                        <td><code><?= Security::e($tool['filename']) ?></code></td>
+                        <td>
+                            <a href="index.php?page=documents&tab=tools&id=<?= urlencode($tId) ?>&course=<?= urlencode($currentCourseSlug) ?>" style="font-weight: 700; color: var(--text-primary);">
+                                <code><?= Security::e($tool['filename']) ?></code>
+                            </a>
+                        </td>
                         <td><?= Security::e($tool['language']) ?></td>
                         <td class="tabular-nums"><?= Security::e($tool['size_formatted']) ?></td>
                         <td>
-                            <a href="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=tool&id=<?= urlencode($tId) ?>&format=raw" class="dl-pill dl-md">
-                                ⬇ Télécharger <?= Security::e($tool['filename']) ?>
-                            </a>
+                            <div class="download-strip">
+                                <a href="index.php?page=documents&tab=tools&id=<?= urlencode($tId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="dl-pill dl-read">
+                                    👁 Lire
+                                </a>
+                                <a href="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=tool&id=<?= urlencode($tId) ?>&format=raw" class="dl-pill dl-md">
+                                    ⬇ Télécharger <?= Security::e($tool['filename']) ?>
+                                </a>
+                            </div>
                         </td>
                     </tr>
                 <?php endforeach; ?>

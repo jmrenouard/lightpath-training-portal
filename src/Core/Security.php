@@ -95,4 +95,33 @@ class Security
     {
         return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
+
+    /**
+     * Formate de manière sécurisée (anti-XSS) un texte court contenant des blocs inline `code`, **gras** ou *italique*.
+     */
+    public static function formatInlineText(?string $value): string
+    {
+        $raw = (string)$value;
+        if ($raw === '') {
+            return '';
+        }
+        $raw = str_replace('\|', '|', $raw);
+        $placeholders = [];
+        $protected = preg_replace_callback('/`([^`]+)`/', static function (array $m) use (&$placeholders): string {
+            $key = '%%INLINE_CODE_' . count($placeholders) . '%%';
+            $placeholders[$key] = '<code class="lms-inline-code">' . self::e($m[1]) . '</code>';
+            return $key;
+        }, $raw) ?? $raw;
+
+        $escaped = self::e($protected);
+        $escaped = preg_replace('/\*\*\*((?:(?!\*\*\*).)+)\*\*\*/u', '<strong><em>$1</em></strong>', $escaped) ?? $escaped;
+        $escaped = preg_replace('/\*\*((?:(?!\*\*).)+)\*\*/u', '<strong>$1</strong>', $escaped) ?? $escaped;
+        $escaped = preg_replace('/(?<![\w*])\*([^\s*](?:[^*]*[^\s*])?)\*(?![\w*])/u', '<em>$1</em>', $escaped) ?? $escaped;
+
+        foreach ($placeholders as $key => $html) {
+            $escaped = str_replace($key, $html, $escaped);
+        }
+        return $escaped;
+    }
 }
+
