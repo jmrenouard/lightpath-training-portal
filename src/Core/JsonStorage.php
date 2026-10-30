@@ -55,6 +55,32 @@ class JsonStorage implements StorageInterface
         }
     }
 
+    /**
+     * Exécute un cycle lecture-modification-écriture atomique sous verrou exclusif (.lock)
+     * pour éliminer toute race condition check-then-write en salle de formation multi-utilisateurs.
+     */
+    protected function mutateFile(string $name, array $default, callable $mutator): mixed
+    {
+        $lockPath = $this->dataDir . '/' . $name . '.lock';
+        $lockFp = @fopen($lockPath, 'c+b');
+        if ($lockFp !== false) {
+            flock($lockFp, LOCK_EX);
+        }
+        try {
+            $current = $this->readFile($name, $default);
+            [$updated, $result] = $mutator($current);
+            if ($updated !== null) {
+                $this->writeFile($name, $updated);
+            }
+            return $result;
+        } finally {
+            if ($lockFp !== false) {
+                flock($lockFp, LOCK_UN);
+                fclose($lockFp);
+            }
+        }
+    }
+
     private function ensureDefaultUsers(): void
     {
         $users = $this->readFile('users', []);
@@ -139,33 +165,31 @@ class JsonStorage implements StorageInterface
 
     public function saveUser(array $user): array
     {
-        $users = $this->getUsers();
-        $id = isset($user['id']) ? (int)$user['id'] : 0;
-
-        if ($id > 0) {
-            foreach ($users as $idx => $existing) {
-                if ((int)$existing['id'] === $id) {
-                    $users[$idx] = array_merge($existing, $user);
-                    $this->writeFile('users', $users);
-                    return $users[$idx];
+        return (array)$this->mutateFile('users', [], static function (array $users) use ($user): array {
+            $id = isset($user['id']) ? (int)$user['id'] : 0;
+            if ($id > 0) {
+                foreach ($users as $idx => $existing) {
+                    if ((int)$existing['id'] === $id) {
+                        $users[$idx] = array_merge($existing, $user);
+                        return [$users, $users[$idx]];
+                    }
                 }
             }
-        }
 
-        $maxId = 0;
-        foreach ($users as $existing) {
-            if ((int)$existing['id'] > $maxId) {
-                $maxId = (int)$existing['id'];
+            $maxId = 0;
+            foreach ($users as $existing) {
+                if ((int)$existing['id'] > $maxId) {
+                    $maxId = (int)$existing['id'];
+                }
             }
-        }
-        $user['id'] = $maxId + 1;
-        $user['created_at'] = $user['created_at'] ?? date('Y-m-d H:i:s');
-        $user['active'] = $user['active'] ?? true;
-        $user['enrolled_courses'] = $user['enrolled_courses'] ?? ['postgresql-18'];
-        $users[] = $user;
-        $this->writeFile('users', $users);
+            $user['id'] = $maxId + 1;
+            $user['created_at'] = $user['created_at'] ?? date('Y-m-d H:i:s');
+            $user['active'] = $user['active'] ?? true;
+            $user['enrolled_courses'] = $user['enrolled_courses'] ?? ['postgresql-18'];
+            $users[] = $user;
 
-        return $user;
+            return [$users, $user];
+        });
     }
 
     public function deleteUser(int $id): bool
@@ -173,13 +197,13 @@ class JsonStorage implements StorageInterface
         if ($id === 1) {
             return false; // Protection du compte Super-Admin principal
         }
-        $users = $this->getUsers();
-        $filtered = array_values(array_filter($users, static fn(array $u): bool => (int)$u['id'] !== $id));
-        if (count($filtered) === count($users)) {
-            return false;
-        }
-        $this->writeFile('users', $filtered);
-        return true;
+        return (bool)$this->mutateFile('users', [], static function (array $users) use ($id): array {
+            $filtered = array_values(array_filter($users, static fn(array $u): bool => (int)$u['id'] !== $id));
+            if (count($filtered) === count($users)) {
+                return [null, false];
+            }
+            return [$filtered, true];
+        });
     }
 
     public function getAllProgress(): array
@@ -187,11 +211,9 @@ class JsonStorage implements StorageInterface
         return $this->readFile('progress', []);
     }
 
-    public function getUserProgress(int $userId, string $courseSlug): array
+    protected function defaultUserProgress(int $userId, string $courseSlug): array
     {
-        $all = $this->getAllProgress();
-        $key = $userId . ':' . $courseSlug;
-        return $all[$key] ?? [
+        return [
             'user_id' => $userId,
             'course_slug' => $courseSlug,
             'completed_modules' => [],
@@ -202,63 +224,73 @@ class JsonStorage implements StorageInterface
         ];
     }
 
-    public function markItemCompleted(int $userId, string $courseSlug, string $itemType, string $itemId, bool $completed = true): void
+    public function getUserProgress(int $userId, string $courseSlug): array
     {
         $all = $this->getAllProgress();
         $key = $userId . ':' . $courseSlug;
-        $prog = $this->getUserProgress($userId, $courseSlug);
+        return $all[$key] ?? $this->defaultUserProgress($userId, $courseSlug);
+    }
 
-        $field = ($itemType === 'lab') ? 'completed_labs' : 'completed_modules';
-        $list = $prog[$field] ?? [];
+    public function markItemCompleted(int $userId, string $courseSlug, string $itemType, string $itemId, bool $completed = true): void
+    {
+        $key = $userId . ':' . $courseSlug;
+        $defaultProg = $this->defaultUserProgress($userId, $courseSlug);
+        $this->mutateFile('progress', [], static function (array $all) use ($key, $defaultProg, $itemType, $itemId, $completed): array {
+            $prog = $all[$key] ?? $defaultProg;
+            $field = ($itemType === 'lab') ? 'completed_labs' : 'completed_modules';
+            $list = $prog[$field] ?? [];
 
-        if ($completed) {
-            if (!in_array($itemId, $list, true)) {
-                $list[] = $itemId;
+            if ($completed) {
+                if (!in_array($itemId, $list, true)) {
+                    $list[] = $itemId;
+                }
+            } else {
+                $list = array_values(array_filter($list, static fn(string $v): bool => $v !== $itemId));
             }
-        } else {
-            $list = array_values(array_filter($list, static fn(string $v): bool => $v !== $itemId));
-        }
 
-        $prog[$field] = $list;
-        $prog['updated_at'] = date('Y-m-d H:i:s');
-        $all[$key] = $prog;
-        $this->writeFile('progress', $all);
+            $prog[$field] = $list;
+            $prog['updated_at'] = date('Y-m-d H:i:s');
+            $all[$key] = $prog;
+            return [$all, null];
+        });
     }
 
     public function saveQuizScore(int $userId, string $courseSlug, string $moduleId, int $score, int $total): void
     {
-        $all = $this->getAllProgress();
         $key = $userId . ':' . $courseSlug;
-        $prog = $this->getUserProgress($userId, $courseSlug);
+        $defaultProg = $this->defaultUserProgress($userId, $courseSlug);
+        $this->mutateFile('progress', [], static function (array $all) use ($key, $defaultProg, $moduleId, $score, $total): array {
+            $prog = $all[$key] ?? $defaultProg;
+            $pct = $total > 0 ? (int)round(($score / $total) * 100) : 0;
+            $prog['quiz_scores'][$moduleId] = [
+                'score' => $score,
+                'total' => $total,
+                'percentage' => $pct,
+                'passed' => $pct >= 66,
+                'date' => date('Y-m-d H:i:s'),
+            ];
 
-        $pct = $total > 0 ? (int)round(($score / $total) * 100) : 0;
-        $prog['quiz_scores'][$moduleId] = [
-            'score' => $score,
-            'total' => $total,
-            'percentage' => $pct,
-            'passed' => $pct >= 66,
-            'date' => date('Y-m-d H:i:s'),
-        ];
+            if ($pct >= 66 && !in_array($moduleId, $prog['completed_modules'], true)) {
+                $prog['completed_modules'][] = $moduleId;
+            }
 
-        if ($pct >= 66 && !in_array($moduleId, $prog['completed_modules'], true)) {
-            $prog['completed_modules'][] = $moduleId;
-        }
-
-        $prog['updated_at'] = date('Y-m-d H:i:s');
-        $all[$key] = $prog;
-        $this->writeFile('progress', $all);
+            $prog['updated_at'] = date('Y-m-d H:i:s');
+            $all[$key] = $prog;
+            return [$all, null];
+        });
     }
 
     public function saveUserNote(int $userId, string $courseSlug, string $itemId, string $note): void
     {
-        $all = $this->getAllProgress();
         $key = $userId . ':' . $courseSlug;
-        $prog = $this->getUserProgress($userId, $courseSlug);
-
-        $prog['notes'][$itemId] = trim($note);
-        $prog['updated_at'] = date('Y-m-d H:i:s');
-        $all[$key] = $prog;
-        $this->writeFile('progress', $all);
+        $defaultProg = $this->defaultUserProgress($userId, $courseSlug);
+        $this->mutateFile('progress', [], static function (array $all) use ($key, $defaultProg, $itemId, $note): array {
+            $prog = $all[$key] ?? $defaultProg;
+            $prog['notes'][$itemId] = trim($note);
+            $prog['updated_at'] = date('Y-m-d H:i:s');
+            $all[$key] = $prog;
+            return [$all, null];
+        });
     }
 
     public function getCustomCourses(): array
@@ -268,25 +300,27 @@ class JsonStorage implements StorageInterface
 
     public function saveCustomCourse(array $course): void
     {
-        $courses = $this->getCustomCourses();
-        $slug = (string)$course['slug'];
-        $courses[$slug] = $course;
-        $this->writeFile('custom_courses', $courses);
+        $this->mutateFile('custom_courses', [], static function (array $courses) use ($course): array {
+            $slug = (string)$course['slug'];
+            $courses[$slug] = $course;
+            return [$courses, null];
+        });
     }
 
     public function logAuditEvent(string $actor, string $action, string $details): void
     {
-        $logs = $this->readFile('audit_logs', []);
-        array_unshift($logs, [
-            'timestamp' => date('Y-m-d H:i:s'),
-            'actor' => $actor,
-            'action' => $action,
-            'details' => $details,
-        ]);
-        if (count($logs) > 250) {
-            $logs = array_slice($logs, 0, 250);
-        }
-        $this->writeFile('audit_logs', $logs);
+        $this->mutateFile('audit_logs', [], static function (array $logs) use ($actor, $action, $details): array {
+            array_unshift($logs, [
+                'timestamp' => date('Y-m-d H:i:s'),
+                'actor' => $actor,
+                'action' => $action,
+                'details' => $details,
+            ]);
+            if (count($logs) > 250) {
+                $logs = array_slice($logs, 0, 250);
+            }
+            return [$logs, null];
+        });
     }
 
     public function getAuditLogs(int $limit = 50): array
@@ -296,18 +330,19 @@ class JsonStorage implements StorageInterface
     }
 
     // =========================================================================
-    // Fonctionnalités LMS Enterprise & Qualiopi (RCA-153, RCA-154, RCA-155)
+    // Fonctionnalités LMS Enterprise & Qualiopi (RCA-153, RCA-154, RCA-155, RCA-160)
     // =========================================================================
 
     public function saveDiagnosticResult(int $userId, string $courseSlug, array $result): void
     {
-        $all = $this->readFile('diagnostics', []);
         $key = $userId . ':' . $courseSlug;
-        $result['user_id'] = $userId;
-        $result['course_slug'] = $courseSlug;
-        $result['completed_at'] = date('Y-m-d H:i:s');
-        $all[$key] = $result;
-        $this->writeFile('diagnostics', $all);
+        $this->mutateFile('diagnostics', [], static function (array $all) use ($key, $userId, $courseSlug, $result): array {
+            $result['user_id'] = $userId;
+            $result['course_slug'] = $courseSlug;
+            $result['completed_at'] = date('Y-m-d H:i:s');
+            $all[$key] = $result;
+            return [$all, null];
+        });
     }
 
     public function getDiagnosticResult(int $userId, string $courseSlug = 'postgresql-18'): ?array
@@ -324,23 +359,23 @@ class JsonStorage implements StorageInterface
 
     public function saveExamAttempt(int $userId, string $courseSlug, array $attempt): array
     {
-        $all = $this->readFile('exams', []);
         $key = $userId . ':' . $courseSlug;
-        $attempt['user_id'] = $userId;
-        $attempt['course_slug'] = $courseSlug;
-        $attempt['submitted_at'] = date('Y-m-d H:i:s');
-        if (empty($attempt['certificate_id'])) {
-            $attempt['certificate_id'] = sprintf(
-                'LP-PG18-CERT-%d-%s',
-                $userId,
-                strtoupper(substr(md5($userId . ':' . $courseSlug . ':' . microtime(true)), 0, 8))
-            );
-        }
-        $history = $all[$key] ?? [];
-        array_unshift($history, $attempt);
-        $all[$key] = array_slice($history, 0, 20);
-        $this->writeFile('exams', $all);
-        return $attempt;
+        return (array)$this->mutateFile('exams', [], static function (array $all) use ($key, $userId, $courseSlug, $attempt): array {
+            $attempt['user_id'] = $userId;
+            $attempt['course_slug'] = $courseSlug;
+            $attempt['submitted_at'] = date('Y-m-d H:i:s');
+            if (empty($attempt['certificate_id'])) {
+                $attempt['certificate_id'] = sprintf(
+                    'LP-PG18-CERT-%d-%s',
+                    $userId,
+                    strtoupper(substr(md5($userId . ':' . $courseSlug . ':' . microtime(true)), 0, 8))
+                );
+            }
+            $history = $all[$key] ?? [];
+            array_unshift($history, $attempt);
+            $all[$key] = array_slice($history, 0, 20);
+            return [$all, $attempt];
+        });
     }
 
     public function getExamAttempts(int $userId, string $courseSlug = 'postgresql-18'): array
@@ -375,49 +410,52 @@ class JsonStorage implements StorageInterface
     public function recordLearningTime(int $userId, string $courseSlug, int $seconds = 60, string $itemId = ''): int
     {
         $seconds = max(1, min(600, $seconds));
-        $all = $this->getAllProgress();
         $key = $userId . ':' . $courseSlug;
-        $prog = $this->getUserProgress($userId, $courseSlug);
+        $defaultProg = $this->defaultUserProgress($userId, $courseSlug);
 
-        $newTotal = (int)($prog['learning_seconds'] ?? $prog['time_spent_seconds'] ?? 0) + $seconds;
-        $prog['learning_seconds'] = $newTotal;
-        $prog['time_spent_seconds'] = $newTotal;
-        if (!isset($prog['item_time_seconds']) || !is_array($prog['item_time_seconds'])) {
-            $prog['item_time_seconds'] = [];
-        }
-        if ($itemId !== '') {
-            $prog['item_time_seconds'][$itemId] = (int)($prog['item_time_seconds'][$itemId] ?? 0) + $seconds;
-        }
-        $prog['updated_at'] = date('Y-m-d H:i:s');
-        $all[$key] = $prog;
-        $this->writeFile('progress', $all);
-
-        return $newTotal;
+        return (int)$this->mutateFile('progress', [], static function (array $all) use ($key, $defaultProg, $seconds, $itemId): array {
+            $prog = $all[$key] ?? $defaultProg;
+            $newTotal = (int)($prog['learning_seconds'] ?? $prog['time_spent_seconds'] ?? 0) + $seconds;
+            $prog['learning_seconds'] = $newTotal;
+            $prog['time_spent_seconds'] = $newTotal;
+            if (!isset($prog['item_time_seconds']) || !is_array($prog['item_time_seconds'])) {
+                $prog['item_time_seconds'] = [];
+            }
+            if ($itemId !== '') {
+                $prog['item_time_seconds'][$itemId] = (int)($prog['item_time_seconds'][$itemId] ?? 0) + $seconds;
+            }
+            $prog['updated_at'] = date('Y-m-d H:i:s');
+            $all[$key] = $prog;
+            return [$all, $newTotal];
+        });
     }
 
     public function signAttendance(int $userId, string $courseSlug, string $halfDayKey, string $signatureText = '', string $ip = '127.0.0.1'): array
     {
-        $all = $this->readFile('attendance', []);
+        if (!Security::isValidHalfDayKey($halfDayKey)) {
+            return $this->getUserAttendance($userId, $courseSlug);
+        }
+
         $key = $userId . ':' . $courseSlug;
-        $userRecords = $all[$key] ?? [];
-        $sig = trim($signatureText) !== '' ? trim($signatureText) : 'Signé numériquement';
+        return (array)$this->mutateFile('attendance', [], static function (array $all) use ($key, $userId, $courseSlug, $halfDayKey, $signatureText, $ip): array {
+            $userRecords = $all[$key] ?? [];
+            $sig = trim($signatureText) !== '' ? trim($signatureText) : 'Signé numériquement';
 
-        $entry = [
-            'user_id' => $userId,
-            'course_slug' => $courseSlug,
-            'half_day_key' => $halfDayKey,
-            'signature' => $sig,
-            'signature_text' => $sig,
-            'signed_at' => date('Y-m-d H:i:s'),
-            'ip' => $ip !== '' ? $ip : '127.0.0.1',
-            'hash' => substr(hash('sha256', $userId . '|' . $courseSlug . '|' . $halfDayKey . '|' . $sig), 0, 16),
-        ];
+            $entry = [
+                'user_id' => $userId,
+                'course_slug' => $courseSlug,
+                'half_day_key' => $halfDayKey,
+                'signature' => $sig,
+                'signature_text' => $sig,
+                'signed_at' => date('Y-m-d H:i:s'),
+                'ip' => $ip !== '' ? $ip : '127.0.0.1',
+                'hash' => substr(hash('sha256', $userId . '|' . $courseSlug . '|' . $halfDayKey . '|' . $sig), 0, 16),
+            ];
 
-        $userRecords[$halfDayKey] = $entry;
-        $all[$key] = $userRecords;
-        $this->writeFile('attendance', $all);
-
-        return $userRecords;
+            $userRecords[$halfDayKey] = $entry;
+            $all[$key] = $userRecords;
+            return [$all, $userRecords];
+        });
     }
 
     public function getUserAttendance(int $userId, string $courseSlug = 'postgresql-18'): array
@@ -434,27 +472,25 @@ class JsonStorage implements StorageInterface
 
     public function saveSatisfactionSurvey(int $userId, string $courseSlug, array $survey): array
     {
-        $all = $this->readFile('satisfaction', []);
         $key = $userId . ':' . $courseSlug;
+        return (array)$this->mutateFile('satisfaction', [], static function (array $all) use ($key, $userId, $courseSlug, $survey): array {
+            $criteriaKeys = ['content_quality', 'labs_docker', 'trainer_pedagogy', 'lms_ergonomics', 'objectives_met'];
+            $ratings = [];
+            foreach ($criteriaKeys as $ck) {
+                $val = isset($survey['ratings'][$ck]) ? (int)$survey['ratings'][$ck] : (int)($survey[$ck] ?? 5);
+                $ratings[$ck] = max(1, min(5, $val));
+            }
 
-        $criteriaKeys = ['content_quality', 'labs_docker', 'trainer_pedagogy', 'lms_ergonomics', 'objectives_met'];
-        $ratings = [];
-        foreach ($criteriaKeys as $ck) {
-            $val = isset($survey['ratings'][$ck]) ? (int)$survey['ratings'][$ck] : (int)($survey[$ck] ?? 5);
-            $ratings[$ck] = max(1, min(5, $val));
-        }
+            $survey['user_id'] = $userId;
+            $survey['course_slug'] = $courseSlug;
+            $survey['ratings'] = $ratings;
+            $survey['average_rating'] = round(array_sum($ratings) / count($ratings), 2);
+            $survey['nps_score'] = max(0, min(10, (int)($survey['nps_score'] ?? 10)));
+            $survey['submitted_at'] = date('Y-m-d H:i:s');
 
-        $survey['user_id'] = $userId;
-        $survey['course_slug'] = $courseSlug;
-        $survey['ratings'] = $ratings;
-        $survey['average_rating'] = round(array_sum($ratings) / count($ratings), 2);
-        $survey['nps_score'] = max(0, min(10, (int)($survey['nps_score'] ?? 10)));
-        $survey['submitted_at'] = date('Y-m-d H:i:s');
-
-        $all[$key] = $survey;
-        $this->writeFile('satisfaction', $all);
-
-        return $survey;
+            $all[$key] = $survey;
+            return [$all, $survey];
+        });
     }
 
     public function getUserSatisfaction(int $userId, string $courseSlug = 'postgresql-18'): ?array
@@ -482,95 +518,113 @@ class JsonStorage implements StorageInterface
             $itemId = $itemType;
             $itemType = 'module';
         }
-        $all = $this->getAllProgress();
         $key = $userId . ':' . $courseSlug;
-        $prog = $this->getUserProgress($userId, $courseSlug);
+        $defaultProg = $this->defaultUserProgress($userId, $courseSlug);
 
-        $bookmarks = $prog['bookmarks'] ?? [];
-        if (!is_array($bookmarks)) {
-            $bookmarks = [];
-        }
-        $bmKey = $itemType . ':' . $itemId;
-        $bookmarked = false;
-        if (isset($bookmarks[$bmKey])) {
-            unset($bookmarks[$bmKey]);
-        } else {
-            $bookmarks[$bmKey] = [
-                'type' => $itemType,
-                'id' => $itemId,
-                'title' => $title !== '' ? $title : $itemId,
-                'created_at' => date('Y-m-d H:i:s'),
-            ];
-            $bookmarked = true;
-        }
-        $prog['bookmarks'] = $bookmarks;
-        $prog['updated_at'] = date('Y-m-d H:i:s');
-        $all[$key] = $prog;
-        $this->writeFile('progress', $all);
+        return (array)$this->mutateFile('progress', [], static function (array $all) use ($key, $defaultProg, $itemType, $itemId, $title): array {
+            $prog = $all[$key] ?? $defaultProg;
+            $bookmarks = $prog['bookmarks'] ?? [];
+            if (!is_array($bookmarks)) {
+                $bookmarks = [];
+            }
+            $bmKey = $itemType . ':' . $itemId;
+            $bookmarked = false;
+            if (isset($bookmarks[$bmKey])) {
+                unset($bookmarks[$bmKey]);
+            } else {
+                $bookmarks[$bmKey] = [
+                    'type' => $itemType,
+                    'id' => $itemId,
+                    'title' => $title !== '' ? $title : $itemId,
+                    'created_at' => date('Y-m-d H:i:s'),
+                ];
+                $bookmarked = true;
+            }
+            $prog['bookmarks'] = $bookmarks;
+            $prog['updated_at'] = date('Y-m-d H:i:s');
+            $all[$key] = $prog;
 
-        return ['bookmarked' => $bookmarked, 'bookmarks' => $bookmarks];
+            return [$all, ['bookmarked' => $bookmarked, 'bookmarks' => $bookmarks]];
+        });
     }
 
     public function recordLastVisited(int $userId, string $courseSlug, string $itemType, string $itemId, string $title, string $mode = 'reader'): void
     {
-        $all = $this->getAllProgress();
-        $key = $userId . ':' . $courseSlug;
-        $prog = $this->getUserProgress($userId, $courseSlug);
+        $currentProg = $this->getUserProgress($userId, $courseSlug);
+        $last = $currentProg['last_visited'] ?? null;
+        if (
+            is_array($last)
+            && ($last['type'] ?? '') === $itemType
+            && ($last['id'] ?? '') === $itemId
+            && ($last['mode'] ?? 'reader') === $mode
+        ) {
+            return;
+        }
 
-        $prog['last_visited'] = [
-            'type' => $itemType,
-            'id' => $itemId,
-            'title' => $title,
-            'mode' => $mode,
-            'visited_at' => date('Y-m-d H:i:s'),
-        ];
-        $all[$key] = $prog;
-        $this->writeFile('progress', $all);
+        $key = $userId . ':' . $courseSlug;
+        $defaultProg = $this->defaultUserProgress($userId, $courseSlug);
+        $this->mutateFile('progress', [], static function (array $all) use ($key, $defaultProg, $itemType, $itemId, $title, $mode): array {
+            $prog = $all[$key] ?? $defaultProg;
+            $prog['last_visited'] = [
+                'type' => $itemType,
+                'id' => $itemId,
+                'title' => $title,
+                'mode' => $mode,
+                'visited_at' => date('Y-m-d H:i:s'),
+            ];
+            $all[$key] = $prog;
+            return [$all, null];
+        });
     }
 
     public function saveFlashcardConfidence(int $userId, string $courseSlug, string $cardId, int|string $level): void
     {
-        $all = $this->getAllProgress();
         $key = $userId . ':' . $courseSlug;
-        $prog = $this->getUserProgress($userId, $courseSlug);
-
-        if (!isset($prog['flashcards']) || !is_array($prog['flashcards'])) {
-            $prog['flashcards'] = [];
-        }
-        if (!isset($prog['flashcard_confidence']) || !is_array($prog['flashcard_confidence'])) {
-            $prog['flashcard_confidence'] = [];
-        }
-
+        $defaultProg = $this->defaultUserProgress($userId, $courseSlug);
         $numLevel = is_numeric($level) ? max(1, min(3, (int)$level)) : ($level === 'mastered' ? 3 : ($level === 'review' ? 1 : 2));
-        $prog['flashcard_confidence'][$cardId] = [
-            'level' => $numLevel,
-            'updated_at' => date('Y-m-d H:i:s'),
-        ];
-        $prog['flashcards'][$cardId] = $prog['flashcard_confidence'][$cardId];
-        $all[$key] = $prog;
-        $this->writeFile('progress', $all);
+
+        $this->mutateFile('progress', [], static function (array $all) use ($key, $defaultProg, $cardId, $numLevel): array {
+            $prog = $all[$key] ?? $defaultProg;
+            unset($prog['flashcards']);
+            if (!isset($prog['flashcard_confidence']) || !is_array($prog['flashcard_confidence'])) {
+                $prog['flashcard_confidence'] = [];
+            }
+            $prog['flashcard_confidence'][$cardId] = [
+                'level' => $numLevel,
+                'updated_at' => date('Y-m-d H:i:s'),
+            ];
+            $all[$key] = $prog;
+            return [$all, null];
+        });
     }
 
     public function addDiscussionMessage(string $courseSlug, string $itemId, int $userId, string $userName, string $userRole, string $message, ?string $parentId = null): array
     {
-        $all = $this->readFile('discussions', []);
+        $cleanMsg = function_exists('mb_substr')
+            ? mb_substr(trim($message), 0, 2000, 'UTF-8')
+            : substr(trim($message), 0, 2000);
+        if ($cleanMsg === '') {
+            return [];
+        }
+
         $key = $courseSlug . ':' . $itemId;
-        $list = $all[$key] ?? [];
-        $entry = [
-            'id' => uniqid('msg_', false),
-            'course_slug' => $courseSlug,
-            'item_id' => $itemId,
-            'user_id' => $userId,
-            'user_name' => $userName,
-            'user_role' => $userRole,
-            'message' => trim($message),
-            'parent_id' => $parentId,
-            'created_at' => date('Y-m-d H:i:s'),
-        ];
-        $list[] = $entry;
-        $all[$key] = $list;
-        $this->writeFile('discussions', $all);
-        return $entry;
+        return (array)$this->mutateFile('discussions', [], static function (array $all) use ($key, $courseSlug, $itemId, $userId, $userName, $userRole, $cleanMsg, $parentId): array {
+            $list = $all[$key] ?? [];
+            $entry = [
+                'id' => uniqid('msg_', false),
+                'course_slug' => $courseSlug,
+                'item_id' => $itemId,
+                'user_id' => $userId,
+                'user_name' => $userName,
+                'user_role' => $userRole,
+                'message' => $cleanMsg,
+                'parent_id' => $parentId,
+                'created_at' => date('Y-m-d H:i:s'),
+            ];
+            $list[] = $entry;
+            $all[$key] = $list;
+            return [$all, $entry];
+        });
     }
 
     public function getDiscussions(string $courseSlug, string $itemId = ''): array
