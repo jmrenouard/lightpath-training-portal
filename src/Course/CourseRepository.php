@@ -212,8 +212,7 @@ class CourseRepository
                 $pos = stripos($raw, $q);
                 if ($pos !== false) {
                     $matchedInBody = true;
-                    $start = max(0, $pos - 60);
-                    $snippet = '…' . trim(preg_replace('/\s+/', ' ', substr($raw, $start, 180)) ?? '') . '…';
+                    $snippet = $this->extractUtf8SafeSnippet($raw, $pos);
                 }
             }
             if (str_contains($haystackLower, $needle) || $matchedInBody) {
@@ -238,8 +237,7 @@ class CourseRepository
                 $pos = stripos($raw, $q);
                 if ($pos !== false) {
                     $matchedInBody = true;
-                    $start = max(0, $pos - 60);
-                    $snippet = '…' . trim(preg_replace('/\s+/', ' ', substr($raw, $start, 180)) ?? '') . '…';
+                    $snippet = $this->extractUtf8SafeSnippet($raw, $pos);
                 }
             }
             if (str_contains($haystackLower, $needle) || $matchedInBody) {
@@ -287,6 +285,25 @@ class CourseRepository
         }
 
         return array_slice($results, 0, 50);
+    }
+
+    /**
+     * Extrait un fragment de texte autour de $bytePos sans jamais couper une séquence multi-octets UTF-8,
+     * même lorsque l'extension PHP mbstring n'est pas activée.
+     */
+    private function extractUtf8SafeSnippet(string $raw, int $bytePos, int $beforeBytes = 60, int $lengthBytes = 180): string
+    {
+        $start = max(0, $bytePos - $beforeBytes);
+        $slice = substr($raw, $start, $lengthBytes);
+        // Purger les octets de continuation UTF-8 orphelins en tête (0x80..0xBF)
+        $slice = (string)preg_replace('/^[\x80-\xBF]+/', '', $slice);
+        // Purger tout caractère UTF-8 multi-octets tronqué en fin de chaîne (max 4 octets)
+        $guard = 0;
+        while ($slice !== '' && !preg_match('//u', $slice) && $guard < 4) {
+            $slice = substr($slice, 0, -1);
+            $guard++;
+        }
+        return '…' . trim((string)preg_replace('/\s+/u', ' ', $slice)) . '…';
     }
 
     private function discoverModules(string $root, array $tracks): array

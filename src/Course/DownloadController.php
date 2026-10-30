@@ -101,7 +101,7 @@ class DownloadController
         }
 
         $candidate = realpath($root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativePath));
-        if ($candidate === false || !str_starts_with($candidate, $root) || !is_file($candidate)) {
+        if ($candidate === false || !Security::isPathInside($candidate, $root) || !is_file($candidate)) {
             return null;
         }
 
@@ -133,7 +133,7 @@ class DownloadController
             if (str_starts_with((string)$fileInfo['mime'], 'text/html')) {
                 $html = (string)file_get_contents($fileInfo['path']);
                 $html = (string)preg_replace('/(?:\.\.\/)+assets\//', 'assets/', $html);
-                $courseSlug = (string)($fileInfo['course'] ?? 'postgresql-18-mastery');
+                $courseSlug = (string)($fileInfo['course'] ?? 'postgresql-18');
                 $course = $this->repo->getCourse($courseSlug);
                 $root = $course !== null ? realpath((string)$course['source_root']) : false;
                 $fileDir = dirname((string)$fileInfo['path']);
@@ -148,7 +148,7 @@ class DownloadController
                                 return $m[0];
                             }
                             $resolved = realpath($fileDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relUrl));
-                            if ($resolved !== false && str_starts_with($resolved, $root) && is_file($resolved)) {
+                            if ($resolved !== false && Security::isPathInside($resolved, $root) && is_file($resolved)) {
                                 $relToRoot = ltrim(str_replace('\\', '/', substr($resolved, strlen($root))), '/');
                                 return $attr . '="index.php?action=course_asset&course=' . urlencode($courseSlug) . '&path=' . urlencode($relToRoot) . $anchor . '"';
                             }

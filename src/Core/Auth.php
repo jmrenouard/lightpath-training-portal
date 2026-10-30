@@ -6,10 +6,62 @@ namespace LightPath\LMS\Core;
 class Auth
 {
     private StorageInterface $storage;
+    private array $loginAttempts = [];
+    private const MAX_LOGIN_ATTEMPTS = 5;
+    private const LOCKOUT_SECONDS = 300;
 
     public function __construct(StorageInterface $storage)
     {
         $this->storage = $storage;
+        if (PHP_SAPI !== 'cli' && isset($_SESSION['lms_login_attempts']) && is_array($_SESSION['lms_login_attempts'])) {
+            $this->loginAttempts = $_SESSION['lms_login_attempts'];
+        }
+    }
+
+    private function throttleKey(string $email, string $ip): string
+    {
+        return strtolower(trim($email)) . '|' . ($ip !== '' ? $ip : '127.0.0.1');
+    }
+
+    private function syncThrottleSession(): void
+    {
+        if (PHP_SAPI !== 'cli' && session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION['lms_login_attempts'] = $this->loginAttempts;
+        }
+    }
+
+    public function isLoginRateLimited(string $email, string $ip = '127.0.0.1'): bool
+    {
+        $key = $this->throttleKey($email, $ip);
+        if (!isset($this->loginAttempts[$key])) {
+            return false;
+        }
+        $entry = $this->loginAttempts[$key];
+        if ((time() - (int)($entry['first_at'] ?? 0)) > self::LOCKOUT_SECONDS) {
+            unset($this->loginAttempts[$key]);
+            $this->syncThrottleSession();
+            return false;
+        }
+        return (int)($entry['count'] ?? 0) >= self::MAX_LOGIN_ATTEMPTS;
+    }
+
+    public function recordFailedLogin(string $email, string $ip = '127.0.0.1'): void
+    {
+        $key = $this->throttleKey($email, $ip);
+        $now = time();
+        if (!isset($this->loginAttempts[$key]) || ($now - (int)($this->loginAttempts[$key]['first_at'] ?? 0)) > self::LOCKOUT_SECONDS) {
+            $this->loginAttempts[$key] = ['count' => 1, 'first_at' => $now];
+        } else {
+            $this->loginAttempts[$key]['count'] = (int)$this->loginAttempts[$key]['count'] + 1;
+        }
+        $this->syncThrottleSession();
+    }
+
+    public function clearLoginAttempts(string $email, string $ip = '127.0.0.1'): void
+    {
+        $key = $this->throttleKey($email, $ip);
+        unset($this->loginAttempts[$key]);
+        $this->syncThrottleSession();
     }
 
     public function verifyCredentials(string $email, string $password): ?array
@@ -24,13 +76,19 @@ class Auth
         return $user;
     }
 
-    public function login(string $email, string $password): ?array
+    public function login(string $email, string $password, string $ip = '127.0.0.1'): ?array
     {
-        $user = $this->verifyCredentials($email, $password);
-        if ($user === null) {
+        if ($this->isLoginRateLimited($email, $ip)) {
             return null;
         }
 
+        $user = $this->verifyCredentials($email, $password);
+        if ($user === null) {
+            $this->recordFailedLogin($email, $ip);
+            return null;
+        }
+
+        $this->clearLoginAttempts($email, $ip);
         $user['last_login'] = date('Y-m-d H:i:s');
         $this->storage->saveUser($user);
         $this->storage->logAuditEvent($user['email'], 'LOGIN', 'Connexion réussie au portail LMS');

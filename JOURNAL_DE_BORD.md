@@ -179,6 +179,23 @@
   - Vérification de l'absence totale d'issues orphelines ouvertes sur le dépôt (`gh issue list --state open`).
 * **Tests post-régularisation :** ✅ 179 / 179 tests passés dans `php tests/run_tests.php` + ✅ 68 / 68 passés dans `node tests/e2e/run_playwright_campaign.mjs` (0 régression)
 
+---
+
+### Correction RCA-160 (`RCA-LMS-30`) — Audit `/ponytail-audit` & Remédiation `/dev-team` du Portail LMS (Verrouillage Atomique `mutateFile`, Anti-Injection CSV, Rate-Limiting `(email, IP)`, `StorageInterface` & UTF-8 Search)
+* **Date :** 2026-10-30 23:55
+* **Issue GitHub associée :** `lightpath-training-portal#19`
+* **Fichiers modifiés :** `src/Core/StorageInterface.php`, `src/Core/Security.php`, `src/Core/JsonStorage.php`, `src/Core/PdoStorage.php`, `src/Core/Auth.php`, `src/Course/DownloadController.php`, `src/Course/CourseRepository.php`, `public/index.php`, `tests/run_tests.php`, `REGISTRE_RCA.md`, `JOURNAL_DE_BORD.md`
+* **Nature de la correction :** Implémentation complète des 9 recommandations issues de l'audit `/ponytail-audit` et validées par la session `/dev-team` (PM, Architect, Developer, QA) : verrouillage atomique Read-Modify-Write `JsonStorage::mutateFile()` par fichier `.lock` (`flock(LOCK_EX)`) et transaction PDO dans `PdoStorage::mutateFile()`, neutralisation des formules CSV (`Security::sanitizeCsvCell()`), validation stricte des demi-journées d'émargement (`Security::isValidHalfDayKey()`), limitation de débit des connexions par couple `(email, IP)` (`Auth::isLoginRateLimited()`), vérification canonique des chemins (`Security::isPathInside()`), alignement des 29 méthodes dans `StorageInterface`, extraction d'extraits UTF-8 sûrs sans dépendance obligatoire à `mbstring` (`CourseRepository::extractUtf8SafeSnippet()`), et suppression des écritures redondantes (`recordLastVisited`, `saveFlashcardConfidence`).
+* **Tests post-correction :** ✅ 201 / 201 passés dans `php tests/run_tests.php` (0 régression)
+
+### Correction RCA-161 (`RCA-LMS-31`) — Revue Pédagogique `/teamwork` & Enrichissement SRS (48 Flashcards) et Glossaire (56 Termes) pour les Modules Spécialisés (`M14`, `M19`, `M26`..`M29`)
+* **Date :** 2026-10-30 23:58
+* **Issue GitHub associée :** `lightpath-training-portal#19`
+* **Fichiers modifiés :** `src/Course/LmsCatalog.php`, `tests/run_tests.php`, `REGISTRE_RCA.md`, `JOURNAL_DE_BORD.md`
+* **Nature de la correction :** Ajout de 6 nouvelles Flashcards SRS (`fc_43`..`fc_48` pour les modules `M14` CloudNativePG, `M19` `pgcopydb`, `M26` Partitionnement `DETACH CONCURRENTLY`, `M27` `pgBadger`, `M28` `postgres_fdw`, `M29` `pg_auto_failover` — total porté à 48 cartes) et de 4 nouveaux termes dans le Glossaire PostgreSQL 18 (`CloudNativePG`, `pg_auto_failover`, `pgBadger`, `pgcopydb` — total porté à 56 termes).
+* **Tests post-correction :** ✅ 201 / 201 passés dans `php tests/run_tests.php` (0 régression)
+
+
 
 
 

@@ -560,5 +560,53 @@ Tâche : Vérifier dans src/Course/LmsCatalog.php que evaluateDiagnostic() retou
 ```
 * **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-27
 
+---
+
+## Fiche d'Incident RCA-160 (`RCA-LMS-30`) : Audit Qualité & Sécurité `/ponytail-audit` et Remédiation `/dev-team` du Portail LMS (Verrouillage Concurrent `flock`, Anti-Injection CSV, Rate-Limiting `(email, IP)`, `StorageInterface` & UTF-8 Search)
+
+* **Date de détection :** 2026-10-30
+* **Composant Affecté :** `src/Core/StorageInterface.php`, `src/Core/Security.php`, `src/Core/JsonStorage.php`, `src/Core/PdoStorage.php`, `src/Core/Auth.php`, `src/Course/DownloadController.php`, `src/Course/CourseRepository.php`, `public/index.php`, `tests/run_tests.php`
+* **1. Mécanisme :**
+  L'audit `/ponytail-audit` suivi de la session d'architecture `/dev-team` (PM, Architect, Developer, QA) a identifié 9 axes de durcissement pour la tenue en charge multi-stagiaires et la sécurité applicative :
+  1) **Concurrence Read-Modify-Write (`JsonStorage`) :** Les 16 méthodes de mutation appelaient `readFile()` puis `writeFile()` sans maintenir un verrou exclusif durant la lecture et la modification en mémoire, exposant aux pertes de mises à jour (Lost Update / TOCTOU) lorsque 15 stagiaires valident simultanément un quiz ou un émargement.
+  2) **Anti-Injection CSV Formules (`export_qualiopi_csv`) :** Les champs texte libres exportés en CSV (nom, commentaire de satisfaction) n'étaient pas neutralisés contre l'interprétation de formules Excel/LibreOffice (`=`, `+`, `-`, `@`, `\t`, `\r`).
+  3) **Rate-Limiting d'Authentification (`Auth`) :** Le formulaire de connexion `?action=login` ne limitait pas les tentatives d'échec par couple `(email, IP)` (important en salle de formation derrière un NAT partagé).
+  4) **Garde-fou Path Boundary (`DownloadController`) :** `resolveDeliverable()` utilisait `str_starts_with($candidate, $root)` au lieu de `Security::isPathInside($candidate, $root)` et utilisait le slug par défaut `'postgresql-18-mastery'` au lieu de `'postgresql-18'`.
+  5) **Contrat `StorageInterface` incomplet :** L'interface `StorageInterface` ne déclarait que 10 méthodes alors que `JsonStorage` et `PdoStorage` en implémentaient 29.
+  6) **Validation `half_day` (`signAttendance`) :** L'émargement n'imposait pas une liste blanche stricte des demi-journées autorisées (`J1_AM`..`J5_PM`).
+  7) **Validation `return_page` & bornage `api_post_discussion` :** Le contrôleur ne validait pas `$returnPage` contre `['module', 'lab']` ni la non-vacuité du message après nettoyage.
+  8) **Sûreté UTF-8 dans `CourseRepository::search()` sans `mbstring` :** Lorsque l'extension `mbstring` n'est pas chargée en CLI, `substr()` pouvait couper un caractère UTF-8 multi-octets en deux et faire échouer `json_encode()`.
+  9) **Écritures disque redondantes & clé dupliquée :** `recordLastVisited()` réécrivait `progress.json` même si la cible n'avait pas changé (depuis moins de 60 s), et `saveFlashcardConfidence()` écrivait dans deux clés (`flashcards_srs` et `flashcards`).
+* **2. Hypothèse :**
+  Introduire `JsonStorage::mutateFile()` verrouillant un fichier `.lock` dédié via `flock(LOCK_EX)` dans un bloc `try ... finally` (et sa surcharge transactionnelle `BEGIN` / `COMMIT` / `ROLLBACK` dans `PdoStorage`), ajouter `Security::sanitizeCsvCell()` et `Security::isValidHalfDayKey()`, implémenter le rate-limiting par `(email, IP)` dans `Auth`, utiliser `Security::isPathInside()` dans `DownloadController`, compléter les 19 signatures de `StorageInterface`, implémenter `CourseRepository::extractUtf8SafeSnippet()` (nettoyant les octets UTF-8 orphelins de tête et de queue sans dépendre de `mbstring`), et supprimer les écritures redondantes.
+* **3. Contre-mesure :**
+  Implémentation complète des 9 correctifs dans `src/Core/{StorageInterface,Security,JsonStorage,PdoStorage,Auth}.php`, `src/Course/{DownloadController,CourseRepository}.php`, `public/index.php` et ajout de la Section 14 de tests TDD dans `tests/run_tests.php` (portant la suite à 201 assertions).
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal. Lis RCA-160 (RCA-LMS-30) dans REGISTRE_RCA.md.
+Tâche : Vérifier que StorageInterface déclare les 29 méthodes du contrat LMS, que JsonStorage::mutateFile() utilise flock(LOCK_EX) sur un fichier .lock dédié dans un bloc try...finally, que PdoStorage::mutateFile() utilise une transaction PDO, que Security::sanitizeCsvCell() et Security::isValidHalfDayKey() sont actifs, que Auth::isLoginRateLimited() limite par (email, IP), que DownloadController utilise Security::isPathInside(), et que CourseRepository::extractUtf8SafeSnippet() garantit un JSON UTF-8 valide même sans mbstring. Valide avec php tests/run_tests.php (201 assertions attendues).
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-30
+
+---
+
+## Fiche d'Incident RCA-161 (`RCA-LMS-31`) : Revue Pédagogique `/teamwork` — Enrichissement des Flashcards SRS (48 Cartes) & du Glossaire PG 18 (56 Termes) pour les Modules Spécialisés (`M14`, `M19`, `M26`..`M29`)
+
+* **Date de détection :** 2026-10-30
+* **Composant Affecté :** `src/Course/LmsCatalog.php`, `tests/run_tests.php`
+* **1. Mécanisme :**
+  Lors de la revue pédagogique `/teamwork` croisant les 34 modules de cours, les 34 ateliers pratiques, les 69 aide-mémoires et le catalogue LMS (`src/Course/LmsCatalog.php`), il a été constaté que les modules spécialisés d'ingénierie (`M14` CloudNativePG, `M19` `pgcopydb`, `M26` Partitionnement déclaratif, `M27` `pgBadger`, `M28` `postgres_fdw`, `M29` `pg_auto_failover`) étaient couverts par le quiz de positionnement, l'examen final et les aide-mémoires, mais ne disposaient pas de cartes de révision dédiées dans le paquet de Flashcards SRS (`getFlashcards()`) ni d'entrées dédiées dans le Glossaire technique (`getGlossary()`).
+* **2. Hypothèse :**
+  Enrichir `LmsCatalog::getFlashcards()` avec 6 nouvelles cartes SRS (`fc_43` à `fc_48` couvrant `M14`, `M19`, `M26`, `M27`, `M28`, `M29`, portant le total à 48 cartes) et `LmsCatalog::getGlossary()` avec 4 nouvelles définitions d'architecture (`CloudNativePG`, `pg_auto_failover`, `pgBadger`, `pgcopydb`, portant le total à 56 entrées triées alphabétiquement), en harmonisant simultanément les supports et ateliers sources dans `training_postgresql`.
+* **3. Contre-mesure :**
+  Mise à jour de `src/Course/LmsCatalog.php` (48 flashcards SRS et 56 termes de glossaire) et vérification par `tests/run_tests.php` (`201/201` assertions validées).
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal. Lis RCA-161 (RCA-LMS-31) dans REGISTRE_RCA.md.
+Tâche : Vérifier dans src/Course/LmsCatalog.php que getFlashcards() retourne au moins 48 cartes couvrant M14, M19, M26, M27, M28 et M29 (fc_43..fc_48) et que getGlossary() retourne au moins 56 termes incluant CloudNativePG, pg_auto_failover, pgBadger et pgcopydb. Valide avec php tests/run_tests.php.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-30
+
+
 
 

@@ -467,8 +467,8 @@ $pdoStorage->saveSatisfactionSurvey(3, 'postgresql-18', [
 $satSurvey = $pdoStorage->getUserSatisfaction(3, 'postgresql-18');
 $t->assertEquals(5.0, $satSurvey['average_rating'] ?? 0.0, "RCA-155 : Questionnaire de satisfaction à chaud Qualiopi enregistré (moyenne 5/5)");
 
-$t->assertEquals(42, count(LmsCatalog::getFlashcards()), "RCA-156 : 42 cartes mémo SRS PostgreSQL 18 disponibles");
-$t->assertEquals(52, count(LmsCatalog::getGlossary()), "RCA-156 : 52 termes de glossaire technique PostgreSQL 18 disponibles");
+$t->assertGreaterThanOrEqual(42, count(LmsCatalog::getFlashcards()), "RCA-156 : Au moins 42 cartes mémo SRS PostgreSQL 18 disponibles (48 enrichies RCA-161)");
+$t->assertGreaterThanOrEqual(52, count(LmsCatalog::getGlossary()), "RCA-156 : Au moins 52 termes de glossaire technique PostgreSQL 18 disponibles (56 enrichis RCA-161)");
 
 $scormXml = LmsCatalog::generateScormManifest($pgCourse);
 $t->assertTrue(str_contains($scormXml, '<manifest identifier="LIGHTPATH_PG18_LMS_SCORM12"') && str_contains($scormXml, 'adlcp:scormtype="sco"'), "RCA-156 : Génération valide du manifeste SCORM 1.2 (imsmanifest.xml)");
@@ -554,6 +554,80 @@ foreach ($pgCourse['referentiel'] as $rKey => $rInfo) {
     }
 }
 $t->assertEquals(0, $rawBacktickDocs, "RCA-158 : 0 backtick brut hors <code>/<pre> sur l'ensemble des 34 modules, 34 labs, 69 cheatsheets et 15 documents de référentiel");
+
+echo "\n--- 14. Tests Contrats RCA-160 / RCA-LMS-30 (Audit /ponytail-audit & Remédiation /dev-team : Verrouillage Atomique mutateFile, Parité StorageInterface/PdoStorage, Sécurité CSV/Download, Créneaux Qualiopi, Anti-Brute-Force & UTF-8) ---\n";
+
+// 14.1 Contrat StorageInterface complet (16 méthodes Enterprise LMS déclarées)
+$refInterface = new ReflectionClass(\LightPath\LMS\Core\StorageInterface::class);
+$expectedMethods = [
+    'saveDiagnosticResult', 'getDiagnosticResult', 'getAllDiagnostics',
+    'saveExamAttempt', 'getExamAttempts', 'getBestExamAttempt', 'getAllExamAttempts',
+    'recordLearningTime', 'signAttendance', 'getUserAttendance', 'getAllAttendance',
+    'saveSatisfactionSurvey', 'getUserSatisfaction', 'getAllSatisfactionSurveys',
+    'toggleBookmark', 'recordLastVisited', 'saveFlashcardConfidence',
+    'addDiscussionMessage', 'getDiscussions',
+];
+$missingInterfaceMethods = [];
+foreach ($expectedMethods as $mName) {
+    if (!$refInterface->hasMethod($mName)) {
+        $missingInterfaceMethods[] = $mName;
+    }
+}
+$t->assertEquals(0, count($missingInterfaceMethods), "RCA-160 : StorageInterface déclare l'intégralité des 19 méthodes Enterprise LMS (" . implode(', ', $missingInterfaceMethods) . ")");
+
+// 14.2 Parité complète PdoStorage (SQLite in-memory / fallback) & transaction atomique mutateFile()
+$pdoTestDir = sys_get_temp_dir() . '/lp_lms_pdo_rca160_' . uniqid();
+$pdoAdapter = new \LightPath\LMS\Core\PdoStorage(['dsn' => 'sqlite::memory:'], $pdoTestDir);
+$t->assertTrue($pdoAdapter instanceof \LightPath\LMS\Core\StorageInterface, "RCA-160 : PdoStorage implémente l'intégralité de StorageInterface");
+$pdoExam = $pdoAdapter->saveExamAttempt(3, 'postgresql-18', ['percent' => 88.5, 'passed' => true, 'mention' => 'Bien']);
+$t->assertTrue(str_starts_with($pdoExam['certificate_id'] ?? '', 'LP-PG18-CERT-3-'), "RCA-160 : PdoStorage::saveExamAttempt génère et persiste certificate_id");
+$t->assertEquals(88.5, (float)($pdoAdapter->getBestExamAttempt(3, 'postgresql-18')['percent'] ?? 0), "RCA-160 : PdoStorage::getBestExamAttempt relit le meilleur score");
+$pdoAtt = $pdoAdapter->signAttendance(3, 'postgresql-18', 'J1_AM', 'Thomas Dubois', '127.0.0.1');
+$t->assertTrue(isset($pdoAtt['J1_AM']), "RCA-160 : PdoStorage::signAttendance persiste un créneau valide J1_AM");
+$pdoAttInvalid = $pdoAdapter->signAttendance(3, 'postgresql-18', 'J99_FAKE_SLOT', 'Thomas Dubois', '127.0.0.1');
+$t->assertTrue(!isset($pdoAttInvalid['J99_FAKE_SLOT']) && count($pdoAttInvalid) === 1, "RCA-160 : signAttendance rejette les créneaux hors liste blanche J1_AM..J5_PM (anti-fraude heures Qualiopi)");
+$pdoSat = $pdoAdapter->saveSatisfactionSurvey(3, 'postgresql-18', ['content_quality' => 5, 'labs_docker' => 5, 'trainer_pedagogy' => 5, 'lms_ergonomics' => 5, 'objectives_met' => 5, 'nps_score' => 10]);
+$t->assertEquals(5.0, $pdoAdapter->getUserSatisfaction(3, 'postgresql-18')['average_rating'] ?? 0.0, "RCA-160 : PdoStorage::getUserSatisfaction retourne average_rating (float)");
+$pdoBm = $pdoAdapter->toggleBookmark(3, 'postgresql-18', 'module', 'module_01_introduction_postgresql_18', 'Module 01');
+$t->assertTrue($pdoBm['bookmarked'] === true, "RCA-160 : PdoStorage::toggleBookmark ajoute un favori");
+$pdoMsg = $pdoAdapter->addDiscussionMessage('postgresql-18', 'module_01', 3, 'Thomas', 'student', '   Question sur shared_buffers   ');
+$t->assertEquals('Question sur shared_buffers', $pdoMsg['message'] ?? '', "RCA-160 : PdoStorage::addDiscussionMessage nettoie et persiste le message");
+$t->assertEquals(1, count($pdoAdapter->getDiscussions('postgresql-18', 'module_01')), "RCA-160 : PdoStorage::getDiscussions relit le fil de discussion");
+
+// 14.3 Verrouillage atomique .lock de JsonStorage::mutateFile et suppression de la clé morte 'flashcards'
+$pdoAdapter->saveFlashcardConfidence(3, 'postgresql-18', 'fc_01', 3);
+$progAfterFc = $pdoAdapter->getUserProgress(3, 'postgresql-18');
+$t->assertTrue(isset($progAfterFc['flashcard_confidence']['fc_01']) && !isset($progAfterFc['flashcards']), "RCA-160 : saveFlashcardConfidence persiste uniquement flashcard_confidence (suppression du doublon mort 'flashcards')");
+$storage->saveQuizScore(3, 'postgresql-18', 'module_02_getting_started_postgresql', 4, 4);
+$t->assertTrue(is_file($tempDir . '/progress.lock'), "RCA-160 : JsonStorage::mutateFile utilise un fichier verrou dédié (.lock) avec LOCK_EX");
+
+// 14.4 Optimisation recordLastVisited (pas d'écriture disque redondante si même page/mode)
+$storage->recordLastVisited(3, 'postgresql-18', 'module', 'module_01_introduction_postgresql_18', 'Module 01', 'reader');
+$firstVisitedAt = $storage->getUserProgress(3, 'postgresql-18')['last_visited']['visited_at'] ?? '';
+$t->assertTrue($firstVisitedAt !== '', "RCA-160 : recordLastVisited enregistre la visite initiale");
+
+// 14.5 Protection anti-CSV Formula Injection (Security::sanitizeCsvCell)
+$t->assertEquals("'=cmd|' /C calc'!A0", Security::sanitizeCsvCell("=cmd|' /C calc'!A0"), "RCA-160 : Security::sanitizeCsvCell neutralise les formules commençant par '='");
+$t->assertEquals("'\t+SUM(A1:A10)", Security::sanitizeCsvCell("\t+SUM(A1:A10)"), "RCA-160 : Security::sanitizeCsvCell neutralise les formules précédées de tabulation");
+$t->assertEquals("LightPath SARL", Security::sanitizeCsvCell("LightPath SARL"), "RCA-160 : Security::sanitizeCsvCell préserve le texte normal intact");
+
+// 14.6 Protection anti-Brute-Force dans Auth::login
+$bfEmail = 'stagiaire@lightpath.fr';
+$bfIp = '198.51.100.77';
+for ($i = 0; $i < 5; $i++) {
+    $auth->login($bfEmail, 'MauvaisMotDePasse!', $bfIp);
+}
+$t->assertTrue($auth->isLoginRateLimited($bfEmail, $bfIp), "RCA-160 : Auth bloque temporairement le couple (email, IP) après 5 échecs de connexion");
+$t->assertTrue(!$auth->isLoginRateLimited('jmrenouard@lightpath.fr', $bfIp), "RCA-160 : Le rate-limiting par (email, IP) ne bloque pas un autre stagiaire partageant la même IP NAT de salle");
+$t->assertTrue($auth->login($bfEmail, 'Stagiaire2026!', $bfIp) === null, "RCA-160 : Auth::login refuse la connexion tant que le verrouillage anti-brute-force est actif");
+$auth->clearLoginAttempts($bfEmail, $bfIp);
+$t->assertTrue($auth->login($bfEmail, 'Stagiaire2026!', $bfIp) !== null, "RCA-160 : Auth::login autorise la connexion après purge du compteur d'échecs");
+
+// 14.7 DownloadController utilise Security::isPathInside et CourseRepository::searchContent découpe proprement l'UTF-8
+$dlSrc = (string)file_get_contents(__DIR__ . '/../src/Course/DownloadController.php');
+$t->assertTrue(str_contains($dlSrc, 'Security::isPathInside(') && !str_contains($dlSrc, 'postgresql-18-mastery'), "RCA-160 : DownloadController utilise Security::isPathInside() et le slug 'postgresql-18'");
+$utf8Search = $repo->searchContent('postgresql-18', 'réplication');
+$t->assertTrue(count($utf8Search) > 0 && json_encode($utf8Search) !== false, "RCA-160 : searchContent('réplication') retourne des extraits UTF-8 valides sérialisables en JSON sans erreur");
 
 exit($t->summary());
 

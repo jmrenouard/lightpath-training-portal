@@ -95,4 +95,35 @@ class PdoStorage extends JsonStorage
         }
         parent::writeFile($name, $data);
     }
+
+    protected function mutateFile(string $name, array $default, callable $mutator): mixed
+    {
+        if ($this->pdo !== null) {
+            $ownTx = !$this->pdo->inTransaction();
+            if ($ownTx) {
+                try {
+                    $this->pdo->beginTransaction();
+                } catch (\Throwable) {
+                    $ownTx = false;
+                }
+            }
+            try {
+                $current = $this->readFile($name, $default);
+                [$updated, $result] = $mutator($current);
+                if ($updated !== null) {
+                    $this->writeFile($name, $updated);
+                }
+                if ($ownTx && $this->pdo->inTransaction()) {
+                    $this->pdo->commit();
+                }
+                return $result;
+            } catch (\Throwable $e) {
+                if ($ownTx && $this->pdo->inTransaction()) {
+                    $this->pdo->rollBack();
+                }
+                throw $e;
+            }
+        }
+        return parent::mutateFile($name, $default, $mutator);
+    }
 }

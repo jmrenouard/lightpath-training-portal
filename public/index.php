@@ -54,6 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'login') {
     $email = trim((string)($_POST['email'] ?? ''));
     $password = (string)($_POST['password'] ?? '');
     $csrf = (string)($_POST['csrf_token'] ?? '');
+    $clientIp = (string)($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1');
 
     if (!Security::verifyCsrfToken($csrf)) {
         $_SESSION['flash_error'] = 'Session expirée (jeton CSRF invalide). Veuillez réessayer.';
@@ -61,7 +62,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'login') {
         exit;
     }
 
-    $loggedUser = $auth->login($email, $password);
+    if ($auth->isLoginRateLimited($email, $clientIp)) {
+        $_SESSION['flash_error'] = 'Trop de tentatives de connexion échouées pour ce compte. Veuillez patienter 5 minutes.';
+        header('Location: index.php?page=login');
+        exit;
+    }
+
+    $loggedUser = $auth->login($email, $password, $clientIp);
     if ($loggedUser !== null) {
         $_SESSION['flash_success'] = 'Bienvenue, ' . $loggedUser['name'] . ' !';
         header('Location: index.php?page=dashboard');
@@ -206,10 +213,10 @@ if ($action === 'export_qualiopi_csv' && $auth->isStaff($currentUser)) {
             $sat = $storage->getUserSatisfaction($uid, $currentCourseSlug);
             fputcsv($out, [
                 $uid,
-                $u['name'],
-                $u['email'],
-                $u['company'] ?? '',
-                $u['role'],
+                Security::sanitizeCsvCell($u['name'] ?? ''),
+                Security::sanitizeCsvCell($u['email'] ?? ''),
+                Security::sanitizeCsvCell($u['company'] ?? ''),
+                Security::sanitizeCsvCell($u['role'] ?? ''),
                 count($p['completed_modules'] ?? []),
                 count($p['completed_labs'] ?? []),
                 count($p['quiz_scores'] ?? []),
@@ -363,9 +370,14 @@ if (str_starts_with($action, 'api_')) {
             exit;
 
         case 'api_post_discussion':
-            $itemId = (string)($payload['item_id'] ?? '');
-            $message = (string)($payload['message'] ?? '');
+            $itemId = trim((string)($payload['item_id'] ?? ''));
+            $message = trim((string)($payload['message'] ?? ''));
             $parentId = isset($payload['parent_id']) ? (string)$payload['parent_id'] : null;
+            if ($itemId === '' || $message === '') {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Message vide ou cible invalide.']);
+                exit;
+            }
             $entry = $storage->addDiscussionMessage(
                 $currentCourseSlug,
                 $itemId,
@@ -383,7 +395,7 @@ if (str_starts_with($action, 'api_')) {
             echo json_encode([
                 'success' => true,
                 'results' => $courseRepo->searchContent($currentCourseSlug, $q),
-            ]);
+            ], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             exit;
 
         case 'api_chaos':
@@ -456,10 +468,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'sign_attendance') {
         $halfDayKey = trim((string)($_POST['half_day_key'] ?? ''));
         $sigText = trim((string)($_POST['signature_text'] ?? $currentUser['name']));
-        if ($halfDayKey !== '') {
+        if (Security::isValidHalfDayKey($halfDayKey)) {
             $storage->signAttendance($userId, $currentCourseSlug, $halfDayKey, $sigText, (string)($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1'));
             $storage->logAuditEvent($currentUser['email'], 'ATTENDANCE_SIGN', "Émargement demi-journée {$halfDayKey}");
             $_SESSION['flash_success'] = "Présence émargée avec succès pour la demi-journée {$halfDayKey}.";
+        } else {
+            $_SESSION['flash_error'] = "Créneau de demi-journée Qualiopi invalide.";
         }
         header('Location: index.php?page=attendance&course=' . urlencode($currentCourseSlug));
         exit;
@@ -475,7 +489,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'post_discussion') {
         $itemId = trim((string)($_POST['item_id'] ?? ''));
-        $returnPage = trim((string)($_POST['return_page'] ?? 'module'));
+        $rawReturnPage = trim((string)($_POST['return_page'] ?? 'module'));
+        $returnPage = in_array($rawReturnPage, ['module', 'lab'], true) ? $rawReturnPage : 'module';
         $message = trim((string)($_POST['message'] ?? ''));
         $parentId = !empty($_POST['parent_id']) ? trim((string)$_POST['parent_id']) : null;
         if ($itemId !== '' && $message !== '') {

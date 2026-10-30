@@ -123,5 +123,39 @@ class Security
         }
         return $escaped;
     }
+
+    /**
+     * Neutralise toute injection de formule tableur (CSV Formula Injection) lors de l'export Excel/LibreOffice.
+     */
+    public static function sanitizeCsvCell(mixed $value): string
+    {
+        $str = (string)$value;
+        if ($str === '' || is_numeric($str)) {
+            return $str;
+        }
+        $trimmed = ltrim($str, " \t\r\n");
+        if (
+            str_starts_with($str, "\t")
+            || str_starts_with($str, "\r")
+            || ($trimmed !== '' && in_array($trimmed[0], ['=', '+', '-', '@'], true))
+        ) {
+            return "'" . $str;
+        }
+        return $str;
+    }
+
+    /**
+     * Vérifie que l'identifiant de demi-journée appartient aux 10 créneaux officiels Qualiopi (J1_AM..J5_PM).
+     */
+    public static function isValidHalfDayKey(string $halfDayKey): bool
+    {
+        return in_array($halfDayKey, [
+            'J1_AM', 'J1_PM',
+            'J2_AM', 'J2_PM',
+            'J3_AM', 'J3_PM',
+            'J4_AM', 'J4_PM',
+            'J5_AM', 'J5_PM',
+        ], true);
+    }
 }
 

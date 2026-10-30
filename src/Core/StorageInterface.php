@@ -22,4 +22,28 @@ interface StorageInterface
 
     public function logAuditEvent(string $actor, string $action, string $details): void;
     public function getAuditLogs(int $limit = 50): array;
+
+    public function saveDiagnosticResult(int $userId, string $courseSlug, array $result): void;
+    public function getDiagnosticResult(int $userId, string $courseSlug = 'postgresql-18'): ?array;
+    public function getAllDiagnostics(): array;
+
+    public function saveExamAttempt(int $userId, string $courseSlug, array $attempt): array;
+    public function getExamAttempts(int $userId, string $courseSlug = 'postgresql-18'): array;
+    public function getBestExamAttempt(int $userId, string $courseSlug = 'postgresql-18'): ?array;
+    public function getAllExamAttempts(): array;
+
+    public function recordLearningTime(int $userId, string $courseSlug, int $seconds = 60, string $itemId = ''): int;
+    public function signAttendance(int $userId, string $courseSlug, string $halfDayKey, string $signatureText = '', string $ip = '127.0.0.1'): array;
+    public function getUserAttendance(int $userId, string $courseSlug = 'postgresql-18'): array;
+    public function getAllAttendance(): array;
+
+    public function saveSatisfactionSurvey(int $userId, string $courseSlug, array $survey): array;
+    public function getUserSatisfaction(int $userId, string $courseSlug = 'postgresql-18'): ?array;
+    public function getAllSatisfactionSurveys(): array;
+
+    public function toggleBookmark(int $userId, string $courseSlug, string $itemType, string $itemId = '', string $title = ''): array;
+    public function recordLastVisited(int $userId, string $courseSlug, string $itemType, string $itemId, string $title, string $mode = 'reader'): void;
+    public function saveFlashcardConfidence(int $userId, string $courseSlug, string $cardId, int|string $level): void;
+    public function addDiscussionMessage(string $courseSlug, string $itemId, int $userId, string $userName, string $userRole, string $message, ?string $parentId = null): array;
+    public function getDiscussions(string $courseSlug, string $itemId = ''): array;
 }
