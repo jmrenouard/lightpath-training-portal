@@ -55,6 +55,15 @@ $labMode = (string)($_GET['mode'] ?? 'enonce');
 if (!in_array($labMode, ['enonce', 'corrige', 'full', 'html_preview', 'pdf_preview'], true)) {
     $labMode = 'enonce';
 }
+$classroomState = $storage->getClassroomState($currentCourseSlug);
+$solutionsLocked = (!empty($classroomState['lock_solutions']) || !empty($classroomState['solutions_locked'])) && !$auth->isStaff($currentUser);
+$lockedSolutionsNotice = false;
+if ($solutionsLocked && in_array($labMode, ['corrige', 'full'], true)) {
+    $labMode = 'enonce';
+    $lockedSolutionsNotice = true;
+}
+$rawLabSource = is_file((string)$lab['source_md_path']) ? (string)file_get_contents((string)$lab['source_md_path']) : '';
+$labHint = $sqlRunner->extractLabHint($rawLabSource, $labId);
 $activeLabHtml = match ($labMode) {
     'corrige' => ($parsed['corrige_html'] ?? $parsed['html']),
     'full' => $parsed['html'],
@@ -146,14 +155,20 @@ $activeLabToc = match ($labMode) {
            class="view-mode-tab <?= $labMode === 'enonce' ? 'active' : '' ?>">
             <span>📋 Énoncé & Travail Pas-à-Pas</span>
         </a>
-        <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=corrige&course=<?= urlencode($currentCourseSlug) ?>"
-           class="view-mode-tab <?= $labMode === 'corrige' ? 'active' : '' ?>">
-            <span>✅ Corrigé Complet & Débriefing REX</span>
-        </a>
-        <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=full&course=<?= urlencode($currentCourseSlug) ?>"
-           class="view-mode-tab <?= $labMode === 'full' ? 'active' : '' ?>">
-            <span>📖 Vue Intégrale (Énoncé + Corrigé)</span>
-        </a>
+        <?php if (!$solutionsLocked): ?>
+            <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=corrige&course=<?= urlencode($currentCourseSlug) ?>"
+               class="view-mode-tab <?= $labMode === 'corrige' ? 'active' : '' ?>">
+                <span>✅ Corrigé Complet & Débriefing REX</span>
+            </a>
+            <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=full&course=<?= urlencode($currentCourseSlug) ?>"
+               class="view-mode-tab <?= $labMode === 'full' ? 'active' : '' ?>">
+                <span>📖 Vue Intégrale (Énoncé + Corrigé)</span>
+            </a>
+        <?php else: ?>
+            <span class="view-mode-tab" style="opacity: 0.65; cursor: not-allowed;" title="Le formateur a temporairement verrouillé l'accès aux corrigés pendant la phase de recherche.">
+                <span>🔒 Corrigé Verrouillé (Phase Recherche)</span>
+            </span>
+        <?php endif; ?>
         <?php if (isset($lab['downloads']['html'])): ?>
             <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=html_preview&course=<?= urlencode($currentCourseSlug) ?>"
                class="view-mode-tab <?= $labMode === 'html_preview' ? 'active' : '' ?>">
@@ -225,17 +240,31 @@ $activeLabToc = match ($labMode) {
                         <option value="postgres" <?= $defaultLabDb === 'postgres' ? 'selected' : '' ?>>postgres (Système)</option>
                     </select>
                 </label>
+                <label style="font-size: 0.76rem; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 0.35rem;">
+                    <span>🕘 Historique :</span>
+                    <select id="lab-sql-history-select" class="form-control" style="padding: 0.15rem 0.5rem; font-size: 0.78rem; height: auto; width: auto; max-width: 220px;">
+                        <option value="">— Requêtes récentes —</option>
+                    </select>
+                </label>
             </div>
             <div class="lms-code-actions">
+                <button type="button" id="btn-inspect-schema" class="btn btn-outline btn-sm" title="Afficher les tables, colonnes et cardinalités de la base cible">
+                    🗂️ Schéma des Tables
+                </button>
+                <button type="button" id="btn-explain-sql" class="btn btn-outline btn-sm" title="Exécuter EXPLAIN (ANALYZE, BUFFERS) sur la requête courante">
+                    📊 EXPLAIN ANALYZE
+                </button>
                 <button type="button" id="btn-execute-sql" class="btn btn-primary btn-sm">
                     ▶ Exécuter la Requête SQL
                 </button>
                 <button type="button" id="btn-run-oracle" class="btn btn-emerald btn-sm" data-lab-id="<?= Security::e($labId) ?>" data-course="<?= Security::e($currentCourseSlug) ?>">
                     🏆 Vérifier mon Lab (Oracle Qualiopi 1-Clic)
                 </button>
-                <button type="button" id="btn-run-lab-solution" class="btn btn-outline-cyan btn-sm" data-lab-id="<?= Security::e($labId) ?>" data-course="<?= Security::e($currentCourseSlug) ?>" title="Exécuter automatiquement les blocs SQL du corrigé officiel et vérifier l'Oracle">
-                    🧪 Tester & Valider le Corrigé Officiel
-                </button>
+                <?php if (!$solutionsLocked): ?>
+                    <button type="button" id="btn-run-lab-solution" class="btn btn-outline-cyan btn-sm" data-lab-id="<?= Security::e($labId) ?>" data-course="<?= Security::e($currentCourseSlug) ?>" title="Exécuter automatiquement les blocs SQL du corrigé officiel et vérifier l'Oracle">
+                        🧪 Tester & Valider le Corrigé Officiel
+                    </button>
+                <?php endif; ?>
             </div>
         </div>
         <textarea id="lab-sql-editor" class="sql-editor-textarea" spellcheck="false"><?= Security::e($defaultSql) ?></textarea>
@@ -261,6 +290,12 @@ $activeLabToc = match ($labMode) {
 <!-- ÉNONCÉ / CORRIGÉ DES 7 PILIERS QUALIOPI & SOMMAIRE SCROLLSPY STICKY -->
 <div class="reader-grid">
     <div class="reader-main-col">
+        <?php if ($lockedSolutionsNotice): ?>
+            <div class="flash-banner flash-error" style="margin-bottom: 1rem;">
+                🔒 <strong>Corrigé temporairement verrouillé par le formateur :</strong> Réalisez d'abord l'investigation dans l'énoncé et utilisez l'indice progressif ci-dessous.
+            </div>
+        <?php endif; ?>
+
         <?php if ($labMode === 'corrige'): ?>
             <div class="lab-mode-banner lab-mode-banner-corrige">
                 <div>
@@ -277,10 +312,28 @@ $activeLabToc = match ($labMode) {
                     <strong>📋 Mode Énoncé & Travail Pas-à-Pas :</strong>
                     Réalisez les étapes dans la console SQL ci-dessus. Les solutions sont masquées par défaut pour préserver votre démarche d'investigation.
                 </div>
-                <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=corrige&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald btn-sm">
-                    ✅ Voir le Corrigé Complet & REX →
-                </a>
+                <?php if (!$solutionsLocked): ?>
+                    <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=corrige&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald btn-sm">
+                        ✅ Voir le Corrigé Complet & REX →
+                    </a>
+                <?php endif; ?>
             </div>
+
+            <!-- INDICE PÉDAGOGIQUE PROGRESSIF SANS DÉVOILER LE CORRIGÉ COMPLET (Feature C3) -->
+            <details class="lms-card" style="margin-bottom: 1.15rem; padding: 0.9rem 1.2rem; border-color: rgba(56, 189, 248, 0.35); cursor: pointer;">
+                <summary style="font-weight: 700; color: var(--brand-cyan-light); font-size: 0.88rem;">
+                    💡 Besoin d'un coup de pouce ? Afficher l'Indice & Piste de Diagnostic DBA (sans dévoiler la solution)
+                </summary>
+                <div style="margin-top: 0.65rem; font-size: 0.86rem; color: var(--text-secondary);">
+                    <p style="margin: 0 0 0.45rem;"><?= Security::e((string)($labHint['hint'] ?? '')) ?></p>
+                    <?php if (!empty($labHint['first_command_clue'])): ?>
+                        <div style="font-size: 0.8rem; color: var(--text-primary);">
+                            <strong>Première piste SQL / catalogue à inspecter :</strong>
+                            <code><?= Security::e((string)$labHint['first_command_clue']) ?> ...</code>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </details>
         <?php endif; ?>
 
         <article id="reader-article-content" class="reader-article markdown-body">
@@ -315,35 +368,7 @@ $activeLabToc = match ($labMode) {
         </div>
 
         <!-- FORUM D'ENTRAIDE TECHNIQUE & Q&A SUR CET ATELIER -->
-        <section id="discussion-section" class="lms-card" style="margin-top: 1.5rem;">
-            <span class="badge-code">ENTRAIDE TECHNIQUE & ACCOMPAGNEMENT FORMATEUR</span>
-            <h3 style="font-size: 1.15rem; margin: 0.35rem 0 0.75rem;">💬 Questions & Réponses sur cet Atelier (<?= count($discussions) ?>)</h3>
-            <?php if (!empty($discussions)): ?>
-                <div style="display: flex; flex-direction: column; gap: 0.65rem; margin-bottom: 1rem;">
-                    <?php foreach ($discussions as $msg): ?>
-                        <div style="padding: 0.75rem 1rem; border-radius: var(--radius-sm); background: var(--bg-base); border: 1px solid var(--border-hairline);">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem; font-size: 0.78rem;">
-                                <span>
-                                    <strong><?= Security::e((string)($msg['user_name'] ?? 'Apprenant')) ?></strong>
-                                    <span class="role-badge role-<?= Security::e((string)($msg['user_role'] ?? 'student')) ?>"><?= Security::e((string)($msg['user_role'] ?? 'student')) ?></span>
-                                </span>
-                                <span style="color: var(--text-muted);" class="tabular-nums"><?= Security::e(substr((string)($msg['created_at'] ?? ''), 0, 16)) ?></span>
-                            </div>
-                            <div style="font-size: 0.86rem; color: var(--text-secondary); white-space: pre-line;"><?= Security::e((string)($msg['message'] ?? '')) ?></div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            <?php endif; ?>
-            <form method="POST" action="index.php?page=lab&action=post_discussion&course=<?= urlencode($currentCourseSlug) ?>">
-                <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
-                <input type="hidden" name="item_id" value="<?= Security::e($labId) ?>"/>
-                <input type="hidden" name="return_page" value="lab"/>
-                <textarea name="message" class="form-control" rows="2" required placeholder="Posez une question technique ou partagez une astuce SQL sur cet atelier..."></textarea>
-                <div style="margin-top: 0.5rem; text-align: right;">
-                    <button type="submit" class="btn btn-primary btn-sm">💬 Publier ma question / remarque</button>
-                </div>
-            </form>
-        </section>
+        <?= renderDiscussionSection($currentCourseSlug, 'lab', $labId, $discussions, $csrfToken, $auth->isStaff($currentUser)) ?>
     </div>
 
     <aside class="reader-sidebar" id="app-right-sidebar">

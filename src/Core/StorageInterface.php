@@ -46,4 +46,16 @@ interface StorageInterface
     public function saveFlashcardConfidence(int $userId, string $courseSlug, string $cardId, int|string $level): void;
     public function addDiscussionMessage(string $courseSlug, string $itemId, int $userId, string $userName, string $userRole, string $message, ?string $parentId = null): array;
     public function getDiscussions(string $courseSlug, string $itemId = ''): array;
+
+    public function signTrainerAttendance(int $userId, string $courseSlug, string $halfDayKey, string $trainerName = 'Jean-Marie Renouard'): array;
+    public function saveColdSatisfactionSurvey(int $userId, string $courseSlug, array $survey): array;
+    public function getUserColdSatisfaction(int $userId, string $courseSlug = 'postgresql-18'): ?array;
+    public function getAllColdSatisfactionSurveys(): array;
+    public function findCertificateByCode(string $certificateId): ?array;
+    public function getClassroomState(string $courseSlug = 'postgresql-18'): array;
+    public function saveClassroomState(string $courseSlug, array $state): array;
+    public function resolveDiscussionMessage(string $courseSlug, string $itemId, string $messageId, bool $resolved = true): bool;
+    public function deleteDiscussionMessage(string $courseSlug, string $itemId, string $messageId): bool;
+    public function getAllCourseDiscussions(string $courseSlug = 'postgresql-18'): array;
+    public function importUsersFromCsv(string $csvContent, string $defaultPassword = 'LightPath2026!'): array;
 }

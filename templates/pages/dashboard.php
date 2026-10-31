@@ -104,9 +104,16 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
         <div class="kpi-sub">Évaluations formatives Bloom C01–C29</div>
     </div>
     <div class="kpi-card">
+        <?php
+        $cheatsheetsCount = count($currentCourse['cheatsheets'] ?? []);
+        $toolsCount = count($currentCourse['tools'] ?? []);
+        $examplesCount = count($currentCourse['examples'] ?? []);
+        ?>
         <div class="kpi-label">📑 Fiches Mémo & Outils DBA</div>
-        <div class="kpi-value tabular-nums"><?= count($currentCourse['cheatsheets'] ?? []) + count($currentCourse['tools'] ?? []) ?></div>
-        <div class="kpi-sub"><?= count($currentCourse['cheatsheets'] ?? []) ?> Cheatsheets + <?= count($currentCourse['tools'] ?? []) ?> Scripts pgscripts</div>
+        <div class="kpi-value tabular-nums"><?= $cheatsheetsCount + $toolsCount + $examplesCount ?></div>
+        <div class="kpi-sub">
+            <?= $cheatsheetsCount ?> Cheatsheets + <?= $toolsCount ?> Scripts pgscripts<?= $examplesCount > 0 ? ' + ' . $examplesCount . ' Exemples Code' : '' ?>
+        </div>
     </div>
 </div>
 
@@ -125,7 +132,10 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
                 ✍️ Émargement (<?= count($userAttendance ?? []) ?>/20)
             </a>
             <a href="index.php?page=flashcards&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">
-                🧠 Révision SRS (42 cartes)
+                🧠 Révision SRS (<?= count(\LightPath\LMS\Course\LmsCatalog::getFlashcards()) ?> cartes)
+            </a>
+            <a href="index.php?page=notes&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">
+                📝 Carnet de Notes
             </a>
             <a href="index.php?action=export_notes_md&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">
                 📥 Exporter mes notes (.md)

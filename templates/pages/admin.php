@@ -7,6 +7,8 @@ $allUsers = $storage->getUsers();
 $allProgress = $storage->getAllProgress();
 $labContainers = $docker->listAllLabContainers();
 $auditLogs = $storage->getAuditLogs(40);
+$classroomState = $storage->getClassroomState($currentCourseSlug);
+$allCourseDiscussions = $storage->getAllCourseDiscussions($currentCourseSlug);
 ?>
 
 <div class="hero-banner" style="padding: 1.5rem 2rem;">
@@ -14,13 +16,14 @@ $auditLogs = $storage->getAuditLogs(40);
         <span class="badge-code">PORTAIL D'ADMINISTRATION & COCKPIT FORMATEUR</span>
         <h1 style="font-size: 1.65rem; margin: 0.4rem 0 0.25rem;">🛡️ Administration des Comptes, Cohortes, Docker & Formations</h1>
         <p style="color: var(--text-secondary); margin: 0; font-size: 0.9rem;">
-            Supervisez la progression des apprenants en temps réel, gérez les comptes utilisateurs, pilotez les conteneurs Docker par stagiaire, injectez des scénarios Chaos DBA et ajoutez de nouvelles formations.
+            Supervisez la progression des apprenants en temps réel, pilotez la salle de classe live, modérez le forum Q&A, importez vos cohortes CSV et exportez vos packages SCORM 1.2.
         </p>
     </div>
 
     <div style="display: flex; flex-wrap: wrap; gap: 0.45rem;">
         <a href="index.php?page=admin&tab=cohort&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $adminTab === 'cohort' ? 'btn-primary' : 'btn-outline' ?>">📊 Suivi Cohorte & Qualiopi</a>
         <a href="index.php?page=admin&tab=users&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $adminTab === 'users' ? 'btn-primary' : 'btn-outline' ?>">👥 Gestion des Comptes (<?= count($allUsers) ?>)</a>
+        <a href="index.php?page=admin&tab=qna&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $adminTab === 'qna' ? 'btn-primary' : 'btn-outline' ?>">💬 Questions Q&A (<?= count($allCourseDiscussions) ?>)</a>
         <a href="index.php?page=admin&tab=docker&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $adminTab === 'docker' ? 'btn-primary' : 'btn-outline' ?>">🐳 Conteneurs Docker & Chaos DBA</a>
         <a href="index.php?page=admin&tab=courses&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $adminTab === 'courses' ? 'btn-primary' : 'btn-outline' ?>">🎓 Multi-Formations (<?= count($allCourses) ?>)</a>
         <a href="index.php?page=admin&tab=audit&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $adminTab === 'audit' ? 'btn-primary' : 'btn-outline' ?>">📜 Journal d'Audit</a>
@@ -28,6 +31,40 @@ $auditLogs = $storage->getAuditLogs(40);
 </div>
 
 <?php if ($adminTab === 'cohort'): ?>
+    <!-- PANNEAU DE PILOTAGE SALLE DE CLASSE EN DIRECT & VERROUILLAGE PÉDAGOGIQUE (Feature D1) -->
+    <section class="lms-card" style="padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; border-color: rgba(56, 189, 248, 0.35);">
+        <span class="badge-code">📢 PILOTAGE SALLE DE CLASSE LIVE & VERROUILLAGE PÉDAGOGIQUE</span>
+        <h3 style="font-size: 1.15rem; margin: 0.35rem 0 0.75rem;">Annonce Temps Réel aux Apprenants & Contrôle d'Accès (Corrigés / Examen)</h3>
+        <form method="POST" action="index.php?page=admin&tab=cohort&action=save_classroom_state&course=<?= urlencode($currentCourseSlug) ?>">
+            <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; align-items: end;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Message diffusé en haut de toutes les pages des stagiaires (laisser vide pour masquer)</label>
+                    <input type="text"
+                           name="broadcast_message"
+                           class="form-control"
+                           value="<?= Security::e((string)($classroomState['broadcast_message'] ?? '')) ?>"
+                           placeholder="Ex: Pause déjeuner jusqu'à 14h00 — Reprise avec l'Atelier 06 (Indexation B-Tree/GIN)"/>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 0.45rem;">
+                    <label style="font-size: 0.82rem; display: flex; align-items: center; gap: 0.45rem; cursor: pointer;">
+                        <input type="checkbox" name="lock_solutions" value="1" <?= !empty($classroomState['lock_solutions']) ? 'checked' : '' ?>/>
+                        <span>🔒 Verrouiller les Corrigés des Labs (Phase Recherche)</span>
+                    </label>
+                    <label style="font-size: 0.82rem; display: flex; align-items: center; gap: 0.45rem; cursor: pointer;">
+                        <input type="checkbox" name="lock_exam" value="1" <?= !empty($classroomState['lock_exam']) ? 'checked' : '' ?>/>
+                        <span>🔒 Verrouiller l'Examen Final Certifiant (40 QCM)</span>
+                    </label>
+                </div>
+            </div>
+            <div style="margin-top: 0.85rem; display: flex; justify-content: flex-end; gap: 0.5rem;">
+                <button type="submit" class="btn btn-primary btn-sm">
+                    📡 Appliquer en Direct à toute la Salle
+                </button>
+            </div>
+        </form>
+    </section>
+
     <!-- 1. SUIVI DE COHORTE & PROGRESSION QUALIOPI -->
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
         <h2 style="font-size: 1.3rem; margin: 0;">📊 Matrice de Suivi Pédagogique de la Cohorte (<?= Security::e($currentCourse['short_title']) ?>)</h2>
@@ -36,7 +73,10 @@ $auditLogs = $storage->getAuditLogs(40);
                 📊 Exporter Audit Qualiopi (CSV)
             </a>
             <a href="index.php?action=export_scorm_manifest&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline-cyan btn-sm">
-                📦 Exporter Manifeste SCORM 1.2 (imsmanifest.xml)
+                📄 Manifeste SCORM 1.2 (.xml)
+            </a>
+            <a href="index.php?action=export_scorm_zip&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-primary btn-sm">
+                📦 Exporter Package SCORM 1.2 Complet (.zip)
             </a>
         </div>
     </div>
@@ -222,7 +262,94 @@ $auditLogs = $storage->getAuditLogs(40);
                     ➕ Créer le Compte Utilisateur
                 </button>
             </form>
+
+            <!-- Import CSV de Cohorte en Masse (Feature D3) -->
+            <hr style="border: none; border-top: 1px solid var(--border-hairline); margin: 1.25rem 0;"/>
+            <h3 style="font-size: 1.05rem; margin-bottom: 0.45rem;">📥 Import CSV de Cohorte en Masse</h3>
+            <p style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.65rem;">
+                Collez une liste CSV (<code>nom;email;entreprise;role;mot_de_passe</code>) pour inscrire toute une session en 1 clic.
+            </p>
+            <form method="POST" action="index.php?page=admin&tab=users&action=admin_import_users_csv&course=<?= urlencode($currentCourseSlug) ?>">
+                <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
+                <div class="form-group">
+                    <textarea name="csv_payload" class="form-control" rows="4" required placeholder="Claire Martin;claire@banque.fr;Banque SA;student;LightPath2026!&#10;David Roy;david@banque.fr;Banque SA;student;LightPath2026!"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm" style="width: 100%;">
+                    📥 Importer la Cohorte CSV
+                </button>
+            </form>
         </aside>
+    </div>
+
+<?php elseif ($adminTab === 'qna'): ?>
+    <!-- 2b. MODÉRATION CENTRALISÉE DU FORUM D'ENTRAIDE Q&A (Feature D2) -->
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+        <div>
+            <h2 style="font-size: 1.3rem; margin: 0;">💬 Modération du Forum d'Entraide Technique & Q&A (<span class="tabular-nums"><?= count($allCourseDiscussions) ?></span> messages)</h2>
+            <p style="font-size: 0.84rem; color: var(--text-secondary); margin: 0.25rem 0 0;">
+                Visualisez toutes les questions posées sur les modules et ateliers, marquez-les comme résolues ou supprimez les entrées obsolètes.
+            </p>
+        </div>
+    </div>
+    <div class="lms-table-wrap">
+        <table class="lms-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Élément (Module / Lab)</th>
+                    <th>Auteur</th>
+                    <th>Question / Message</th>
+                    <th>Statut</th>
+                    <th>Actions Formateur</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (empty($allCourseDiscussions)): ?>
+                    <tr><td colspan="6">Aucune question publiée pour le moment sur cette formation.</td></tr>
+                <?php else: ?>
+                    <?php foreach ($allCourseDiscussions as $disc):
+                        $dItemId = (string)($disc['item_id'] ?? '');
+                        $dMsgId = (string)($disc['id'] ?? '');
+                        $dIsLab = str_starts_with($dItemId, 'lab_');
+                        $dTargetPage = $dIsLab ? 'lab' : 'module';
+                        $dResolved = !empty($disc['resolved']);
+                    ?>
+                        <tr>
+                            <td class="tabular-nums"><code><?= Security::e(substr((string)($disc['created_at'] ?? ''), 0, 16)) ?></code></td>
+                            <td>
+                                <a href="index.php?page=<?= $dTargetPage ?>&id=<?= urlencode($dItemId) ?>&course=<?= urlencode($currentCourseSlug) ?>#discussion-section" class="badge-code">
+                                    <?= $dIsLab ? '🧪 ' : '📖 ' ?><?= Security::e($dItemId) ?>
+                                </a>
+                            </td>
+                            <td>
+                                <strong><?= Security::e((string)($disc['user_name'] ?? 'Apprenant')) ?></strong>
+                                <span class="role-badge role-<?= Security::e((string)($disc['user_role'] ?? 'student')) ?>"><?= Security::e((string)($disc['user_role'] ?? 'student')) ?></span>
+                            </td>
+                            <td style="max-width: 440px; white-space: pre-line; font-size: 0.85rem;"><?= Security::e((string)($disc['message'] ?? '')) ?></td>
+                            <td>
+                                <?= $dResolved
+                                    ? '<span class="badge-completed">✔ Résolu</span>'
+                                    : '<span class="badge-phase">⏳ Ouvert</span>' ?>
+                            </td>
+                            <td>
+                                <form method="POST" action="index.php?page=admin&tab=qna&action=moderate_discussion&course=<?= urlencode($currentCourseSlug) ?>" style="display: inline-flex; gap: 0.35rem;">
+                                    <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
+                                    <input type="hidden" name="item_id" value="<?= Security::e($dItemId) ?>"/>
+                                    <input type="hidden" name="message_id" value="<?= Security::e($dMsgId) ?>"/>
+                                    <input type="hidden" name="return_page" value="admin"/>
+                                    <button type="submit" name="mod_action" value="resolve" class="btn btn-emerald btn-sm">
+                                        <?= $dResolved ? '↩ Rouvrir' : '✔ Résolu' ?>
+                                    </button>
+                                    <button type="submit" name="mod_action" value="delete" class="btn btn-danger btn-sm">
+                                        🗑️
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
     </div>
 
 <?php elseif ($adminTab === 'docker'): ?>

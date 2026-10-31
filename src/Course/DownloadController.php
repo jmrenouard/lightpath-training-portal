@@ -29,6 +29,9 @@ class DownloadController
         'jpg' => 'image/jpeg',
         'jpeg' => 'image/jpeg',
         'svg' => 'image/svg+xml',
+        'mp4' => 'video/mp4',
+        'vtt' => 'text/vtt; charset=UTF-8',
+        'zip' => 'application/zip',
     ];
 
     public function __construct(CourseRepository $repo)
@@ -48,6 +51,7 @@ class DownloadController
             'cheatsheet' => $this->repo->getCheatsheet($courseSlug, $itemId),
             'referentiel' => $this->repo->getReferentielDoc($courseSlug, $itemId),
             'tool' => $this->repo->getToolDoc($courseSlug, $itemId),
+            'example' => $this->repo->getExampleDoc($courseSlug, $itemId),
             default => null,
         };
 
@@ -55,7 +59,7 @@ class DownloadController
             return null;
         }
 
-        if ($itemType === 'tool') {
+        if ($itemType === 'tool' || $itemType === 'example') {
             $path = (string)($item['path'] ?? '');
             if ($path === '' || !is_file($path)) {
                 return null;
@@ -169,8 +173,180 @@ class DownloadController
             }
         }
 
+        if (($fileInfo['mime'] ?? '') === 'video/mp4') {
+            header('Accept-Ranges: bytes');
+            $size = (int)$fileInfo['size'];
+            $rangeHeader = $_SERVER['HTTP_RANGE'] ?? '';
+            if ($rangeHeader !== '' && preg_match('/bytes=(\d+)-(\d*)/i', (string)$rangeHeader, $m)) {
+                $start = (int)$m[1];
+                $end = ($m[2] !== '') ? min($size - 1, (int)$m[2]) : ($size - 1);
+                if ($start <= $end && $start < $size) {
+                    $length = $end - $start + 1;
+                    header('HTTP/1.1 206 Partial Content');
+                    header("Content-Range: bytes {$start}-{$end}/{$size}");
+                    header('Content-Length: ' . $length);
+                    $fp = fopen($fileInfo['path'], 'rb');
+                    if ($fp !== false) {
+                        fseek($fp, $start);
+                        echo fread($fp, $length);
+                        fclose($fp);
+                    }
+                    exit;
+                }
+            }
+        }
+
         header('Content-Length: ' . $fileInfo['size']);
         readfile($fileInfo['path']);
         exit;
+    }
+
+    /**
+     * Génère un package d'archive SCORM 1.2 complet (.zip) autonome contenant :
+     * - imsmanifest.xml (conforme ADL SCORM 1.2)
+     * - index_scorm.html (lanceur SCO interactif)
+     * - scorm_api.js (adaptateur API SCORM 1.2 LMSInitialize / LMSSetValue / LMSFinish)
+     * - README_SCORM.md (documentation d'intégration LMS tiers : Moodle, Cornerstone, 360Learning)
+     */
+    public function buildScorm12ZipPackage(string $courseSlug, array $course): ?string
+    {
+        $itemsXml = '';
+        $resXml = '';
+        $modListHtml = '';
+        foreach (($course['modules'] ?? []) as $mId => $mod) {
+            $safeId = Security::e($mId);
+            $safeTitle = Security::e(($mod['badge_code'] ?? '') . ' — ' . ($mod['title'] ?? $mId));
+            $itemsXml .= "      <item identifier=\"ITEM_{$safeId}\" identifierref=\"RES_{$safeId}\"><title>{$safeTitle}</title></item>\n";
+            $resXml .= "    <resource identifier=\"RES_{$safeId}\" type=\"webcontent\" adlcp:scormtype=\"sco\" href=\"index_scorm.html?module={$safeId}\">\n      <file href=\"index_scorm.html\"/>\n      <file href=\"scorm_api.js\"/>\n    </resource>\n";
+            $modListHtml .= "<li><strong>{$safeTitle}</strong> — " . Security::e((string)($mod['bloom'] ?? '')) . "</li>\n";
+        }
+
+        $courseTitle = Security::e((string)($course['title'] ?? 'PostgreSQL 18'));
+        $manifest = <<<XML
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest identifier="LP_PG18_SCORM12" version="1.2"
+          xmlns="http://www.imsproject.org/xsd/imscp_rootv1p1p2"
+          xmlns:adlcp="http://www.adlnet.org/xsd/adlcp_rootv1p2">
+  <metadata>
+    <schema>ADL SCORM</schema>
+    <schemaversion>1.2</schemaversion>
+  </metadata>
+  <organizations default="LIGHTPATH_ORG">
+    <organization identifier="LIGHTPATH_ORG">
+      <title>{$courseTitle}</title>
+{$itemsXml}    </organization>
+  </organizations>
+  <resources>
+{$resXml}  </resources>
+</manifest>
+XML;
+
+        $scormJs = <<<'JS'
+(function () {
+    function findAPI(win) {
+        var tries = 0;
+        while ((win.API == null) && (win.parent != null) && (win.parent != win)) {
+            tries++;
+            if (tries > 10) return null;
+            win = win.parent;
+        }
+        return win.API || null;
+    }
+    var api = findAPI(window) || (window.opener ? findAPI(window.opener) : null);
+    window.LightPathScorm = {
+        init: function () {
+            if (api && typeof api.LMSInitialize === 'function') {
+                api.LMSInitialize('');
+                api.LMSSetValue('cmi.core.lesson_status', 'incomplete');
+                api.LMSCommit('');
+            }
+        },
+        complete: function (score) {
+            if (api && typeof api.LMSSetValue === 'function') {
+                api.LMSSetValue('cmi.core.score.raw', String(score || 100));
+                api.LMSSetValue('cmi.core.lesson_status', 'completed');
+                api.LMSCommit('');
+                api.LMSFinish('');
+            }
+            var st = document.getElementById('scorm-status');
+            if (st) st.textContent = 'Statut SCORM 1.2 synchronisé : COMPLETED (100%)';
+        }
+    };
+    window.addEventListener('DOMContentLoaded', function () { window.LightPathScorm.init(); });
+})();
+JS;
+
+        $indexHtml = <<<HTML
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<title>{$courseTitle} — Lanceur SCORM 1.2 LightPath SARL</title>
+<script src="scorm_api.js"></script>
+<style>
+body{font-family:system-ui,-apple-system,sans-serif;background:#0B1120;color:#F8FAFC;margin:0;padding:2rem;line-height:1.6;}
+.card{max-width:900px;margin:0 auto;background:#0F172A;border:1px solid #1E293B;border-radius:12px;padding:2rem;}
+.badge{display:inline-block;background:rgba(0,176,240,0.15);color:#38BDF8;padding:0.25rem 0.65rem;border-radius:6px;font-size:0.8rem;font-weight:700;}
+.btn{background:#00B0F0;color:#0B1120;border:none;padding:0.65rem 1.25rem;border-radius:8px;font-weight:700;cursor:pointer;}
+</style>
+</head>
+<body>
+<div class="card">
+  <span class="badge">PACKAGE SCORM 1.2 CERTIFIÉ QUALIOPI • LIGHTPATH SARL</span>
+  <h1>{$courseTitle}</h1>
+  <p>Formateur Référent : <strong>Jean-Marie Renouard</strong> (LightPath SARL — contact@lightpath.fr)</p>
+  <p id="scorm-status">Statut SCORM 1.2 : Initialisé (en cours)</p>
+  <button type="button" class="btn" onclick="window.LightPathScorm.complete(100)">✔ Valider la Complétion SCORM 1.2</button>
+  <h2>Modules du Cursus (34 SCOs)</h2>
+  <ul>{$modListHtml}</ul>
+</div>
+</body>
+</html>
+HTML;
+
+        $readmeMd = "# Package SCORM 1.2 — {$courseTitle}\n\n"
+            . "- **Organisme** : LightPath SARL (Certifié Qualiopi)\n"
+            . "- **Formateur** : Jean-Marie Renouard (`contact@lightpath.fr`)\n"
+            . "- **Standard** : ADL SCORM 1.2 (`imsmanifest.xml` + API Wrapper `scorm_api.js`)\n"
+            . "- **Nombre de modules (SCO)** : " . count($course['modules'] ?? []) . "\n";
+
+        $files = [
+            'imsmanifest.xml' => $manifest,
+            'index_scorm.html' => $indexHtml,
+            'scorm_api.js' => $scormJs,
+            'README_SCORM.md' => $readmeMd,
+        ];
+
+        $zipPath = sys_get_temp_dir() . '/scorm12_' . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $courseSlug) . '_' . getmypid() . '.zip';
+        if (class_exists(\ZipArchive::class)) {
+            $zip = new \ZipArchive();
+            if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
+                foreach ($files as $name => $content) {
+                    $zip->addFromString($name, $content);
+                }
+                $zip->close();
+                return $zipPath;
+            }
+        }
+
+        // Fallback ZIP pur PHP (format PKZIP Store standard sans compression) si l'extension php_zip est absente
+        $localParts = [];
+        $centralParts = [];
+        $offset = 0;
+        foreach ($files as $name => $data) {
+            $len = strlen($data);
+            $crc = crc32($data);
+            $nameLen = strlen($name);
+            $localHeader = pack('VvvvvvVVVvv', 0x04034b50, 20, 0, 0, 0, 0, $crc, $len, $len, $nameLen, 0) . $name;
+            $localEntry = $localHeader . $data;
+            $localParts[] = $localEntry;
+            $centralParts[] = pack('VvvvvvvVVVvvvvvVV', 0x02014b50, 20, 20, 0, 0, 0, 0, $crc, $len, $len, $nameLen, 0, 0, 0, 0, 32, $offset) . $name;
+            $offset += strlen($localEntry);
+        }
+        $centralDir = implode('', $centralParts);
+        $count = count($files);
+        $eocd = pack('VvvvvVVv', 0x06054b50, 0, 0, $count, $count, strlen($centralDir), $offset, 0);
+        file_put_contents($zipPath, implode('', $localParts) . $centralDir . $eocd);
+        return is_file($zipPath) ? $zipPath : null;
     }
 }

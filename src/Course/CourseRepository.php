@@ -65,6 +65,7 @@ class CourseRepository
         $cheatsheets = $this->discoverCheatsheets($root);
         $referentiel = $this->discoverReferentiel($root);
         $tools = $this->discoverTools($pgScriptsRoot);
+        $examples = $this->discoverExamples($root);
 
         // Lier chaque module à son Lab et sa Cheatsheet correspondants + propager le parcours au Lab
         foreach ($modules as $modId => &$mod) {
@@ -118,12 +119,14 @@ class CourseRepository
             'cheatsheets' => $cheatsheets,
             'referentiel' => $referentiel,
             'tools' => $tools,
+            'examples' => $examples,
             'stats' => [
                 'modules_count' => count($modules),
                 'labs_count' => count($labs),
                 'cheatsheets_count' => count($cheatsheets),
                 'referentiel_count' => count($referentiel),
                 'tools_count' => count($tools),
+                'examples_count' => count($examples),
             ],
         ];
 
@@ -143,12 +146,14 @@ class CourseRepository
         $dirs = [
             $root . '/03_supports_de_cours',
             $root . '/04_ateliers_et_tp',
+            $root . '/04_ateliers_et_tp/pgexamples',
             $root . '/05_cheatsheets/modules',
             $root . '/05_cheatsheets/labs',
             $root . '/01_programme_et_referentiel',
+            $root . '/video_engine/output',
             $pgScriptsRoot,
         ];
-        $parts = ['v6_rca158', md5(json_encode($tracks) ?: '')];
+        $parts = ['v7_rca163', md5(json_encode($tracks) ?: '')];
         foreach ($dirs as $d) {
             $parts[] = is_dir($d) ? (string)@filemtime($d) : '0';
         }
@@ -183,6 +188,12 @@ class CourseRepository
     {
         $course = $this->getCourse($courseSlug);
         return $course['tools'][$toolId] ?? null;
+    }
+
+    public function getExampleDoc(string $courseSlug, string $exampleId): ?array
+    {
+        $course = $this->getCourse($courseSlug);
+        return $course['examples'][$exampleId] ?? null;
     }
 
     /**
@@ -267,7 +278,67 @@ class CourseRepository
             }
         }
 
+        foreach ($course['referentiel'] ?? [] as $docId => $doc) {
+            $haystack = ($doc['title'] ?? '') . ' ' . ($doc['summary'] ?? '') . ' ' . ($doc['category'] ?? '') . ' ' . $docId;
+            $haystackLower = function_exists('mb_strtolower') ? mb_strtolower($haystack, 'UTF-8') : strtolower($haystack);
+            if (str_contains($haystackLower, $needle)) {
+                $results[] = [
+                    'type' => 'referentiel',
+                    'badge' => strtoupper((string)($doc['category'] ?? 'QUALIOPI')),
+                    'id' => $docId,
+                    'title' => $doc['title'],
+                    'snippet' => (string)($doc['summary'] ?? ''),
+                    'url' => '?page=documents&tab=referentiel&course=' . urlencode($courseSlug) . '&id=' . urlencode($docId),
+                ];
+            }
+        }
+
+        foreach ($course['tools'] ?? [] as $toolId => $tool) {
+            $haystack = ($tool['filename'] ?? '') . ' ' . ($tool['category'] ?? '') . ' ' . ($tool['language'] ?? '') . ' ' . $toolId;
+            $haystackLower = function_exists('mb_strtolower') ? mb_strtolower($haystack, 'UTF-8') : strtolower($haystack);
+            if (str_contains($haystackLower, $needle)) {
+                $results[] = [
+                    'type' => 'tool',
+                    'badge' => 'PGSCRIPTS • ' . strtoupper((string)($tool['language'] ?? 'DBA')),
+                    'id' => $toolId,
+                    'title' => (string)($tool['filename'] ?? $toolId),
+                    'snippet' => (string)($tool['category'] ?? 'Outil DBA de production'),
+                    'url' => '?page=documents&tab=tools&course=' . urlencode($courseSlug) . '&id=' . urlencode($toolId),
+                ];
+            }
+        }
+
+        foreach ($course['examples'] ?? [] as $exId => $ex) {
+            $haystack = ($ex['filename'] ?? '') . ' ' . ($ex['category'] ?? '') . ' ' . ($ex['language'] ?? '') . ' ' . $exId;
+            $haystackLower = function_exists('mb_strtolower') ? mb_strtolower($haystack, 'UTF-8') : strtolower($haystack);
+            if (str_contains($haystackLower, $needle)) {
+                $results[] = [
+                    'type' => 'example',
+                    'badge' => 'PGEXAMPLES • ' . strtoupper((string)($ex['language'] ?? 'CODE')),
+                    'id' => $exId,
+                    'title' => (string)($ex['filename'] ?? $exId),
+                    'snippet' => (string)($ex['category'] ?? 'Exemple de code compagnon'),
+                    'url' => '?page=documents&tab=examples&course=' . urlencode($courseSlug) . '&id=' . urlencode($exId),
+                ];
+            }
+        }
+
         if (class_exists(LmsCatalog::class)) {
+            foreach (LmsCatalog::getFlashcards() as $fc) {
+                $haystack = ($fc['front'] ?? '') . ' ' . ($fc['back'] ?? '') . ' ' . ($fc['category'] ?? '') . ' ' . ($fc['module'] ?? '');
+                $haystackLower = function_exists('mb_strtolower') ? mb_strtolower($haystack, 'UTF-8') : strtolower($haystack);
+                if (str_contains($haystackLower, $needle)) {
+                    $results[] = [
+                        'type' => 'flashcard',
+                        'badge' => 'FLASHCARD SRS • ' . ($fc['module'] ?? 'DBA'),
+                        'id' => $fc['id'],
+                        'title' => $fc['front'],
+                        'snippet' => $fc['back'],
+                        'url' => '?page=flashcards&course=' . urlencode($courseSlug) . '&q=' . urlencode($q),
+                    ];
+                }
+            }
+
             foreach (LmsCatalog::getGlossary() as $g) {
                 $haystack = ($g['term'] ?? '') . ' ' . ($g['category'] ?? '') . ' ' . ($g['definition'] ?? '');
                 $haystackLower = function_exists('mb_strtolower') ? mb_strtolower($haystack, 'UTF-8') : strtolower($haystack);
@@ -364,6 +435,27 @@ class CourseRepository
                 'docx' => ['ext' => '.docx', 'label' => 'Word DOCX'],
             ]);
 
+            $videoDir = $root . '/video_engine/output';
+            $videoFiles = [
+                'video_mp4' => ['path' => $videoDir . '/' . $baseName . '_cours_interactif.mp4', 'label' => 'Vidéo Cours MP4'],
+                'video_slides_mp4' => ['path' => $videoDir . '/presentation/' . $baseName . '_cours_interactif.mp4', 'label' => 'Vidéo Slides MP4'],
+                'video_vtt' => ['path' => $videoDir . '/' . $baseName . '_cours_interactif.vtt', 'label' => 'Sous-titres WebVTT'],
+                'video_transcript' => ['path' => $videoDir . '/' . $baseName . '_transcript.md', 'label' => 'Transcription MD'],
+            ];
+            foreach ($videoFiles as $vKey => $vSpec) {
+                if (is_file($vSpec['path'])) {
+                    $sz = (int)@filesize($vSpec['path']);
+                    $downloads[$vKey] = [
+                        'format' => $vKey,
+                        'label' => $vSpec['label'],
+                        'filename' => basename($vSpec['path']),
+                        'path' => $vSpec['path'],
+                        'size_bytes' => $sz,
+                        'size_formatted' => self::formatBytes($sz),
+                    ];
+                }
+            }
+
             $modules[$baseName] = [
                 'id' => $baseName,
                 'code' => $code,
@@ -383,6 +475,8 @@ class CourseRepository
                 'track_total' => $trackTotal,
                 'source_md_path' => $mdPath,
                 'source_html_path' => is_file($dir . '/' . $baseName . '.html') ? ($dir . '/' . $baseName . '.html') : null,
+                'has_video' => isset($downloads['video_mp4']),
+                'video_transcript_path' => $downloads['video_transcript']['path'] ?? null,
                 'downloads' => $downloads,
                 'linked_lab_id' => null,
                 'linked_lab_title' => null,
@@ -591,26 +685,92 @@ class CourseRepository
         $tools = [];
         $files = array_merge(
             glob($pgScriptsRoot . '/pg_*.py') ?: [],
+            glob($pgScriptsRoot . '/python/pg_*.py') ?: [],
+            glob($pgScriptsRoot . '/bash/pg_*.sh') ?: [],
             glob($pgScriptsRoot . '/sql/*.sql') ?: []
         );
         natsort($files);
 
         foreach ($files as $filePath) {
             $fileName = basename($filePath);
-            $ext = pathinfo($filePath, PATHINFO_EXTENSION);
+            $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
             $id = pathinfo($filePath, PATHINFO_FILENAME) . '_' . $ext;
+            $lang = match ($ext) {
+                'py' => 'Python 3',
+                'sh' => 'Bash Linux',
+                default => 'SQL',
+            };
+            $cat = match ($ext) {
+                'py' => 'Script Python DBA',
+                'sh' => 'Script Bash Exploitation',
+                default => 'Diagnostic SQL Expert',
+            };
 
             $tools[$id] = [
                 'id' => $id,
                 'filename' => $fileName,
-                'language' => $ext === 'py' ? 'Python 3' : 'SQL',
-                'category' => $ext === 'py' ? 'Script Python DBA' : 'Diagnostic SQL Expert',
+                'language' => $lang,
+                'category' => $cat,
                 'path' => $filePath,
                 'size_formatted' => self::formatBytes((int)@filesize($filePath)),
             ];
         }
 
         return $tools;
+    }
+
+    private function discoverExamples(string $root): array
+    {
+        $exDir = $root . '/04_ateliers_et_tp/pgexamples';
+        if (!is_dir($exDir)) {
+            return [];
+        }
+
+        $examples = [];
+        $files = array_merge(
+            glob($exDir . '/python/*.py') ?: [],
+            glob($exDir . '/golang/*.go') ?: [],
+            glob($exDir . '/php/*.php') ?: [],
+            glob($exDir . '/sql/*.sql') ?: [],
+            glob($exDir . '/README*.md') ?: []
+        );
+        natsort($files);
+
+        foreach ($files as $filePath) {
+            $fileName = basename($filePath);
+            if ($fileName === '__init__.py') {
+                continue;
+            }
+            $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+            $subFolder = basename(dirname($filePath));
+            $id = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $subFolder . '_' . pathinfo($filePath, PATHINFO_FILENAME) . '_' . $ext);
+
+            $lang = match ($ext) {
+                'py' => 'Python 3 (psycopg3)',
+                'go' => 'Go (pgx/v5)',
+                'php' => 'PHP 8.4 (PDO)',
+                'sql' => 'SQL Schéma',
+                default => 'Documentation Markdown',
+            };
+            $cat = match ($ext) {
+                'py' => 'Module 15 • Connecteur Python psycopg3',
+                'go' => 'Module 17 • Microservices Golang pgx/v5',
+                'php' => 'Module 16 • Applications Web PHP PDO',
+                'sql' => 'Schéma & Données Exemples',
+                default => 'Guide Exemples Multi-Langages',
+            };
+
+            $examples[$id] = [
+                'id' => $id,
+                'filename' => $fileName,
+                'language' => $lang,
+                'category' => $cat,
+                'path' => $filePath,
+                'size_formatted' => self::formatBytes((int)@filesize($filePath)),
+            ];
+        }
+
+        return $examples;
     }
 
     private function extractItemCode(string $baseName, string $prefix): string

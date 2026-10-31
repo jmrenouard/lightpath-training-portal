@@ -7,8 +7,10 @@ use LightPath\LMS\Course\LmsCatalog;
 $questions = LmsCatalog::getFinalExamQuestions();
 $bestExam = $storage->getBestExamAttempt($userId, $currentCourseSlug);
 $allAttempts = $storage->getExamAttempts($userId, $currentCourseSlug);
-$latestAttempt = !empty($allAttempts) ? end($allAttempts) : null;
+$latestAttempt = !empty($allAttempts) ? $allAttempts[0] : null;
 $showRetake = isset($_GET['retake']) && $_GET['retake'] === '1';
+$classroomState = $storage->getClassroomState($currentCourseSlug);
+$isExamLockedForStudent = !empty($classroomState['lock_exam']) && (($currentUser['role'] ?? 'student') === 'student');
 ?>
 
 <div class="hero-banner" style="padding: 1.5rem 2rem;">
@@ -24,9 +26,15 @@ $showRetake = isset($_GET['retake']) && $_GET['retake'] === '1';
     </div>
 
     <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem;">
-        <div id="exam-timer-pill" class="badge-code tabular-nums" style="font-size: 0.95rem; padding: 0.45rem 0.9rem;">
-            ⏱ Chronomètre : <span id="exam-timer-display">00:00</span>
-        </div>
+        <?php if (!$isExamLockedForStudent): ?>
+            <div id="exam-timer-pill" class="badge-code tabular-nums" style="font-size: 0.95rem; padding: 0.45rem 0.9rem;">
+                ⏱ Chronomètre : <span id="exam-timer-display">00:00</span>
+            </div>
+        <?php else: ?>
+            <span class="badge-code" style="background: rgba(245, 158, 11, 0.15); color: #FBBF24; border-color: rgba(245, 158, 11, 0.35);">
+                🔒 Session verrouillée par le formateur
+            </span>
+        <?php endif; ?>
         <?php if ($bestExam !== null): ?>
             <a href="index.php?page=certificate&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald btn-sm">
                 🎓 Voir mon Certificat Officiel
@@ -75,9 +83,11 @@ $showRetake = isset($_GET['retake']) && $_GET['retake'] === '1';
         </div>
 
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
-            <a href="index.php?page=exam&retake=1&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline">
-                🔄 Nouvelle Tentative d'Examen
-            </a>
+            <?php if (!$isExamLockedForStudent): ?>
+                <a href="index.php?page=exam&retake=1&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline">
+                    🔄 Nouvelle Tentative d'Examen
+                </a>
+            <?php endif; ?>
             <a href="index.php?page=certificate&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald">
                 🎓 Ouvrir & Imprimer mon Certificat Qualiopi →
             </a>
@@ -85,6 +95,25 @@ $showRetake = isset($_GET['retake']) && $_GET['retake'] === '1';
     </div>
 <?php endif; ?>
 
+<?php if ($isExamLockedForStudent): ?>
+    <div class="lms-card" style="border-color: #F59E0B; text-align: center; padding: 2.25rem 1.5rem;">
+        <div style="font-size: 2.4rem; margin-bottom: 0.5rem;">🔒</div>
+        <h2 style="font-size: 1.3rem; margin-bottom: 0.45rem;">
+            🔒 L'examen final est temporairement verrouillé par le formateur jusqu'à la session d'évaluation officielle
+        </h2>
+        <p style="color: var(--text-secondary); max-width: 640px; margin: 0 auto 1.25rem; font-size: 0.9rem;">
+            Conformément au protocole d'évaluation sommative Qualiopi (Indicateur 11), le formateur déverrouille l'épreuve certifiante de 40 QCM lors de la séquence d'examen. En attendant, vous pouvez consolider vos acquis avec les flashcards SRS et les ateliers Docker.
+        </p>
+        <div style="display: flex; justify-content: center; gap: 0.65rem; flex-wrap: wrap;">
+            <a href="index.php?page=flashcards&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-primary btn-sm">
+                🧠 Réviser avec les Flashcards SRS
+            </a>
+            <a href="index.php?page=catalog&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">
+                📚 Retourner au Catalogue des Modules
+            </a>
+        </div>
+    </div>
+<?php else: ?>
 <form id="final-exam-form" method="POST" action="index.php?page=exam&action=submit_exam&course=<?= urlencode($currentCourseSlug) ?>" class="lms-card">
     <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
     <input type="hidden" name="duration_seconds" id="exam-duration-seconds" value="0"/>
@@ -144,3 +173,4 @@ $showRetake = isset($_GET['retake']) && $_GET['retake'] === '1';
     }, 1000);
 })();
 </script>
+<?php endif; ?>

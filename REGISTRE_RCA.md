@@ -635,6 +635,40 @@ Valide avec php tests/run_tests.php.
 ```
 * **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-31
 
+---
+
+## Fiche d'Incident RCA-163 (`RCA-LMS-33`) : Audit `/ponytail-audit` de la Plateforme LMS (7 Correctifs) & Implémentation des 12 Fonctionnalités LMS Entreprise & Qualiopi (Axes A–D)
+
+* **Date de détection :** 2026-10-31
+* **Issues GitHub associées :** `lightpath-training-portal#23`, `training_postgresql#100`
+* **Composant Affecté :** `src/Core/{Security,StorageInterface,JsonStorage,PdoStorage}.php`, `src/Course/{CourseRepository,DownloadController}.php`, `src/Docker/{DockerManager,LabSqlRunner}.php`, `public/index.php`, `public/assets/js/app.js`, `templates/layout.php`, `templates/pages/{module_view,lab_view,documents,flashcards,attendance,satisfaction,exam,certificate,verify,notes,dashboard,admin}.php`, `tests/run_tests.php`
+* **1. Mécanisme :**
+  L'audit `/ponytail-audit` de la plateforme LMS (`lightpath-training-portal`) a identifié **7 correctifs** (4 Must-Fix, 3 Should-Fix/Nice-to-Have) et **12 fonctionnalités LMS Entreprise & Qualiopi manquantes** réparties sur 4 axes (A à D) :
+  1) **7 Correctifs de l'audit `/ponytail-audit` :**
+     - *Audit #1 (Must-Fix) :* `Security::isValidHalfDayKey()` rejetait `J6_AM..J11_PM`, bloquant l'émargement de la Semaine 2 des cursus de 10 jours (70h).
+     - *Audit #2 (Must-Fix) :* `templates/pages/flashcards.php` lisait `$userProgress['flashcards']` au lieu de `$userProgress['flashcard_confidence']` (alimenté par `saveFlashcardConfidence()`), et `layout.php` / `dashboard.php` affichaient un compteur figé à `42` au lieu des `53` cartes SRS.
+     - *Audit #3 (Must-Fix) :* `templates/pages/exam.php` appelait `end($allAttempts)` alors que `JsonStorage::saveExamAttempt()` insère la tentative la plus récente en tête (`$allAttempts[0]`) via `array_unshift`.
+     - *Audit #4 (Must-Fix) :* `api_submit_quiz` dans `public/index.php` enregistrait le score client sans recalculer le score côté serveur à partir de `MarkdownParser::parseModuleFile()['quiz']` lorsque `answers` est fourni.
+     - *Audit #5 (Should-Fix) :* `DockerManager::writeStatusCache()` écrivait `docker_status_cache.json` sans fichier temporaire `.tmp` ni `LOCK_EX` + `rename()`.
+     - *Audit #6 (Should-Fix) :* `CourseRepository::searchContent()` (`Ctrl+K`) n'indexait ni `referentiel` (19 documents Qualiopi), ni `tools` (`pgscripts`), ni `examples` (`pgexamples`), ni `flashcards` (53 cartes SRS).
+     - *Audit #7 (Should-Fix) :* Branche morte `$page === 'docker'` dans `public/index.php`, duplication de `#discussion-section` entre `module_view.php` et `lab_view.php`, et absence du badge `$fc['module']` sur les cartes SRS.
+  2) **12 Fonctionnalités LMS Entreprise & Qualiopi (Axes A–D) :**
+     - *Axe A (Médiathèque Vidéo, Code Polyglotte & SRS) :* Lecteur vidéo HTML5 Studio 1080p (`?mode=video` dans `module_view.php`) avec streaming HTTP `206 Partial Content` (`DownloadController`), sous-titres WebVTT `.vtt` et transcription Markdown interactive ; explorateur de code compagnon multi-langages (`04_ateliers_et_tp/pgexamples/` : Python `psycopg3`, Go `pgx/v5`, PHP `PDO`, SQL) dans `documents.php` (`?page=documents&tab=examples`) ; filtres par module/niveau et Mode Focus carte-par-carte dans `flashcards.php`.
+     - *Axe B (Conformité Qualiopi Indicateurs 11, 12, 30 & 32) :* Filtre de feuille d'émargement par parcours (3j/5j/10j), contre-signature électronique formateur (`signTrainerAttendance`) et bouton d'impression OPCO dans `attendance.php` ; questionnaire d'évaluation « À Froid (J+60 Impact Métier) » (`saveColdSatisfactionSurvey`, `?page=satisfaction&tab=cold`) ; portail de vérification d'authenticité des certificats (`?page=verify&code=LP-PG18-CERT-...`, `findCertificateByCode`) et QR Code SVG vectoriel 100 % hors-ligne (`Security::renderVerificationQrSvg`) dans `certificate.php`.
+     - *Axe C (Workbench SQL & Carnet de Notes) :* Explorateur de schéma relationnel en 1 clic (`🗂️ Schéma des Tables`, `LabSqlRunner::inspectDatabaseSchema`), bouton `📊 EXPLAIN ANALYZE` 1-clic et historique SQL persistant dans `lab_view.php` ; carnet de notes centralisé (`?page=notes` dans `templates/pages/notes.php`) avec recherche, édition en ligne et export Markdown ; indices pédagogiques progressifs (`💡 Indice & Piste de Diagnostic DBA`, `LabSqlRunner::extractLabHint`) dans `lab_view.php`.
+     - *Axe D (Pilotage Salle de Classe Live & Interopérabilité) :* Bannière d'annonce temps réel salle de classe et verrouillage pédagogique formateur des corrigés de labs (`lock_solutions`) et de l'examen final (`lock_exam`) (`getClassroomState` / `saveClassroomState`) ; modération formateur du forum Q&A (`resolveDiscussionMessage`, `deleteDiscussionMessage`, `getAllCourseDiscussions` + onglet `💬 Questions Q&A` dans `admin.php`) ; import CSV de cohorte en masse (`importUsersFromCsv`) et export de package `.zip` SCORM 1.2 complet (`DownloadController::buildScorm12ZipPackage`).
+* **2. Hypothèse :**
+  Implémenter les 7 correctifs `/ponytail-audit` et les 12 fonctionnalités des Axes A à D via la session `/dev-team` (`PM`, `Architect`, `Developer`, `QA`), en préservant la parité `StorageInterface` / `JsonStorage` / `PdoStorage` et le zéro dépendance CDN.
+* **3. Contre-mesure :**
+  Implémentation complète sur l'ensemble des contrôleurs, services et templates, et ajout de la Section 16 de tests TDD dans `tests/run_tests.php` (`298 / 298` assertions passées).
+* **4. Prompt LLM :**
+  ```text
+  Contexte : dépôt lightpath-training-portal. Lis RCA-163 (RCA-LMS-33) dans REGISTRE_RCA.md.
+  Tâche : Vérifier les 7 correctifs /ponytail-audit et les 12 fonctionnalités Entreprise/Qualiopi (Axes A à D) : émargement J1_AM..J11_PM + contre-signature formateur, persistance SRS flashcard_confidence + filtres/Mode Focus, sélection $allAttempts[0] dans exam.php, validation serveur QCM dans api_submit_quiz, cache atomique DockerManager, recherche plein-texte étendue (referentiel, tools, examples, flashcards), lecteur vidéo MP4 Range 206 + VTT + transcript, explorateur pgexamples, évaluation à froid J+60, vérification certificat + QR SVG offline, explorateur de schéma SQL + EXPLAIN + historique + indices progressifs, carnet de notes ?page=notes, pilotage salle live + verrous, modération Q&A, import CSV cohortes et export ZIP SCORM 1.2. Valide avec php tests/run_tests.php (298 assertions attendues).
+  ```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-31
+
+
 
 
 

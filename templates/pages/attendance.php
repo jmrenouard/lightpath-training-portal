@@ -6,8 +6,35 @@ use LightPath\LMS\Core\Gamification;
 
 $userAttendance = $storage->getUserAttendance($userId, $currentCourseSlug);
 $learningSeconds = (int)($userProgress['learning_seconds'] ?? 0);
-$signedHalfDaysCount = count($userAttendance);
-$loggedHours = $signedHalfDaysCount * 3.5;
+$selectedTrack = (string)($_GET['track'] ?? 'cursus-complet');
+$isStaffUser = in_array($currentUser['role'] ?? '', ['trainer', 'admin'], true);
+
+$attendanceTracks = [
+    'cursus-complet' => [
+        'label' => 'Cursus Complet : 10 jours / 20 demi-journées (70h) — Jours 1 à 10',
+        'days' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        'half_days' => 20,
+    ],
+    'parcours-1-initial-dba' => [
+        'label' => 'Parcours 1 Initial DBA : 3 jours / 6 demi-journées (21h) — Jours 1 à 3',
+        'days' => [1, 2, 3],
+        'half_days' => 6,
+    ],
+    'parcours-2-administration-production' => [
+        'label' => 'Parcours 2 Administration Production : 5 jours / 10 demi-journées (35h) — Jours 1 à 5',
+        'days' => [1, 2, 3, 4, 5],
+        'half_days' => 10,
+    ],
+    'parcours-3-performance-tuning' => [
+        'label' => 'Parcours 3 Performance & Tuning : 3 jours / 6 demi-journées (21h) — Jours 6 à 8',
+        'days' => [6, 7, 8],
+        'half_days' => 6,
+    ],
+];
+if (!isset($attendanceTracks[$selectedTrack])) {
+    $selectedTrack = 'cursus-complet';
+}
+$activeTrackSpec = $attendanceTracks[$selectedTrack];
 
 $halfDaySchedule = [
     1 => ['title' => 'Jour 1 — Architecture Interne, Installation & Stockage (M01–M02)', 'mod_focus' => 'M01, M02, Labs 01–02'],
@@ -21,13 +48,16 @@ $halfDaySchedule = [
     9 => ['title' => 'Jour 9 — pgBackRest Industriel & Tuning Kernel Linux (M19–M20)', 'mod_focus' => 'M19, M20, Labs 19–20'],
     10 => ['title' => 'Jour 10 — Architecture Cloud/K8s, Chaos DBA & Certification Finale (M21–M29)', 'mod_focus' => 'M21–M29 + Examen'],
 ];
+
+$signedHalfDaysCount = count($userAttendance);
+$loggedHours = $signedHalfDaysCount * 3.5;
 ?>
 
 <div class="hero-banner" style="padding: 1.5rem 2rem;">
     <div style="flex: 1; min-width: 0;">
         <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.45rem;">
             <span class="badge-code">CONFORMITÉ OPCO / QUALIOPI • TRAÇABILITÉ D'ASSIDUITÉ</span>
-            <span class="badge-phase tabular-nums"><?= $signedHalfDaysCount ?> / 20 demi-journées émargées (<?= number_format($loggedHours, 1, ',', ' ') ?>h)</span>
+            <span class="badge-phase tabular-nums"><?= $signedHalfDaysCount ?> / <?= (int)$activeTrackSpec['half_days'] ?> demi-journées émargées (<?= number_format($loggedHours, 1, ',', ' ') ?>h)</span>
         </div>
         <h1 style="font-size: 1.6rem; margin-bottom: 0.35rem;">✍️ Feuille d'Émargement Numérique & Temps de Connexion</h1>
         <p style="color: var(--text-secondary); margin: 0; font-size: 0.9rem;">
@@ -43,8 +73,35 @@ $halfDaySchedule = [
     </div>
 </div>
 
+<div class="lms-card no-print" style="margin-bottom: 1.25rem; padding: 1rem 1.25rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.85rem;">
+    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <strong style="font-size: 0.86rem;">🧭 Filtrer par Parcours OPCO :</strong>
+        <?php foreach ($attendanceTracks as $tSlug => $tInfo): ?>
+            <a href="index.php?page=attendance&track=<?= urlencode($tSlug) ?>&course=<?= urlencode($currentCourseSlug) ?>"
+               class="btn btn-sm <?= $selectedTrack === $tSlug ? 'btn-primary' : 'btn-outline' ?>">
+                <?= Security::e($tInfo['label']) ?>
+            </a>
+        <?php endforeach; ?>
+    </div>
+    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <?php if ($isStaffUser): ?>
+            <form method="POST" action="index.php?page=attendance&action=sign_trainer_attendance&course=<?= urlencode($currentCourseSlug) ?>" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
+                <input type="hidden" name="target_user_id" value="<?= $userId ?>"/>
+                <input type="hidden" name="half_day_key" value="ALL"/>
+                <button type="submit" class="btn btn-emerald btn-sm">
+                    ✔ Contre-signer toutes les demi-journées émargées
+                </button>
+            </form>
+        <?php endif; ?>
+        <button type="button" onclick="window.print()" class="btn btn-outline-cyan btn-sm">
+            🖨️ Imprimer la Feuille d'Émargement OPCO (PDF)
+        </button>
+    </div>
+</div>
+
 <div class="lms-card">
-    <h2 style="font-size: 1.25rem; margin-bottom: 1rem;">📅 Registre Officiel des 20 Demi-Journées (Cursus 70h / 10 Jours)</h2>
+    <h2 style="font-size: 1.25rem; margin-bottom: 1rem;">📅 Registre Officiel des Demi-Journées — <?= Security::e($activeTrackSpec['label']) ?></h2>
     <div class="lms-table-wrap">
         <table class="lms-table">
             <thead>
@@ -52,14 +109,21 @@ $halfDaySchedule = [
                     <th>Journée & Programme</th>
                     <th>Matin (09h00 – 12h30 • 3h30)</th>
                     <th>Après-Midi (14h00 – 17h30 • 3h30)</th>
+                    <th>Visa & Contre-Signature Formateur</th>
                 </tr>
             </thead>
             <tbody>
                 <?php foreach ($halfDaySchedule as $dayNum => $dayInfo):
+                    if (!in_array($dayNum, $activeTrackSpec['days'], true)) {
+                        continue;
+                    }
                     $keyAm = "J{$dayNum}_AM";
                     $keyPm = "J{$dayNum}_PM";
                     $sigAm = $userAttendance[$keyAm] ?? null;
                     $sigPm = $userAttendance[$keyPm] ?? null;
+                    $trainerSignedAm = !empty($sigAm['trainer_signed_at']);
+                    $trainerSignedPm = !empty($sigPm['trainer_signed_at']);
+                    $trainerName = (string)($sigAm['trainer_name'] ?? $sigPm['trainer_name'] ?? $appConfig['trainer_name'] ?? 'Jean-Marie Renouard');
                 ?>
                     <tr>
                         <td>
@@ -93,6 +157,30 @@ $halfDaySchedule = [
                                     <input type="hidden" name="half_day_key" value="<?= Security::e($keyPm) ?>"/>
                                     <input type="hidden" name="signature_text" value="Lu et approuvé — <?= Security::e($currentUser['name']) ?>"/>
                                     <button type="submit" class="btn btn-emerald btn-sm">✍️ Émarger Après-Midi (J<?= $dayNum ?>)</button>
+                                </form>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php if ($trainerSignedAm || $trainerSignedPm): ?>
+                                <span class="badge-completed">✔ Contre-signé par <?= Security::e($trainerName) ?></span>
+                                <div style="font-size: 0.72rem; color: var(--text-muted);" class="tabular-nums">
+                                    <?= Security::e(substr((string)($sigAm['trainer_signed_at'] ?? $sigPm['trainer_signed_at'] ?? ''), 0, 16)) ?>
+                                </div>
+                            <?php elseif ($sigAm !== null || $sigPm !== null): ?>
+                                <span class="badge-code">⏳ En attente visa formateur</span>
+                            <?php else: ?>
+                                <span style="font-size: 0.78rem; color: var(--text-muted);">—</span>
+                            <?php endif; ?>
+
+                            <?php if ($isStaffUser && ($sigAm !== null || $sigPm !== null) && !($trainerSignedAm && $trainerSignedPm)): ?>
+                                <form method="POST" action="index.php?page=attendance&action=sign_trainer_attendance&course=<?= urlencode($currentCourseSlug) ?>" style="margin-top: 0.35rem;">
+                                    <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
+                                    <input type="hidden" name="target_user_id" value="<?= $userId ?>"/>
+                                    <input type="hidden" name="day_num" value="<?= $dayNum ?>"/>
+                                    <input type="hidden" name="half_day_key" value="<?= $sigAm !== null && !$trainerSignedAm ? Security::e($keyAm) : Security::e($keyPm) ?>"/>
+                                    <button type="submit" class="btn btn-outline-cyan btn-sm" style="font-size: 0.74rem;">
+                                        ✒️ Contre-signer J<?= $dayNum ?>
+                                    </button>
                                 </form>
                             <?php endif; ?>
                         </td>

@@ -7,12 +7,16 @@ $docTab = (string)($_GET['tab'] ?? $defaultDocTab);
 $selectedDocId = trim((string)($_GET['id'] ?? ''));
 $selectedDoc = null;
 $selectedTool = null;
+$selectedExample = null;
 if ($selectedDocId !== '') {
     $selectedDoc = $currentCourse['cheatsheets'][$selectedDocId]
         ?? $currentCourse['referentiel'][$selectedDocId]
         ?? null;
     if ($selectedDoc === null && isset($currentCourse['tools'][$selectedDocId])) {
         $selectedTool = $currentCourse['tools'][$selectedDocId];
+    }
+    if ($selectedDoc === null && $selectedTool === null && isset($currentCourse['examples'][$selectedDocId])) {
+        $selectedExample = $currentCourse['examples'][$selectedDocId];
     }
 }
 ?>
@@ -56,6 +60,35 @@ if ($selectedDocId !== '') {
         <?= $renderedTool['html'] ?>
     </article>
 </div>
+<?php elseif ($selectedExample !== null && !empty($selectedExample['path']) && is_file($selectedExample['path'])):
+    $exExt = strtolower(pathinfo((string)$selectedExample['filename'], PATHINFO_EXTENSION));
+    $exLang = match ($exExt) {
+        'py' => 'python',
+        'go' => 'go',
+        'php' => 'php',
+        'md' => 'markdown',
+        'sql' => 'sql',
+        default => 'text',
+    };
+    $rawExContent = (string)file_get_contents($selectedExample['path']);
+    $exMd = ($exExt === 'md') ? $rawExContent : ("```" . $exLang . "\n" . $rawExContent . "\n```");
+    $renderedExample = $mdParser->renderMarkdown($exMd, $currentCourseSlug, false);
+?>
+<div class="lms-card" style="margin-bottom: 1.75rem; border-color: var(--brand-cyan);">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-hairline);">
+        <div>
+            <span class="badge-code">APERÇU CODE COMPAGNON • <?= Security::e((string)($selectedExample['language'] ?? $selectedExample['category'] ?? 'Exemple')) ?></span>
+            <h2 style="font-size: 1.35rem; margin: 0.35rem 0 0;"><code><?= Security::e((string)$selectedExample['filename']) ?></code></h2>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <a href="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=example&id=<?= urlencode($selectedDocId) ?>&format=raw" class="dl-pill dl-md">⬇ Télécharger <?= Security::e((string)$selectedExample['filename']) ?></a>
+            <a href="index.php?page=documents&tab=examples&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">✕ Fermer l'aperçu</a>
+        </div>
+    </div>
+    <article class="reader-article markdown-body">
+        <?= $renderedExample['html'] ?>
+    </article>
+</div>
 <?php endif; ?>
 
 <div class="hero-banner" style="padding: 1.5rem 2rem;">
@@ -64,7 +97,7 @@ if ($selectedDocId !== '') {
         <h1 style="font-size: 1.65rem; margin: 0.4rem 0 0.25rem;">📥 Bibliothèque & Téléchargements Multi-Formats</h1>
         <p style="color: var(--text-secondary); margin: 0; font-size: 0.9rem;">
             Téléchargez l'ensemble des livrables de la formation en haute définition :
-            Supports <code>.pdf</code>, Présentations Studio <code>.pptx</code> & <code>_slides.pdf</code>, Sources <code>.md</code>, Pages Web <code>.html</code>, Documents Word <code>.docx</code> et Scripts <code>.sql / .py</code>.
+            Supports <code>.pdf</code>, Présentations Studio <code>.pptx</code> & <code>_slides.pdf</code>, Sources <code>.md</code>, Pages Web <code>.html</code>, Documents Word <code>.docx</code>, Scripts <code>.sql / .py</code> et Exemples <code>pgexamples</code>.
         </p>
     </div>
 
@@ -75,6 +108,7 @@ if ($selectedDocId !== '') {
         <a href="index.php?page=documents&tab=labs&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $docTab === 'labs' ? 'btn-primary' : 'btn-outline' ?>">🧪 Labs (<?= count($currentCourse['labs'] ?? []) ?>)</a>
         <a href="index.php?page=documents&tab=cheatsheets&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $docTab === 'cheatsheets' ? 'btn-primary' : 'btn-outline' ?>">📑 Cheatsheets (<?= count($currentCourse['cheatsheets'] ?? []) ?>)</a>
         <a href="index.php?page=documents&tab=tools&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $docTab === 'tools' ? 'btn-primary' : 'btn-outline' ?>">🛠️ Scripts DBA (<?= count($currentCourse['tools'] ?? []) ?>)</a>
+        <a href="index.php?page=documents&tab=examples&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $docTab === 'examples' ? 'btn-primary' : 'btn-outline' ?>">💻 Exemples Code (<?= count($currentCourse['examples'] ?? []) ?>)</a>
     </div>
 </div>
 
@@ -201,7 +235,7 @@ if ($selectedDocId !== '') {
 <!-- 5. BOÎTE À OUTILS DBA PGSCRIPTS (PYTHON & SQL) -->
 <?php if ($docTab === 'all' || $docTab === 'tools'): ?>
     <h2 style="font-size: 1.3rem; margin-bottom: 0.85rem;">🛠️ Boîte à Outils Production DBA (<code>pgscripts</code> Python & 23 Scripts SQL)</h2>
-    <div class="lms-table-wrap">
+    <div class="lms-table-wrap" style="margin-bottom: 2.25rem;">
         <table class="lms-table">
             <thead>
                 <tr>
@@ -230,6 +264,48 @@ if ($selectedDocId !== '') {
                                 </a>
                                 <a href="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=tool&id=<?= urlencode($tId) ?>&format=raw" class="dl-pill dl-md">
                                     ⬇ Télécharger <?= Security::e($tool['filename']) ?>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+<?php endif; ?>
+
+<!-- 6. EXEMPLES DE CODE COMPAGNON PGEXAMPLES (PYTHON, GO, PHP) -->
+<?php if ($docTab === 'all' || $docTab === 'examples'): ?>
+    <h2 style="font-size: 1.3rem; margin-bottom: 0.85rem;">💻 Exemples de Code Compagnon (<code>pgexamples</code> — Python <code>psycopg3</code>, Go <code>pgx/v5</code>, PHP <code>PDO</code>)</h2>
+    <div class="lms-table-wrap">
+        <table class="lms-table">
+            <thead>
+                <tr>
+                    <th>Stack / Catégorie</th>
+                    <th>Fichier Exemple</th>
+                    <th>Langage</th>
+                    <th>Taille</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach (($currentCourse['examples'] ?? []) as $exId => $ex): ?>
+                    <tr data-searchable="<?= Security::e(($ex['filename'] ?? '') . ' ' . ($ex['category'] ?? '') . ' ' . ($ex['language'] ?? '')) ?>">
+                        <td><span class="badge-code"><?= Security::e($ex['category'] ?? 'Code') ?></span></td>
+                        <td>
+                            <a href="index.php?page=documents&tab=examples&id=<?= urlencode($exId) ?>&course=<?= urlencode($currentCourseSlug) ?>" style="font-weight: 700; color: var(--text-primary);">
+                                <code><?= Security::e($ex['filename'] ?? $exId) ?></code>
+                            </a>
+                        </td>
+                        <td><?= Security::e($ex['language'] ?? '') ?></td>
+                        <td class="tabular-nums"><?= Security::e($ex['size_formatted'] ?? '') ?></td>
+                        <td>
+                            <div class="download-strip">
+                                <a href="index.php?page=documents&tab=examples&id=<?= urlencode($exId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="dl-pill dl-read">
+                                    👁 Lire
+                                </a>
+                                <a href="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=example&id=<?= urlencode($exId) ?>&format=raw" class="dl-pill dl-md">
+                                    ⬇ Télécharger <?= Security::e($ex['filename'] ?? $exId) ?>
                                 </a>
                             </div>
                         </td>
