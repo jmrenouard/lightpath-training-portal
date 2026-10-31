@@ -73,7 +73,7 @@ class DockerManager
 
         if (!$forceRefresh) {
             $cache = $this->readStatusCache();
-            if (isset($cache['runtime']) && is_array($cache['runtime']) && (($cache['runtime']['cached_at'] ?? 0) > time() - 3600)) {
+            if (isset($cache['runtime']) && is_array($cache['runtime']) && isset($cache['runtime']['mode'])) {
                 self::$runtimeCache = $cache['runtime'];
                 return self::$runtimeCache;
             }
