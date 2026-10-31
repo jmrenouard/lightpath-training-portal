@@ -195,6 +195,18 @@
 * **Nature de la correction :** Ajout de 6 nouvelles Flashcards SRS (`fc_43`..`fc_48` pour les modules `M14` CloudNativePG, `M19` `pgcopydb`, `M26` Partitionnement `DETACH CONCURRENTLY`, `M27` `pgBadger`, `M28` `postgres_fdw`, `M29` `pg_auto_failover` — total porté à 48 cartes) et de 4 nouveaux termes dans le Glossaire PostgreSQL 18 (`CloudNativePG`, `pg_auto_failover`, `pgBadger`, `pgcopydb` — total porté à 56 termes).
 * **Tests post-correction :** ✅ 201 / 201 passés dans `php tests/run_tests.php` (0 régression)
 
+---
+
+### Correction RCA-162 (`RCA-LMS-32`) — Audit Pédagogique `/ponytail-audit` & Remédiation `/teamwork` : Rééquilibrage A/B/C/D de l'Examen Final (10/10/10/10) et du Diagnostic (4/4/4/3), Tagging `'module'` et Couverture `Parcours 4 (SQL-01..05)` des 53 Flashcards SRS
+* **Date :** 2026-10-31 07:32
+* **Fichiers modifiés :** `src/Course/LmsCatalog.php`, `tests/run_tests.php`, `REGISTRE_RCA.md`, `JOURNAL_DE_BORD.md`
+* **Nature de la correction :**
+  1. **Rééquilibrage exact 10/10/10/10 de l'Examen Final de Certification (`getFinalExamQuestions()`) :** Permutation des options `'A'`, `'B'`, `'C'`, `'D'` et alignement de `'correct'` / `'answer'` sur les 40 questions (`exam_01`..`exam_40`) pour garantir exactement **10 `'A'`, 10 `'B'`, 10 `'C'`, 10 `'D'`** (2 par lettre dans chacun des 5 domaines DBA, plafonnant toute réponse uniforme à `25 %` au lieu de `97,5 %`).
+  2. **Rééquilibrage A/B/C/D du Diagnostic Pré-Formation (`getDiagnosticQuestions()`) :** Permutation des options sur les 15 questions (`diag_01`..`diag_15`) pour garantir exactement **4 `'A'`, 4 `'B'`, 4 `'C'`, 3 `'D'`**.
+  3. **Tagging `'module'` et couverture `Parcours 4 (SQL-01..05)` des Flashcards SRS (`getFlashcards()`) :** Ajout du champ `'module'` (`M01`..`M29`) sur les 48 flashcards existantes (`fc_01`..`fc_48`) et création de 5 nouvelles flashcards (`fc_49` à `fc_53`, `'category' => 'SQL:2023'`, `'module' => 'SQL-01'` à `'SQL-05'`) couvrant l'intégralité du Parcours 4 (total porté à **53 flashcards SRS**).
+* **Tests post-correction :** ✅ 265 / 265 passés dans `php tests/run_tests.php` (0 régression)
+
+
 
 
 

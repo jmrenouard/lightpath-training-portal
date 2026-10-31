@@ -607,6 +607,35 @@ Tâche : Vérifier dans src/Course/LmsCatalog.php que getFlashcards() retourne a
 ```
 * **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-30
 
+---
+
+## Fiche d'Incident RCA-162 (`RCA-LMS-32`) : Audit Pédagogique `/ponytail-audit` & Remédiation `/teamwork` — Rééquilibrage A/B/C/D de l'Examen Final (10/10/10/10) et du Diagnostic (4/4/4/3), Tagging `'module'` et Couverture `Parcours 4 (SQL-01..05)` des 53 Flashcards SRS
+
+* **Date de détection :** 2026-10-31
+* **Composant Affecté :** `src/Course/LmsCatalog.php`, `tests/run_tests.php`
+* **1. Mécanisme :**
+  L'audit qualité `/ponytail-audit` du contenu pédagogique a mis en évidence trois vulnérabilités d'évaluation et de couverture SRS dans `src/Course/LmsCatalog.php` :
+  1) **Biais critique de bonnes réponses sur l'Examen Final de Certification (`getFinalExamQuestions()`) :** Sur les 40 questions (`exam_01` à `exam_40`), 39 avaient la bonne réponse positionnée sur l'option `'A'` (`{"A": 39, "B": 1, "C": 0, "D": 0}`). Un stagiaire cochant systématiquement `'A'` sans lire les énoncés obtenait `39/40` (`97,5 %`) et validait la certification (seuil `75 %`).
+  2) **Déséquilibre A/B/C/D du Diagnostic Pré-Formation (`getDiagnosticQuestions()`) :** Sur les 15 questions (`diag_01` à `diag_15`), la répartition était `{"A": 7, "B": 6, "C": 2, "D": 0}` (`0` réponse `'D'` et `87 %` de réponses `'A'` ou `'B'`).
+  3) **Absence de tag `'module'` et de couverture `Parcours 4 (SQL-01..05)` dans les Flashcards SRS (`getFlashcards()`) :** Les 48 flashcards existantes (`fc_01`..`fc_48`) ne comportaient pas de champ `'module'` normalisé (`M01`..`M29`) et le Parcours 4 (`SQL-01` à `SQL-05` — SQL:2023) ne disposait d'aucune carte SRS dédiée.
+* **2. Hypothèse :**
+  1) Permuter les propositions `'A'`, `'B'`, `'C'`, `'D'` et mettre à jour `'correct'` / `'answer'` sur les 40 questions de `LmsCatalog::getFinalExamQuestions()` pour atteindre une distribution exacte **10 `'A'`, 10 `'B'`, 10 `'C'`, 10 `'D'`** (soit 2 réponses de chaque lettre dans chacun des 5 domaines DBA, plafonnant toute réponse mono-lettre à `25 %`).
+  2) Permuter les propositions et mettre à jour `'correct'` / `'answer'` sur `LmsCatalog::getDiagnosticQuestions()` pour obtenir une distribution exacte **4 `'A'`, 4 `'B'`, 4 `'C'`, 3 `'D'`**.
+  3) Ajouter l'attribut `'module'` (`M01`..`M29`) sur les 48 flashcards existantes et créer 5 nouvelles flashcards (`fc_49` à `fc_53`, `'category' => 'SQL:2023'`, `'module' => 'SQL-01'` à `'SQL-05'`) couvrant `GENERATED ALWAYS AS IDENTITY` / `UNIQUE NULLS NOT DISTINCT`, la logique ternaire `NULL` / `IS DISTINCT FROM` / `WITH TIES`, les jointures `LATERAL` / `NOT EXISTS`, `GROUPING SETS` / `ROLLUP` / `CUBE` / `FILTER`, et le fenêtrage `ROWS/RANGE/GROUPS` + `WITH RECURSIVE` (`SEARCH` / `CYCLE`).
+* **3. Contre-mesure :**
+  Mise à jour de `src/Course/LmsCatalog.php` (rééquilibrage 10/10/10/10 de l'examen final, rééquilibrage 4/4/4/3 du diagnostic initial, tagging `'module'` et ajout de `fc_49`..`fc_53` portant le total à 53 flashcards SRS) et ajout de la Section 15 de tests TDD dans `tests/run_tests.php` (`265/265` assertions passées).
+* **4. Prompt LLM :**
+```text
+Contexte : dépôt lightpath-training-portal. Lis RCA-162 (RCA-LMS-32) dans REGISTRE_RCA.md.
+Tâche : Vérifier dans src/Course/LmsCatalog.php que :
+1) getFinalExamQuestions() retourne 40 questions avec exactement 10 'A', 10 'B', 10 'C' et 10 'D' (cocher 'A' partout donne 25% et passed=false).
+2) getDiagnosticQuestions() retourne 15 questions avec exactement 4 'A', 4 'B', 4 'C' et 3 'D'.
+3) getFlashcards() retourne >= 53 cartes dotées chacune d'une clé 'module' valide (M01..M29 ou SQL-01..SQL-05) incluant fc_49..fc_53 pour le Parcours 4 SQL:2023.
+Valide avec php tests/run_tests.php.
+```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-31
+
+
 
 
 

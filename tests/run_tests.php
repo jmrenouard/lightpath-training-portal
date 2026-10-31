@@ -629,6 +629,50 @@ $t->assertTrue(str_contains($dlSrc, 'Security::isPathInside(') && !str_contains(
 $utf8Search = $repo->searchContent('postgresql-18', 'réplication');
 $t->assertTrue(count($utf8Search) > 0 && json_encode($utf8Search) !== false, "RCA-160 : searchContent('réplication') retourne des extraits UTF-8 valides sérialisables en JSON sans erreur");
 
+// 15. Tests Contrats RCA-162 / RCA-LMS-32 (Audit Pédagogique /ponytail-audit & Remédiation /teamwork : Distribution 10/10/10/10 Examen Final, Distribution 4/4/4/3 Diagnostic & 53 Flashcards SRS taggées 'module' incluant SQL-01..05)
+echo "\n--- 15. Tests Contrats RCA-162 / RCA-LMS-32 (Rééquilibrage QCM Examen 10/10/10/10, Diagnostic 4/4/4/3 & 53 Flashcards SRS Taggées Module + SQL-01..05) ---\n";
+
+$examDistribution = ['A' => 0, 'B' => 0, 'C' => 0, 'D' => 0];
+$allAExamAnswers = [];
+foreach ($examQs as $eq) {
+    $ans = $eq['correct'] ?? '';
+    $t->assertTrue(isset($eq['options'][$ans]) && ($eq['answer'] ?? '') === $ans, "RCA-LMS-32 : Question {$eq['id']} possède une clé 'correct'/'answer' valide ({$ans})");
+    if (isset($examDistribution[$ans])) {
+        $examDistribution[$ans]++;
+    }
+    $allAExamAnswers[$eq['id']] = 'A';
+}
+$t->assertEquals(['A' => 10, 'B' => 10, 'C' => 10, 'D' => 10], $examDistribution, "RCA-LMS-32 : Examen Final de Certification équilibré exactement en 10 A / 10 B / 10 C / 10 D");
+$allAExamEval = LmsCatalog::evaluateFinalExam($allAExamAnswers, 600);
+$t->assertTrue($allAExamEval['passed'] === false && $allAExamEval['percent'] === 25, "RCA-LMS-32 : Cocher 'A' partout à l'examen final donne 25% (10/40) et échoue la certification");
+
+$diagDistribution = ['A' => 0, 'B' => 0, 'C' => 0, 'D' => 0];
+foreach ($diagQs as $dq) {
+    $ans = $dq['correct'] ?? '';
+    $t->assertTrue(isset($dq['options'][$ans]) && ($dq['answer'] ?? '') === $ans, "RCA-LMS-32 : Question diagnostique {$dq['id']} possède une clé 'correct'/'answer' valide ({$ans})");
+    if (isset($diagDistribution[$ans])) {
+        $diagDistribution[$ans]++;
+    }
+}
+$t->assertEquals(['A' => 4, 'B' => 4, 'C' => 4, 'D' => 3], $diagDistribution, "RCA-LMS-32 : Diagnostic Pré-Formation équilibré exactement en 4 A / 4 B / 4 C / 3 D");
+
+$allFlashcards = LmsCatalog::getFlashcards();
+$t->assertGreaterThanOrEqual(53, count($allFlashcards), "RCA-LMS-32 : Le catalogue SRS contient au moins 53 flashcards (48 DBA + 5 SQL:2023)");
+$fcMissingModule = 0;
+$fcModulesFound = [];
+foreach ($allFlashcards as $fc) {
+    $modTag = trim((string)($fc['module'] ?? ''));
+    if ($modTag === '' || !preg_match('/^(M\d{2}|SQL-0[1-5])$/', $modTag)) {
+        $fcMissingModule++;
+    } else {
+        $fcModulesFound[$modTag] = true;
+    }
+}
+$t->assertEquals(0, $fcMissingModule, "RCA-LMS-32 : 100% des flashcards SRS possèdent un tag 'module' normalisé (M01..M29 ou SQL-01..SQL-05)");
+foreach (['SQL-01', 'SQL-02', 'SQL-03', 'SQL-04', 'SQL-05'] as $sqlModCode) {
+    $t->assertTrue(isset($fcModulesFound[$sqlModCode]), "RCA-LMS-32 : Le module {$sqlModCode} du Parcours 4 (SQL:2023) est couvert par les Flashcards SRS");
+}
+
 exit($t->summary());
 
 
