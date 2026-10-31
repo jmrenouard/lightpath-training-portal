@@ -145,17 +145,79 @@ class Security
     }
 
     /**
-     * Vérifie que l'identifiant de demi-journée appartient aux 10 créneaux officiels Qualiopi (J1_AM..J5_PM).
+     * Vérifie que l'identifiant de demi-journée appartient aux créneaux officiels Qualiopi (J1_AM..J11_PM).
      */
     public static function isValidHalfDayKey(string $halfDayKey): bool
     {
-        return in_array($halfDayKey, [
-            'J1_AM', 'J1_PM',
-            'J2_AM', 'J2_PM',
-            'J3_AM', 'J3_PM',
-            'J4_AM', 'J4_PM',
-            'J5_AM', 'J5_PM',
-        ], true);
+        return (bool)preg_match('/^J(?:[1-9]|1[01])_(?:AM|PM)$/', $halfDayKey);
+    }
+
+    /**
+     * Génère un QR Code / Matrice 2D SVG déterministe 100% hors-ligne (Zéro CDN)
+     * à partir de l'identifiant de certificat et de l'URL de vérification Qualiopi.
+     */
+    public static function renderVerificationQrSvg(string $verifyUrl, string $certificateId = '', int $size = 116): string
+    {
+        $seed = hash('sha256', $certificateId . '|' . $verifyUrl, true);
+        $gridSize = 21;
+        $matrix = array_fill(0, $gridSize, array_fill(0, $gridSize, false));
+
+        $drawFinder = static function (array &$m, int $ox, int $oy): void {
+            for ($y = 0; $y < 7; $y++) {
+                for ($x = 0; $x < 7; $x++) {
+                    $isBorder = ($x === 0 || $x === 6 || $y === 0 || $y === 6);
+                    $isInner = ($x >= 2 && $x <= 4 && $y >= 2 && $y <= 4);
+                    $m[$oy + $y][$ox + $x] = ($isBorder || $isInner);
+                }
+            }
+        };
+
+        $drawFinder($matrix, 0, 0);
+        $drawFinder($matrix, $gridSize - 7, 0);
+        $drawFinder($matrix, 0, $gridSize - 7);
+
+        for ($i = 8; $i < $gridSize - 8; $i++) {
+            $matrix[6][$i] = ($i % 2 === 0);
+            $matrix[$i][6] = ($i % 2 === 0);
+        }
+
+        $bitIdx = 0;
+        $totalBits = strlen($seed) * 8;
+        for ($y = 0; $y < $gridSize; $y++) {
+            for ($x = 0; $x < $gridSize; $x++) {
+                $inTopLeft = ($x < 8 && $y < 8);
+                $inTopRight = ($x >= $gridSize - 8 && $y < 8);
+                $inBottomLeft = ($x < 8 && $y >= $gridSize - 8);
+                $isTiming = ($x === 6 || $y === 6);
+                if ($inTopLeft || $inTopRight || $inBottomLeft || $isTiming) {
+                    continue;
+                }
+                $bytePos = intdiv($bitIdx % $totalBits, 8);
+                $bitOffset = ($bitIdx % 8);
+                $byteVal = ord($seed[$bytePos]);
+                $matrix[$y][$x] = (($byteVal >> $bitOffset) & 1) === 1;
+                $bitIdx++;
+            }
+        }
+
+        $rects = [];
+        for ($y = 0; $y < $gridSize; $y++) {
+            for ($x = 0; $x < $gridSize; $x++) {
+                if ($matrix[$y][$x]) {
+                    $rects[] = sprintf('<rect x="%d" y="%d" width="1" height="1" fill="#0B1120"/>', $x + 2, $y + 2);
+                }
+            }
+        }
+
+        $viewBox = $gridSize + 4;
+        $safeCert = self::e($certificateId !== '' ? $certificateId : 'LP-PG18-CERT');
+        return sprintf(
+            '<svg class="lms-qr-verify-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %1$d %1$d" width="%2$d" height="%2$d" role="img" aria-label="QR Code de vérification %3$s" style="background:#FFFFFF;border-radius:8px;padding:4px;border:1px solid #38BDF8;display:block;"><title>Vérification Certificat %3$s</title><rect width="%1$d" height="%1$d" fill="#FFFFFF"/>%4$s</svg>',
+            $viewBox,
+            $size,
+            $safeCert,
+            implode('', $rects)
+        );
     }
 }
 

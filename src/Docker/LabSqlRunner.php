@@ -337,4 +337,123 @@ class LabSqlRunner
 
         return $catalog;
     }
+
+    /**
+     * Inspecte le schéma des tables de la base cible (live sur Docker si actif, ou catalogue de référence Sakila / formation_pg hors-ligne).
+     */
+    public function inspectDatabaseSchema(int $userId, string $database = 'dvdrental'): array
+    {
+        $db = $this->normalizeDatabase($database);
+        $targetContainer = $this->resolveActiveContainer($userId);
+
+        if ($targetContainer !== null) {
+            $sql = "SELECT table_name, string_agg(column_name || ' (' || data_type || ')', ', ' ORDER BY ordinal_position) AS columns "
+                 . "FROM information_schema.columns WHERE table_schema = 'public' GROUP BY table_name ORDER BY table_name LIMIT 25;";
+            $res = $this->executeSql($userId, $sql, $db);
+            if (!empty($res['success']) && trim((string)$res['output']) !== '') {
+                return [
+                    'success' => true,
+                    'mode' => 'live_docker',
+                    'database' => $db,
+                    'container' => $targetContainer,
+                    'output' => $res['output'],
+                    'tables' => $this->getStaticSchemaCatalog($db),
+                ];
+            }
+        }
+
+        $tables = $this->getStaticSchemaCatalog($db);
+        $lines = [" table_name | columns (catalogue de référence {$db})", "------------+--------------------------------------------------------------------------------"];
+        foreach ($tables as $tName => $cols) {
+            $lines[] = sprintf(" %-10s | %s", $tName, implode(', ', $cols));
+        }
+
+        return [
+            'success' => true,
+            'mode' => 'reference_catalog',
+            'database' => $db,
+            'container' => $targetContainer ?? 'catalogue_statique',
+            'output' => implode("\n", $lines),
+            'tables' => $tables,
+        ];
+    }
+
+    private function getStaticSchemaCatalog(string $database): array
+    {
+        $sakilaTables = [
+            'film' => ['film_id (serial PK)', 'title (varchar)', 'description (text)', 'release_year (int)', 'rental_duration (smallint)', 'rental_rate (numeric)', 'length (smallint)', 'replacement_cost (numeric)', 'rating (varchar)', 'last_update (timestamptz)'],
+            'actor' => ['actor_id (serial PK)', 'first_name (varchar)', 'last_name (varchar)', 'last_update (timestamptz)'],
+            'rental' => ['rental_id (serial PK)', 'rental_date (timestamptz)', 'inventory_id (int FK)', 'customer_id (smallint FK)', 'return_date (timestamptz)', 'staff_id (smallint)'],
+            'payment' => ['payment_id (serial PK)', 'customer_id (smallint FK)', 'staff_id (smallint)', 'rental_id (int FK)', 'amount (numeric)', 'payment_date (timestamptz)'],
+            'customer' => ['customer_id (serial PK)', 'store_id (smallint)', 'first_name (varchar)', 'last_name (varchar)', 'email (varchar)', 'activebool (boolean)', 'create_date (date)'],
+            'inventory' => ['inventory_id (serial PK)', 'film_id (int FK)', 'store_id (smallint)', 'last_update (timestamptz)'],
+            'category' => ['category_id (serial PK)', 'name (varchar)', 'last_update (timestamptz)'],
+        ];
+
+        if ($database === 'postgres') {
+            return [
+                'pg_stat_activity' => ['pid (int)', 'datname (name)', 'usename (name)', 'state (text)', 'wait_event_type (text)', 'wait_event (text)', 'query (text)', 'backend_type (text)'],
+                'pg_stat_io' => ['backend_type (text)', 'object (text)', 'context (text)', 'reads (bigint)', 'writes (bigint)', 'hits (bigint)', 'evictions (bigint)', 'fsyncs (bigint)'],
+                'pg_stat_user_tables' => ['relid (oid)', 'schemaname (name)', 'relname (name)', 'seq_scan (bigint)', 'idx_scan (bigint)', 'n_live_tup (bigint)', 'n_dead_tup (bigint)', 'last_autovacuum (timestamptz)'],
+                'pg_locks' => ['locktype (text)', 'database (oid)', 'relation (oid)', 'pid (int)', 'mode (text)', 'granted (bool)'],
+            ];
+        }
+
+        return $sakilaTables;
+    }
+
+    /**
+     * Génère un indice progressif (piste de diagnostic DBA sans dévoiler la solution complète) pour un atelier donné.
+     */
+    public function extractLabHint(string $markdown, string $labId): array
+    {
+        $code = $this->extractLabCode($labId);
+        $oracles = $this->getLabOracles();
+        $oracleInfo = $oracles[$code] ?? $oracles['01'];
+
+        $views = [];
+        if (preg_match_all('/\b(pg_stat_[a-z_]+|pg_locks|pg_class|pg_index|pg_settings|page_header|get_raw_page|information_schema\.[a-z_]+|EXPLAIN\s*\([^)]+\))\b/i', $markdown, $m)) {
+            foreach ($m[1] as $v) {
+                $clean = strtolower(trim($v));
+                if (!in_array($clean, $views, true)) {
+                    $views[] = $clean;
+                }
+            }
+        }
+        if (empty($views)) {
+            $views = ['pg_stat_activity', 'pg_settings', 'EXPLAIN (ANALYZE, BUFFERS)'];
+        }
+
+        $blocks = $this->extractSolutionSqlBlocks($markdown);
+        $firstCmdClue = 'SELECT name, setting, unit FROM pg_settings WHERE name LIKE \'%shared_buffers%\';';
+        if (!empty($blocks[0]['sql'])) {
+            $lines = preg_split('/\r\n|\r|\n/', trim($blocks[0]['sql'])) ?: [];
+            foreach ($lines as $l) {
+                $trimmed = trim($l);
+                if ($trimmed !== '' && !str_starts_with($trimmed, '--')) {
+                    $firstCmdClue = substr($trimmed, 0, 95) . (strlen($trimmed) > 95 ? ' ...' : '');
+                    break;
+                }
+            }
+        }
+
+        $viewsList = implode(', ', array_slice($views, 0, 5));
+        $hintText = sprintf(
+            'Objectif Bloom (%s — %s) : Inspectez en priorité les vues et objets %s pour diagnostiquer l\'état de l\'instance avant d\'appliquer vos commandes correctives.',
+            $oracleInfo['bloom'],
+            $oracleInfo['title'],
+            $viewsList
+        );
+
+        return [
+            'lab_code' => $code,
+            'bloom' => $oracleInfo['bloom'],
+            'title' => $oracleInfo['title'],
+            'hint' => $hintText,
+            'key_objects' => array_slice($views, 0, 5),
+            'first_sql_clue' => $firstCmdClue,
+            'first_command_clue' => $firstCmdClue,
+            'validation_tip' => 'Utilisez le bouton « 🏆 Vérifier mon Lab (Oracle Qualiopi 1-Clic) » une fois les objets créés pour valider la pastille VALIDATION_OK.',
+        ];
+    }
 }

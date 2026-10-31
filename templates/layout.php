@@ -20,9 +20,16 @@ function renderDownloadStrip(string $courseSlug, string $itemType, string $itemI
         'md' => '📝 MD',
         'html' => '🌐 HTML',
         'docx' => '📘 DOCX',
+        'video_mp4' => '🎬 Vidéo MP4',
+        'video_slides_mp4' => '🎞️ Vidéo Slides',
+        'video_vtt' => '💬 Sous-titres VTT',
+        'video_transcript' => '📜 Transcription',
     ];
     $out = '<div class="download-strip">';
     foreach ($downloads as $fmt => $info) {
+        if ($compact && in_array($fmt, ['video_slides_mp4', 'video_vtt', 'video_transcript'], true)) {
+            continue;
+        }
         $label = $icons[$fmt] ?? strtoupper($fmt);
         $size = !$compact && !empty($info['size_formatted']) ? ' <span class="dl-size">(' . Security::e($info['size_formatted']) . ')</span>' : '';
         $url = sprintf(
@@ -38,6 +45,75 @@ function renderDownloadStrip(string $courseSlug, string $itemType, string $itemI
     }
     $out .= '</div>';
     return $out;
+}
+
+/**
+ * Helper unifié d'affichage du Forum Q&A et de modération Formateur (Audit #7 & Feature D2)
+ */
+function renderDiscussionSection(
+    string $courseSlug,
+    string $returnPage,
+    string $itemId,
+    array $discussions,
+    string $csrfToken,
+    bool $isStaff = false
+): string {
+    $labelItem = $returnPage === 'lab' ? 'cet Atelier' : 'ce Module';
+    ob_start();
+    ?>
+    <section id="discussion-section" class="lms-card" style="margin-top: 1.5rem;">
+        <span class="badge-code">ENTRAIDE TECHNIQUE & ACCOMPAGNEMENT FORMATEUR</span>
+        <h3 style="font-size: 1.15rem; margin: 0.35rem 0 0.75rem;">💬 Questions & Réponses sur <?= Security::e($labelItem) ?> (<span class="tabular-nums"><?= count($discussions) ?></span>)</h3>
+        <?php if (!empty($discussions)): ?>
+            <div style="display: flex; flex-direction: column; gap: 0.65rem; margin-bottom: 1rem;">
+                <?php foreach ($discussions as $msg):
+                    $msgId = (string)($msg['id'] ?? '');
+                    $isResolved = !empty($msg['resolved']);
+                ?>
+                    <div style="padding: 0.75rem 1rem; border-radius: var(--radius-sm); background: var(--bg-base); border: 1px solid <?= $isResolved ? 'rgba(16, 185, 129, 0.45)' : 'var(--border-hairline)' ?>;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.3rem; font-size: 0.78rem;">
+                            <span style="display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+                                <strong><?= Security::e((string)($msg['user_name'] ?? 'Apprenant')) ?></strong>
+                                <span class="role-badge role-<?= Security::e((string)($msg['user_role'] ?? 'student')) ?>"><?= Security::e((string)($msg['user_role'] ?? 'student')) ?></span>
+                                <?php if ($isResolved): ?>
+                                    <span class="badge-completed" style="font-size: 0.7rem;">✔ Résolu</span>
+                                <?php endif; ?>
+                            </span>
+                            <div style="display: inline-flex; align-items: center; gap: 0.45rem;">
+                                <span style="color: var(--text-muted);" class="tabular-nums"><?= Security::e(substr((string)($msg['created_at'] ?? ''), 0, 16)) ?></span>
+                                <?php if ($isStaff && $msgId !== ''): ?>
+                                    <form method="POST" action="index.php?page=<?= urlencode($returnPage) ?>&action=moderate_discussion&course=<?= urlencode($courseSlug) ?>" style="display: inline;">
+                                        <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
+                                        <input type="hidden" name="item_id" value="<?= Security::e($itemId) ?>"/>
+                                        <input type="hidden" name="message_id" value="<?= Security::e($msgId) ?>"/>
+                                        <input type="hidden" name="return_page" value="<?= Security::e($returnPage) ?>"/>
+                                        <button type="submit" name="mod_action" value="resolve" class="btn btn-outline btn-sm" style="padding: 0.1rem 0.45rem; font-size: 0.7rem;" title="Basculer statut Résolu">
+                                            <?= $isResolved ? '↩ Rouvrir' : '✔ Résolu' ?>
+                                        </button>
+                                        <button type="submit" name="mod_action" value="delete" class="btn btn-danger btn-sm" style="padding: 0.1rem 0.45rem; font-size: 0.7rem;" title="Supprimer ce message">
+                                            🗑️
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <div style="font-size: 0.86rem; color: var(--text-secondary); white-space: pre-line;"><?= Security::e((string)($msg['message'] ?? '')) ?></div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+        <form method="POST" action="index.php?page=<?= urlencode($returnPage) ?>&action=post_discussion&course=<?= urlencode($courseSlug) ?>">
+            <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
+            <input type="hidden" name="item_id" value="<?= Security::e($itemId) ?>"/>
+            <input type="hidden" name="return_page" value="<?= Security::e($returnPage) ?>"/>
+            <textarea name="message" class="form-control" rows="2" required placeholder="Posez une question technique ou partagez un retour d'expérience sur <?= Security::e($labelItem) ?>..."></textarea>
+            <div style="margin-top: 0.5rem; text-align: right;">
+                <button type="submit" class="btn btn-primary btn-sm">💬 Publier ma question / remarque</button>
+            </div>
+        </form>
+    </section>
+    <?php
+    return (string)ob_get_clean();
 }
 
 // Déterminer le parcours et l'élément actif si on consulte un module, un lab ou un filtre de catalogue
@@ -156,11 +232,19 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
             </a>
             <a href="index.php?page=flashcards&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'flashcards' ? 'active' : '' ?>">
                 <span>🧠 Cartes SRS & Glossaire</span>
-                <span class="nav-badge">42 SRS</span>
+                <span class="nav-badge tabular-nums"><?= count(\LightPath\LMS\Course\LmsCatalog::getFlashcards()) ?> SRS</span>
+            </a>
+            <a href="index.php?page=notes&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'notes' ? 'active' : '' ?>">
+                <span>📝 Mon Carnet de Notes</span>
+                <span class="nav-badge tabular-nums"><?= count($userProgress['notes'] ?? []) ?></span>
             </a>
             <a href="index.php?page=satisfaction&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'satisfaction' ? 'active' : '' ?>">
                 <span>⭐ Satisfaction Qualiopi</span>
-                <span class="nav-badge">Avis</span>
+                <span class="nav-badge">Chaud/Froid</span>
+            </a>
+            <a href="index.php?page=verify&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'verify' ? 'active' : '' ?>">
+                <span>🛡️ Vérifier un Certificat</span>
+                <span class="nav-badge">QR</span>
             </a>
             <a href="index.php?page=search&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'search' ? 'active' : '' ?>">
                 <span>🔍 Recherche Plein-Texte</span>
@@ -322,6 +406,23 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
         </header>
 
         <main class="app-content">
+            <?php
+            $classroomState = $storage->getClassroomState($currentCourseSlug);
+            $broadcastMsg = trim((string)($classroomState['broadcast_message'] ?? ''));
+            ?>
+            <?php if ($broadcastMsg !== ''): ?>
+                <div class="flash-banner" style="background: rgba(56, 189, 248, 0.14); border: 1px solid rgba(56, 189, 248, 0.45); color: var(--text-primary); display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                    <div>
+                        <span class="badge-code" style="margin-right: 0.45rem;">📢 MESSAGE SALLE EN DIRECT</span>
+                        <strong><?= Security::e($broadcastMsg) ?></strong>
+                        <?php if (!empty($classroomState['updated_by'])): ?>
+                            <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: 0.5rem;">
+                                (<?= Security::e((string)$classroomState['updated_by']) ?> • <?= Security::e(substr((string)($classroomState['updated_at'] ?? ''), 11, 5)) ?>)
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
             <?php if ($flashError): ?>
                 <div class="flash-banner flash-error"><?= Security::e($flashError) ?></div>
             <?php endif; ?>
@@ -336,11 +437,13 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
                 'lab' => __DIR__ . '/pages/lab_view.php',
                 'documents', 'cheatsheets' => __DIR__ . '/pages/documents.php',
                 'certificate' => __DIR__ . '/pages/certificate.php',
+                'verify' => __DIR__ . '/pages/verify.php',
                 'diagnostic' => __DIR__ . '/pages/diagnostic.php',
                 'exam' => __DIR__ . '/pages/exam.php',
                 'attendance' => __DIR__ . '/pages/attendance.php',
                 'satisfaction' => __DIR__ . '/pages/satisfaction.php',
                 'flashcards' => __DIR__ . '/pages/flashcards.php',
+                'notes' => __DIR__ . '/pages/notes.php',
                 'search' => __DIR__ . '/pages/search.php',
                 'admin' => $auth->isStaff($currentUser) ? (__DIR__ . '/pages/admin.php') : (__DIR__ . '/pages/dashboard.php'),
                 'profile' => __DIR__ . '/pages/profile.php',

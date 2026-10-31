@@ -57,8 +57,13 @@ $prevModBadge = $prevModId !== null ? (string)($allCourseMods[$prevModId]['badge
 $nextModBadge = $nextModId !== null ? (string)($allCourseMods[$nextModId]['badge_code'] ?? '') : '';
 
 $viewMode = (string)($_GET['mode'] ?? 'reader');
-if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
+if (!in_array($viewMode, ['reader', 'slides', 'video', 'html_preview'], true)) {
     $viewMode = 'reader';
+}
+$hasVideo = !empty($mod['has_video']) || isset($mod['downloads']['video_mp4']) || isset($mod['downloads']['video_slides_mp4']) || isset($mod['downloads']['video_transcript']);
+$videoVariant = (string)($_GET['video_src'] ?? 'course');
+if (!in_array($videoVariant, ['course', 'slides'], true)) {
+    $videoVariant = 'course';
 }
 ?>
 
@@ -132,6 +137,15 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
             <span>🖥️ Diaporama Studio 16:9</span>
             <span class="tab-pill tabular-nums"><?= $totalSlides ?> slides</span>
         </a>
+        <?php if ($hasVideo): ?>
+            <a href="index.php?page=module&id=<?= urlencode($moduleId) ?>&mode=video&course=<?= urlencode($currentCourseSlug) ?>"
+               class="view-mode-tab <?= $viewMode === 'video' ? 'active' : '' ?>">
+                <span>🎬 Vidéo Studio & Transcription</span>
+                <?php if (isset($mod['downloads']['video_vtt'])): ?>
+                    <span class="tab-pill">CC VTT</span>
+                <?php endif; ?>
+            </a>
+        <?php endif; ?>
         <?php if (isset($mod['downloads']['html'])): ?>
             <a href="index.php?page=module&id=<?= urlencode($moduleId) ?>&mode=html_preview&course=<?= urlencode($currentCourseSlug) ?>"
                class="view-mode-tab <?= $viewMode === 'html_preview' ? 'active' : '' ?>">
@@ -324,6 +338,115 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
         </div>
     </div>
 
+<?php elseif ($viewMode === 'video' && $hasVideo): ?>
+    <?php
+    $activeVideoFormat = ($videoVariant === 'slides' && isset($mod['downloads']['video_slides_mp4'])) ? 'video_slides_mp4' : 'video_mp4';
+    $videoStreamUrl = sprintf(
+        'index.php?action=download&course=%s&type=module&id=%s&format=%s&inline=1',
+        urlencode($currentCourseSlug),
+        urlencode($moduleId),
+        urlencode($activeVideoFormat)
+    );
+    $vttUrl = isset($mod['downloads']['video_vtt'])
+        ? sprintf('index.php?action=download&course=%s&type=module&id=%s&format=video_vtt&inline=1', urlencode($currentCourseSlug), urlencode($moduleId))
+        : '';
+    $transcriptHtml = '';
+    if (!empty($mod['transcript_md_path']) && is_file((string)$mod['transcript_md_path'])) {
+        $parsedTranscript = $mdParser->parseModuleFile((string)$mod['transcript_md_path'], $currentCourseSlug);
+        $transcriptHtml = (string)($parsedTranscript['html'] ?? '');
+    }
+    ?>
+    <div class="reader-grid">
+        <div class="reader-main-col">
+            <section class="lms-card" style="padding: 1.25rem; margin-bottom: 1.5rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.9rem;">
+                    <div>
+                        <span class="badge-code">🎬 LECTEUR VIDÉO STUDIO 1080P & SOUS-TITRES WEBVTT</span>
+                        <h2 style="font-size: 1.2rem; margin: 0.3rem 0 0;"><?= Security::e($mod['title']) ?></h2>
+                    </div>
+                    <div style="display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center;">
+                        <?php if (isset($mod['downloads']['video_mp4']) && isset($mod['downloads']['video_slides_mp4'])): ?>
+                            <a href="index.php?page=module&id=<?= urlencode($moduleId) ?>&mode=video&video_src=course&course=<?= urlencode($currentCourseSlug) ?>"
+                               class="btn btn-sm <?= $videoVariant === 'course' ? 'btn-primary' : 'btn-outline' ?>">
+                                🎬 Cours Interactif MP4
+                            </a>
+                            <a href="index.php?page=module&id=<?= urlencode($moduleId) ?>&mode=video&video_src=slides&course=<?= urlencode($currentCourseSlug) ?>"
+                               class="btn btn-sm <?= $videoVariant === 'slides' ? 'btn-primary' : 'btn-outline' ?>">
+                                🎞️ Présentation Slides MP4
+                            </a>
+                        <?php endif; ?>
+                        <div style="display: inline-flex; gap: 0.25rem; align-items: center;" aria-label="Vitesse de lecture">
+                            <?php foreach ([1, 1.25, 1.5, 2] as $spd): ?>
+                                <button type="button"
+                                        class="btn btn-outline btn-sm btn-video-speed tabular-nums"
+                                        data-speed="<?= $spd ?>"
+                                        onclick="const v=document.getElementById('lms-module-video'); if(v){v.playbackRate=<?= $spd ?>;}">
+                                    <?= $spd ?>x
+                                </button>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                </div>
+
+                <?php if (isset($mod['downloads'][$activeVideoFormat])): ?>
+                    <div style="background: #050811; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-strong);">
+                        <video id="lms-module-video"
+                               controls
+                               preload="metadata"
+                               style="width: 100%; max-height: 70vh; display: block;">
+                            <source src="<?= Security::e($videoStreamUrl) ?>" type="video/mp4"/>
+                            <?php if ($vttUrl !== ''): ?>
+                                <track kind="subtitles" srclang="fr" label="Français (Studio)" src="<?= Security::e($vttUrl) ?>" default/>
+                            <?php endif; ?>
+                            Votre navigateur ne supporte pas la lecture vidéo HTML5.
+                        </video>
+                    </div>
+                <?php endif; ?>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.85rem; font-size: 0.8rem; color: var(--text-secondary);">
+                    <span>💡 Astuce : Activez les sous-titres synchronisés (CC) dans le lecteur ou consultez la transcription intégrale ci-dessous.</span>
+                    <div style="display: flex; gap: 0.45rem;">
+                        <?php if (isset($mod['downloads']['video_mp4'])): ?>
+                            <a href="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=module&id=<?= urlencode($moduleId) ?>&format=video_mp4" class="btn btn-outline btn-sm">
+                                ⬇ Télécharger MP4 (<?= Security::e($mod['downloads']['video_mp4']['size_formatted'] ?? '') ?>)
+                            </a>
+                        <?php endif; ?>
+                        <?php if (isset($mod['downloads']['video_vtt'])): ?>
+                            <a href="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=module&id=<?= urlencode($moduleId) ?>&format=video_vtt" class="btn btn-outline btn-sm">
+                                ⬇ Sous-titres .VTT
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </section>
+
+            <?php if ($transcriptHtml !== ''): ?>
+                <section class="lms-card" style="padding: 1.5rem;">
+                    <span class="badge-code">📜 TRANSCRIPTION INTÉGRALE & ACCESSIBILITÉ (WCAG / QUALIOPI)</span>
+                    <h3 style="font-size: 1.15rem; margin: 0.35rem 0 1rem;">Transcription Textuelle Synchronisée du Module</h3>
+                    <div class="markdown-body">
+                        <?= $transcriptHtml ?>
+                    </div>
+                </section>
+            <?php endif; ?>
+        </div>
+
+        <aside class="reader-sidebar" id="app-right-sidebar">
+            <div class="toc-box">
+                <div style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light); margin-bottom: 0.5rem;">
+                    📝 Mes Notes Vidéo
+                </div>
+                <textarea id="user-personal-note" class="form-control" rows="6" placeholder="Prenez vos notes pendant le visionnage vidéo..."><?= Security::e($savedNote) ?></textarea>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.55rem;">
+                    <span id="note-save-status" style="font-size: 0.74rem; color: var(--accent-emerald);"></span>
+                    <button type="button" id="btn-save-note" class="btn btn-primary btn-sm" data-id="<?= Security::e($moduleId) ?>" data-course="<?= Security::e($currentCourseSlug) ?>">
+                        💾 Enregistrer
+                    </button>
+                </div>
+            </div>
+        </aside>
+    </div>
+
 <?php elseif ($viewMode === 'html_preview' && isset($mod['downloads']['html'])): ?>
     <div style="background: #FFFFFF; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border-strong); height: 82vh;">
         <iframe src="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=module&id=<?= urlencode($moduleId) ?>&format=html&inline=1"
@@ -409,35 +532,7 @@ if (!in_array($viewMode, ['reader', 'slides', 'html_preview'], true)) {
             </div>
 
             <!-- FORUM D'ENTRAIDE TECHNIQUE & Q&A SUR CE MODULE -->
-            <section id="discussion-section" class="lms-card" style="margin-top: 1.5rem;">
-                <span class="badge-code">ENTRAIDE TECHNIQUE & ACCOMPAGNEMENT FORMATEUR</span>
-                <h3 style="font-size: 1.15rem; margin: 0.35rem 0 0.75rem;">💬 Questions & Réponses sur ce Module (<?= count($discussions) ?>)</h3>
-                <?php if (!empty($discussions)): ?>
-                    <div style="display: flex; flex-direction: column; gap: 0.65rem; margin-bottom: 1rem;">
-                        <?php foreach ($discussions as $msg): ?>
-                            <div style="padding: 0.75rem 1rem; border-radius: var(--radius-sm); background: var(--bg-base); border: 1px solid var(--border-hairline);">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem; font-size: 0.78rem;">
-                                    <span>
-                                        <strong><?= Security::e((string)($msg['user_name'] ?? 'Apprenant')) ?></strong>
-                                        <span class="role-badge role-<?= Security::e((string)($msg['user_role'] ?? 'student')) ?>"><?= Security::e((string)($msg['user_role'] ?? 'student')) ?></span>
-                                    </span>
-                                    <span style="color: var(--text-muted);" class="tabular-nums"><?= Security::e(substr((string)($msg['created_at'] ?? ''), 0, 16)) ?></span>
-                                </div>
-                                <div style="font-size: 0.86rem; color: var(--text-secondary); white-space: pre-line;"><?= Security::e((string)($msg['message'] ?? '')) ?></div>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-                <form method="POST" action="index.php?page=module&action=post_discussion&course=<?= urlencode($currentCourseSlug) ?>">
-                    <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
-                    <input type="hidden" name="item_id" value="<?= Security::e($moduleId) ?>"/>
-                    <input type="hidden" name="return_page" value="module"/>
-                    <textarea name="message" class="form-control" rows="2" required placeholder="Posez une question technique ou partagez un retour d'expérience sur ce module..."></textarea>
-                    <div style="margin-top: 0.5rem; text-align: right;">
-                        <button type="submit" class="btn btn-primary btn-sm">💬 Publier ma question / remarque</button>
-                    </div>
-                </form>
-            </section>
+            <?= renderDiscussionSection($currentCourseSlug, 'module', $moduleId, $discussions, $csrfToken, $auth->isStaff($currentUser)) ?>
         </div>
 
         <!-- COLONNE LATÉRALE ÉPURÉE : SOMMAIRE SCROLLSPY + NOTES + PARCOURS REPLIABLE -->

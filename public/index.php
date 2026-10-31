@@ -191,6 +191,21 @@ if ($action === 'export_scorm_manifest') {
     exit;
 }
 
+if ($action === 'export_scorm_zip') {
+    $zipPath = $downloader->buildScorm12ZipPackage($currentCourseSlug, $currentCourse ?? []);
+    if ($zipPath === null || !is_file($zipPath)) {
+        http_response_code(500);
+        echo 'Erreur lors de la génération du package SCORM 1.2 (.zip).';
+        exit;
+    }
+    header('Content-Type: application/zip');
+    header('Content-Disposition: attachment; filename="scorm12_' . $currentCourseSlug . '.zip"');
+    header('Content-Length: ' . (int)filesize($zipPath));
+    readfile($zipPath);
+    @unlink($zipPath);
+    exit;
+}
+
 if ($action === 'export_qualiopi_csv' && $auth->isStaff($currentUser)) {
     header('Content-Type: text/csv; charset=UTF-8');
     header('Content-Disposition: attachment; filename="audit_qualiopi_' . $currentCourseSlug . '_' . date('Ymd_His') . '.csv"');
@@ -270,8 +285,31 @@ if (str_starts_with($action, 'api_')) {
 
         case 'api_submit_quiz':
             $moduleId = (string)($payload['module_id'] ?? '');
-            $score = (int)($payload['score'] ?? 0);
+            $modObj = $courseRepo->getModule($currentCourseSlug, $moduleId);
+            if ($modObj === null && $moduleId === '') {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'Module introuvable.']);
+                exit;
+            }
             $total = max(1, (int)($payload['total'] ?? 1));
+            $score = max(0, min($total, (int)($payload['score'] ?? 0)));
+
+            // Si la carte des réponses (answers) est transmise, recalculer le score côté serveur
+            if ($modObj !== null && !empty($payload['answers']) && is_array($payload['answers']) && !empty($modObj['source_md_path'])) {
+                $parsedQuiz = $mdParser->parseModuleFile($modObj['source_md_path'], $currentCourseSlug)['quiz'] ?? [];
+                if (!empty($parsedQuiz)) {
+                    $total = count($parsedQuiz);
+                    $score = 0;
+                    foreach ($parsedQuiz as $qItem) {
+                        $qIdx = (string)($qItem['index'] ?? '');
+                        $given = strtoupper(trim((string)($payload['answers'][$qIdx] ?? $payload['answers']['q_' . $qIdx] ?? '')));
+                        if ($given !== '' && $given === strtoupper(trim((string)($qItem['correct'] ?? '')))) {
+                            $score++;
+                        }
+                    }
+                }
+            }
+
             $storage->saveQuizScore($userId, $currentCourseSlug, $moduleId, $score, $total);
             $storage->logAuditEvent($currentUser['email'], 'QUIZ_SUBMIT', "Module {$moduleId} : {$score}/{$total}");
             $prog = $storage->getUserProgress($userId, $currentCourseSlug);
@@ -315,6 +353,11 @@ if (str_starts_with($action, 'api_')) {
             $database = (string)($payload['database'] ?? 'formation_pg');
             $res = $sqlRunner->executeSql($userId, $sql, $database);
             echo json_encode($res);
+            exit;
+
+        case 'api_schema_inspect':
+            $database = (string)($payload['database'] ?? 'dvdrental');
+            echo json_encode($sqlRunner->inspectDatabaseSchema($userId, $database));
             exit;
 
         case 'api_run_oracle':
@@ -451,6 +494,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'submit_exam') {
+        $classroomState = $storage->getClassroomState($currentCourseSlug);
+        if (!empty($classroomState['lock_exam']) && !$auth->isStaff($currentUser)) {
+            $_SESSION['flash_error'] = 'L\'examen final est actuellement verrouillé par le formateur.';
+            header('Location: index.php?page=exam&course=' . urlencode($currentCourseSlug));
+            exit;
+        }
         $answers = is_array($_POST['answers'] ?? null) ? $_POST['answers'] : [];
         $durationSec = (int)($_POST['duration_seconds'] ?? 0);
         $eval = LmsCatalog::evaluateFinalExam($answers, $durationSec);
@@ -479,11 +528,77 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'sign_trainer_attendance' && $auth->isStaff($currentUser)) {
+        $targetUid = (int)($_POST['target_user_id'] ?? $userId);
+        $halfDayKey = trim((string)($_POST['half_day_key'] ?? 'ALL'));
+        $storage->signTrainerAttendance($targetUid, $currentCourseSlug, $halfDayKey, $currentUser['name']);
+        $storage->logAuditEvent($currentUser['email'], 'TRAINER_ATTENDANCE_COUNTERSIGN', "Contre-signature formateur ({$halfDayKey}) pour cible #{$targetUid}");
+        $_SESSION['flash_success'] = "Contre-signature formateur Qualiopi apposée avec succès ({$halfDayKey}).";
+        header('Location: index.php?page=attendance&course=' . urlencode($currentCourseSlug));
+        exit;
+    }
+
     if ($action === 'submit_satisfaction') {
         $storage->saveSatisfactionSurvey($userId, $currentCourseSlug, $_POST);
         $storage->logAuditEvent($currentUser['email'], 'SATISFACTION_SUBMIT', "Questionnaire de satisfaction à chaud Qualiopi complété");
         $_SESSION['flash_success'] = 'Merci ! Votre évaluation de satisfaction Qualiopi a été enregistrée.';
         header('Location: index.php?page=satisfaction&course=' . urlencode($currentCourseSlug));
+        exit;
+    }
+
+    if ($action === 'submit_cold_satisfaction') {
+        $storage->saveColdSatisfactionSurvey($userId, $currentCourseSlug, $_POST);
+        $storage->logAuditEvent($currentUser['email'], 'COLD_SATISFACTION_SUBMIT', "Questionnaire d'impact à froid J+60 Qualiopi complété");
+        $_SESSION['flash_success'] = 'Merci ! Votre évaluation d\'impact métier à froid (J+60) a été enregistrée.';
+        header('Location: index.php?page=satisfaction&tab=cold&course=' . urlencode($currentCourseSlug));
+        exit;
+    }
+
+    if ($action === 'save_note_form') {
+        $itemId = trim((string)($_POST['item_id'] ?? ''));
+        $note = (string)($_POST['note'] ?? '');
+        if ($itemId !== '') {
+            $storage->saveUserNote($userId, $currentCourseSlug, $itemId, $note);
+            $_SESSION['flash_success'] = 'Note personnelle enregistrée dans votre carnet.';
+        }
+        header('Location: index.php?page=notes&course=' . urlencode($currentCourseSlug));
+        exit;
+    }
+
+    if ($action === 'save_classroom_state' && $auth->isStaff($currentUser)) {
+        $storage->saveClassroomState($currentCourseSlug, [
+            'broadcast_message' => trim((string)($_POST['broadcast_message'] ?? '')),
+            'broadcast_level' => (string)($_POST['broadcast_level'] ?? 'info'),
+            'lock_solutions' => isset($_POST['lock_solutions']) && $_POST['lock_solutions'] === '1',
+            'lock_exam' => isset($_POST['lock_exam']) && $_POST['lock_exam'] === '1',
+            'active_track' => (string)($_POST['active_track'] ?? 'cursus-complet'),
+            'updated_by' => $currentUser['name'],
+        ]);
+        $storage->logAuditEvent($currentUser['email'], 'CLASSROOM_STATE_UPDATE', 'Mise à jour du mode Salle de Classe Live & Verrous');
+        $_SESSION['flash_success'] = 'Configuration de la Salle de Classe Live mise à jour pour tous les stagiaires.';
+        header('Location: index.php?page=admin&tab=cohort&course=' . urlencode($currentCourseSlug));
+        exit;
+    }
+
+    if ($action === 'moderate_discussion' && $auth->isStaff($currentUser)) {
+        $itemId = trim((string)($_POST['item_id'] ?? ''));
+        $msgId = trim((string)($_POST['message_id'] ?? ''));
+        $modAction = trim((string)($_POST['mod_action'] ?? 'resolve'));
+        $returnPage = trim((string)($_POST['return_page'] ?? 'admin'));
+        if ($itemId !== '' && $msgId !== '') {
+            if ($modAction === 'delete') {
+                $storage->deleteDiscussionMessage($currentCourseSlug, $itemId, $msgId);
+                $_SESSION['flash_success'] = 'Message supprimé du fil Q&A.';
+            } else {
+                $storage->resolveDiscussionMessage($currentCourseSlug, $itemId, $msgId, true);
+                $_SESSION['flash_success'] = 'Question marquée comme « ✔ Résolue » par le formateur.';
+            }
+        }
+        if ($returnPage === 'admin') {
+            header('Location: index.php?page=admin&tab=qna&course=' . urlencode($currentCourseSlug));
+        } else {
+            header('Location: index.php?page=' . urlencode($returnPage) . '&id=' . urlencode($itemId) . '&course=' . urlencode($currentCourseSlug) . '#discussion-section');
+        }
         exit;
     }
 
@@ -549,6 +664,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $_SESSION['flash_error'] = "Impossible de supprimer ce compte (le Super-Admin est protégé).";
             }
+            header('Location: index.php?page=admin&tab=users');
+            exit;
+        }
+
+        if ($action === 'admin_import_users_csv') {
+            $csvRaw = trim((string)($_POST['csv_content'] ?? ''));
+            $defaultPw = trim((string)($_POST['default_password'] ?? 'LightPath2026!'));
+            $importRes = $storage->importUsersFromCsv($csvRaw, $defaultPw !== '' ? $defaultPw : 'LightPath2026!');
+            $storage->logAuditEvent($currentUser['email'], 'ADMIN_CSV_IMPORT', "Import cohorte CSV : {$importRes['created']} créés, {$importRes['skipped']} ignorés");
+            $_SESSION['flash_success'] = "Import CSV terminé : {$importRes['created']} compte(s) créé(s), {$importRes['skipped']} ligne(s) ignorée(s).";
             header('Location: index.php?page=admin&tab=users');
             exit;
         }
@@ -620,9 +745,8 @@ $userBestExam = $storage->getBestExamAttempt($userId, $currentCourseSlug);
 $userAttendance = $storage->getUserAttendance($userId, $currentCourseSlug);
 $userGamification = Gamification::computeUserBadgesAndXp($userProgress, $userDiagnostic, $userBestExam, $userAttendance);
 
-$dockerStatus = ($page === 'docker')
-    ? $docker->getUserContainerStatus($userId)
-    : $docker->getCachedUserContainerStatus($userId);
+$dockerStatus = $docker->getCachedUserContainerStatus($userId);
+$classroomState = $storage->getClassroomState($currentCourseSlug);
 $allCourses = $courseRepo->getAllCourses();
 
 $totalModules = count($currentCourse['modules'] ?? []);

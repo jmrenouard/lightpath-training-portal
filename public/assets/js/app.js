@@ -732,11 +732,16 @@ document.addEventListener('DOMContentLoaded', () => {
             let score = 0;
             const total = questions.length;
 
-            questions.forEach((qBox) => {
+            const answers = {};
+            questions.forEach((qBox, idx) => {
                 const correct = qBox.getAttribute('data-correct');
                 const selected = qBox.querySelector('input[type="radio"]:checked');
                 const feedback = qBox.querySelector('.quiz-feedback');
                 const chosen = selected ? selected.value : '';
+                const qIndex = idx + 1;
+                if (chosen) {
+                    answers[`q_${qIndex}`] = chosen;
+                }
 
                 if (chosen === correct) {
                     score++;
@@ -756,7 +761,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     csrf_token: csrfToken,
                     module_id: moduleId,
                     score: score,
-                    total: total
+                    total: total,
+                    answers: answers
                 })
             });
             const data = await res.json();
@@ -812,12 +818,52 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ------------------------------------------------------------------------
-    // 12. Console SQL Interactive, Sélecteur de Base & Oracles Qualiopi 1-Clic
+    // 12. Console SQL Interactive, Sélecteur de Base, Schéma, EXPLAIN & Oracles 1-Clic
     // ------------------------------------------------------------------------
     const getSelectedLabDb = () => {
         const sel = document.getElementById('lab-sql-db-select');
         return sel ? sel.value : 'formation_pg';
     };
+
+    const sqlHistorySelect = document.getElementById('lab-sql-history-select');
+    const loadSqlHistory = () => {
+        try {
+            return JSON.parse(localStorage.getItem('lp_lms_sql_history') || '[]');
+        } catch (_) {
+            return [];
+        }
+    };
+    const refreshSqlHistoryDropdown = () => {
+        if (!sqlHistorySelect) return;
+        const list = loadSqlHistory();
+        sqlHistorySelect.innerHTML = '<option value="">— Requêtes récentes (' + list.length + ') —</option>';
+        list.forEach((q, idx) => {
+            const opt = document.createElement('option');
+            opt.value = String(idx);
+            const clean = q.replace(/\s+/g, ' ').trim();
+            opt.textContent = (idx + 1) + '. ' + (clean.length > 52 ? clean.slice(0, 52) + '…' : clean);
+            sqlHistorySelect.appendChild(opt);
+        });
+    };
+    const pushSqlHistory = (sqlText) => {
+        const trimmed = (sqlText || '').trim();
+        if (!trimmed) return;
+        const list = loadSqlHistory().filter((item) => item !== trimmed);
+        list.unshift(trimmed);
+        localStorage.setItem('lp_lms_sql_history', JSON.stringify(list.slice(0, 10)));
+        refreshSqlHistoryDropdown();
+    };
+    if (sqlHistorySelect) {
+        refreshSqlHistoryDropdown();
+        sqlHistorySelect.addEventListener('change', () => {
+            const idx = parseInt(sqlHistorySelect.value, 10);
+            const list = loadSqlHistory();
+            const editor = document.getElementById('lab-sql-editor');
+            if (!Number.isNaN(idx) && list[idx] && editor) {
+                editor.value = list[idx];
+            }
+        });
+    }
 
     const execSqlBtn = document.getElementById('btn-execute-sql');
     if (execSqlBtn) {
@@ -827,6 +873,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!editor || !outBox) return;
 
             const db = getSelectedLabDb();
+            pushSqlHistory(editor.value);
             execSqlBtn.disabled = true;
             outBox.innerText = `⏳ Exécution SQL sur votre instance PostgreSQL 18 (base : ${db})...`;
 
@@ -842,6 +889,47 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             execSqlBtn.disabled = false;
             outBox.innerText = `[Instance: ${data.container || 'N/A'} | Base: ${data.database || db} | Durée: ${data.duration_ms || 0} ms]\n\n` + (data.output || '');
+        });
+    }
+
+    const explainSqlBtn = document.getElementById('btn-explain-sql');
+    if (explainSqlBtn && execSqlBtn) {
+        explainSqlBtn.addEventListener('click', () => {
+            const editor = document.getElementById('lab-sql-editor');
+            if (!editor) return;
+            const current = editor.value.trim();
+            if (current && !/^EXPLAIN\b/i.test(current)) {
+                editor.value = `EXPLAIN (ANALYZE, BUFFERS)\n${current}`;
+            }
+            execSqlBtn.click();
+        });
+    }
+
+    const inspectSchemaBtn = document.getElementById('btn-inspect-schema');
+    if (inspectSchemaBtn) {
+        inspectSchemaBtn.addEventListener('click', async () => {
+            const outBox = document.getElementById('lab-sql-output');
+            const db = getSelectedLabDb();
+            if (!outBox) return;
+            inspectSchemaBtn.disabled = true;
+            outBox.innerText = `⏳ Inspection du catalogue relationnel de la base ${db}...`;
+            try {
+                const res = await fetch('index.php?action=api_schema_inspect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                    body: JSON.stringify({ csrf_token: csrfToken, database: db })
+                });
+                const data = await res.json();
+                const tables = Array.isArray(data.tables) ? data.tables : [];
+                let lines = [`[EXPLORATEUR DE SCHÉMA — Base : ${data.database || db} | Source : ${data.source || 'catalog'} | ${tables.length} table(s)]`, ''];
+                tables.forEach((t) => {
+                    lines.push(`▸ ${t.schema}.${t.table} (~${t.est_rows} lignes)`);
+                    lines.push(`    Colonnes : ${t.columns}`);
+                });
+                outBox.innerText = lines.join('\n');
+            } finally {
+                inspectSchemaBtn.disabled = false;
+            }
         });
     }
 

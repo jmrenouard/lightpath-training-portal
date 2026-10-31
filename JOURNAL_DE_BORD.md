@@ -206,6 +206,29 @@
   3. **Tagging `'module'` et couverture `Parcours 4 (SQL-01..05)` des Flashcards SRS (`getFlashcards()`) :** Ajout du champ `'module'` (`M01`..`M29`) sur les 48 flashcards existantes (`fc_01`..`fc_48`) et création de 5 nouvelles flashcards (`fc_49` à `fc_53`, `'category' => 'SQL:2023'`, `'module' => 'SQL-01'` à `'SQL-05'`) couvrant l'intégralité du Parcours 4 (total porté à **53 flashcards SRS**).
 * **Tests post-correction :** ✅ 265 / 265 passés dans `php tests/run_tests.php` (0 régression)
 
+---
+
+### Correction RCA-163 (`RCA-LMS-33`) — Audit `/ponytail-audit` de la Plateforme LMS (7 Correctifs) & Implémentation `/dev-team` des 12 Fonctionnalités LMS Entreprise & Qualiopi (Axes A–D)
+* **Date :** 2026-10-31 23:18
+* **Issues GitHub associées :** `lightpath-training-portal#23`, `training_postgresql#100`
+* **Fichiers modifiés :** `src/Core/{Security,StorageInterface,JsonStorage}.php`, `src/Course/{CourseRepository,DownloadController}.php`, `src/Docker/{DockerManager,LabSqlRunner}.php`, `public/index.php`, `public/assets/js/app.js`, `templates/layout.php`, `templates/pages/{module_view,lab_view,documents,flashcards,attendance,satisfaction,exam,certificate,verify,notes,dashboard,admin}.php`, `tests/run_tests.php`, `REGISTRE_RCA.md`, `JOURNAL_DE_BORD.md`
+* **Nature de la correction :**
+  1. **Remédiation des 7 constats de l'audit `/ponytail-audit` :**
+     - Extension de `Security::isValidHalfDayKey()` à `J1_AM..J11_PM` pour couvrir les cursus de 10 jours (70h).
+     - Lecture de `$userProgress['flashcard_confidence']` dans `flashcards.php` et remplacement des compteurs codés en dur (`42 SRS`) par le compteur dynamique (`53 SRS`) dans `layout.php` et `dashboard.php`.
+     - Sélection de `$allAttempts[0]` (tentative la plus récente insérée par `array_unshift`) au lieu de `end($allAttempts)` dans `exam.php`.
+     - Recalcul déterministe côté serveur du score QCM dans `api_submit_quiz` (`public/index.php`) lorsque `answers` est fourni.
+     - Écriture atomique du cache Docker (`DockerManager::writeStatusCache()`) via `.tmp` + `LOCK_EX` + `rename()`.
+     - Extension de `CourseRepository::searchContent()` (`Ctrl+K`) aux documents Qualiopi (`referentiel`), outils DBA (`tools`), exemples multi-langages (`examples`) et cartes SRS (`flashcards`).
+     - Suppression de la branche morte `$page === 'docker'`, factorisation de `renderDiscussionSection()` dans `layout.php` et affichage du badge `$fc['module']` sur les flashcards.
+  2. **Implémentation des 12 fonctionnalités LMS Entreprise & Qualiopi (Axes A–D) :**
+     - **Axe A :** Lecteur vidéo HTML5 Studio 1080p (`?mode=video` dans `module_view.php`) avec streaming HTTP `206 Partial Content`, sous-titres WebVTT et transcription interactive ; explorateur de code polyglotte `pgexamples/` (Python, Go, PHP, SQL) dans `documents.php` (`?page=documents&tab=examples`) ; filtres par module/niveau et Mode Focus dans `flashcards.php`.
+     - **Axe B :** Filtre d'émargement par parcours (3j/5j/10j), contre-signature formateur (`signTrainerAttendance`) et impression OPCO dans `attendance.php` ; évaluation Qualiopi à froid J+60 (`saveColdSatisfactionSurvey`, `?page=satisfaction&tab=cold`) ; vérification publique de certificat (`?page=verify&code=...`, `findCertificateByCode`) et QR Code SVG 100 % offline (`Security::renderVerificationQrSvg`) sur `certificate.php`.
+     - **Axe C :** Explorateur de schéma relationnel (`LabSqlRunner::inspectDatabaseSchema`), bouton `📊 EXPLAIN ANALYZE` 1-clic, historique SQL persistant et indices progressifs (`LabSqlRunner::extractLabHint`) dans `lab_view.php` ; carnet de notes centralisé (`?page=notes` dans `templates/pages/notes.php`) avec filtre et export Markdown.
+     - **Axe D :** Diffusion d'annonce salle de classe en direct et verrouillage pédagogique des corrigés/examen (`getClassroomState` / `saveClassroomState`) ; modération formateur du forum Q&A (`resolveDiscussionMessage`, `deleteDiscussionMessage`, `getAllCourseDiscussions` + onglet `💬 Questions Q&A` dans `admin.php`) ; import CSV de cohorte en masse (`importUsersFromCsv`) et export de package `.zip` SCORM 1.2 complet (`DownloadController::buildScorm12ZipPackage`).
+* **Tests post-correction :** ✅ 298 / 298 passés dans `php tests/run_tests.php` (0 régression)
+
+
 
 
 

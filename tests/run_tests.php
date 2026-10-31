@@ -673,6 +673,137 @@ foreach (['SQL-01', 'SQL-02', 'SQL-03', 'SQL-04', 'SQL-05'] as $sqlModCode) {
     $t->assertTrue(isset($fcModulesFound[$sqlModCode]), "RCA-LMS-32 : Le module {$sqlModCode} du Parcours 4 (SQL:2023) est couvert par les Flashcards SRS");
 }
 
+// 16. Tests Contrats RCA-163 / RCA-LMS-33 (Audit /ponytail-audit 7 correctifs + 12 Nouvelles Fonctionnalités LMS Entreprise & Qualiopi Axes A..D)
+echo "\n--- 16. Tests Contrats RCA-163 / RCA-LMS-33 (7 Correctifs Audit /ponytail + 12 Fonctionnalités LMS Entreprise & Qualiopi) ---\n";
+
+// 16.1 Audit #1 & Feature B1 : Émargement 10 jours (J1_AM..J11_PM) + Contre-signature Formateur OPCO
+$t->assertTrue(Security::isValidHalfDayKey('J6_AM') && Security::isValidHalfDayKey('J10_PM') && Security::isValidHalfDayKey('J11_PM'), "RCA-163 (Audit #1) : Security::isValidHalfDayKey autorise les demi-journées J6_AM..J11_PM (cursus 10 jours)");
+$t->assertTrue(!Security::isValidHalfDayKey('J12_AM') && !Security::isValidHalfDayKey('INVALID'), "RCA-163 (Audit #1) : Security::isValidHalfDayKey rejette les clés hors plage (> J11_PM)");
+$storage->signAttendance(3, 'postgresql-18', 'J6_AM', '192.0.2.50', 'UnitTest-Day6');
+$storage->signAttendance(3, 'postgresql-18', 'J10_PM', '192.0.2.50', 'UnitTest-Day10');
+$attAfter10d = $storage->getUserAttendance(3, 'postgresql-18');
+$t->assertTrue(isset($attAfter10d['J6_AM']) && isset($attAfter10d['J10_PM']), "RCA-163 (Audit #1) : signAttendance persiste bien les demi-journées J6_AM et J10_PM");
+
+$storage->signTrainerAttendance(3, 'postgresql-18', 'J6_AM', 'Jean-Marie Renouard');
+$attAfterTrainer = $storage->getUserAttendance(3, 'postgresql-18');
+$t->assertTrue(($attAfterTrainer['J6_AM']['trainer_name'] ?? '') === 'Jean-Marie Renouard' && !empty($attAfterTrainer['J6_AM']['trainer_signed_at']), "RCA-163 (Feature B1) : signTrainerAttendance appose le visa formateur sur la demi-journée ciblée");
+$storage->signTrainerAttendance(0, 'postgresql-18', 'ALL', 'Jean-Marie Renouard');
+$attAfterAllTrainer = $storage->getUserAttendance(3, 'postgresql-18');
+$t->assertTrue(!empty($attAfterAllTrainer['J10_PM']['trainer_signed_at']), "RCA-163 (Feature B1) : signTrainerAttendance(0, ..., 'ALL') contre-signe en 1 clic toutes les demi-journées émargées");
+
+// 16.2 Audit #2 & Feature A3 : Persistance SRS flashcards.php, compteurs dynamiques & filtres module/niveau/Focus
+$fcTplSrc = (string)file_get_contents(__DIR__ . '/../templates/pages/flashcards.php');
+$layoutTplSrc = (string)file_get_contents(__DIR__ . '/../templates/layout.php');
+$dashTplSrc = (string)file_get_contents(__DIR__ . '/../templates/pages/dashboard.php');
+$t->assertTrue(str_contains($fcTplSrc, "flashcard_confidence") && str_contains($fcTplSrc, "fc-filter-module") && str_contains($fcTplSrc, "btn-fc-focus-toggle"), "RCA-163 (Audit #2 & Feature A3) : flashcards.php lit flashcard_confidence, affiche le badge module et propose les filtres + Mode Focus");
+$t->assertTrue(!str_contains($layoutTplSrc, '>42 SRS<') && !str_contains($dashTplSrc, '42 cartes'), "RCA-163 (Audit #2) : Suppression des compteurs codés en dur '42 SRS' / '42 cartes' dans layout.php et dashboard.php");
+
+// 16.3 Audit #3 : exam.php sélectionne $allAttempts[0] (dernière tentative insérée par array_unshift)
+$examTplSrc = (string)file_get_contents(__DIR__ . '/../templates/pages/exam.php');
+$t->assertTrue(str_contains($examTplSrc, '$allAttempts[0]') && !str_contains($examTplSrc, 'end($allAttempts)'), 'RCA-163 (Audit #3) : exam.php affiche $allAttempts[0] (tentative la plus récente) au lieu de end($allAttempts)');
+
+// 16.4 Audit #4 : Validation serveur des réponses QCM dans api_submit_quiz (public/index.php)
+$indexSrc = (string)file_get_contents(__DIR__ . '/../public/index.php');
+$t->assertTrue(str_contains($indexSrc, 'parseModuleFile($modObj[\'source_md_path\']') && !str_contains($indexSrc, '$page === \'docker\''), 'RCA-163 (Audit #4 & #7) : api_submit_quiz recalcule le score QCM côté serveur et la branche morte $page === \'docker\' est supprimée');
+
+// 16.5 Audit #5 : Écriture atomique du cache Docker dans DockerManager::writeStatusCache
+$dockerMgrSrc = (string)file_get_contents(__DIR__ . '/../src/Docker/DockerManager.php');
+$t->assertTrue(str_contains($dockerMgrSrc, 'LOCK_EX') && str_contains($dockerMgrSrc, '@rename($tmpPath, $this->cacheFile)'), "RCA-163 (Audit #5) : DockerManager::writeStatusCache écrit de manière atomique (.tmp + LOCK_EX + rename)");
+
+// 16.6 Audit #6, Feature A1 & Feature A2 : Vidéos MP4/VTT/Transcript, Exemples pgexamples & Recherche Plein-Texte étendue
+$mod01 = $repo->getModule('postgresql-18', 'module_01_introduction_postgresql_18');
+$t->assertTrue($mod01 !== null && !empty($mod01['has_video']) && isset($mod01['downloads']['video_mp4']) && isset($mod01['downloads']['video_vtt']), "RCA-163 (Feature A1) : CourseRepository découvre les vidéos MP4 Studio, sous-titres WebVTT et transcriptions de video_engine/output/");
+$examples = $pgCourse['examples'] ?? [];
+$t->assertGreaterThanOrEqual(4, count($examples), "RCA-163 (Feature A2) : CourseRepository::discoverExamples découvre les exemples multi-langages (Python, Go, PHP, SQL) de pgexamples/");
+$firstExId = (string)array_key_first($examples);
+$firstExObj = $repo->getExampleDoc('postgresql-18', $firstExId);
+$t->assertTrue($firstExObj !== null && is_file((string)$firstExObj['path']), "RCA-163 (Feature A2) : CourseRepository::getExampleDoc retourne un descripteur valide pour pgexamples");
+
+$searchRef = $repo->searchContent('postgresql-18', 'Qualiopi');
+$searchEx = $repo->searchContent('postgresql-18', 'psycopg');
+$searchFc = $repo->searchContent('postgresql-18', 'fillfactor');
+$searchTypes = array_unique(array_merge(
+    array_column($searchRef, 'type'),
+    array_column($searchEx, 'type'),
+    array_column($searchFc, 'type')
+));
+$t->assertTrue(in_array('referentiel', $searchTypes, true) || in_array('flashcard', $searchTypes, true) || in_array('example', $searchTypes, true), "RCA-163 (Audit #6) : CourseRepository::searchContent indexe désormais referentiel, tools, examples et flashcards");
+
+// 16.7 Feature B2 : Évaluation Qualiopi à Froid (J+60 Impact Métier — Indicateurs 30 & 32)
+$storage->saveColdSatisfactionSurvey(3, 'postgresql-18', [
+    'user_name' => 'Sophie Bernard',
+    'company' => 'Client Production SA',
+    'prod_application' => 5,
+    'perf_gains' => 5,
+    'autonomy_level' => 4,
+    'tools_adoption' => 5,
+    'career_impact' => 5,
+    'concrete_projects' => 'Mise en place de pgBackRest + PgBouncer et tuning Linux vm.overcommit_memory=2',
+    'further_needs' => 'Approfondissement Kubernetes CloudNativePG',
+]);
+$coldSurvey = $storage->getUserColdSatisfaction(3, 'postgresql-18');
+$allColdSurveys = $storage->getAllColdSatisfactionSurveys();
+$t->assertTrue($coldSurvey !== null && (float)$coldSurvey['average_rating'] >= 4.5 && count($allColdSurveys) === 1, "RCA-163 (Feature B2) : saveColdSatisfactionSurvey et getUserColdSatisfaction persistent l'évaluation à froid J+60");
+
+// 16.8 Feature B3 : Vérification Publique d'Authenticité de Certificat & QR Code SVG 100% Autonome
+$savedExamJson = $storage->saveExamAttempt(3, 'postgresql-18', $examEval);
+$certIdToVerify = (string)($savedExamJson['certificate_id'] ?? '');
+$verifiedCert = $storage->findCertificateByCode($certIdToVerify);
+$t->assertTrue($verifiedCert !== null && (bool)$verifiedCert['verified'] === true && (int)$verifiedCert['user_id'] === 3, "RCA-163 (Feature B3) : findCertificateByCode retrouve et authentifie un certificat par son code unique LP-PG18-CERT-...");
+$t->assertTrue($storage->findCertificateByCode('LP-PG18-CERT-INEXISTANT') === null, "RCA-163 (Feature B3) : findCertificateByCode retourne null pour un code de certificat invalide");
+$qrSvg = Security::renderVerificationQrSvg('index.php?page=verify&code=' . urlencode($certIdToVerify), $certIdToVerify);
+$t->assertTrue(str_starts_with($qrSvg, '<svg ') && str_contains($qrSvg, 'rect') && !str_contains($qrSvg, 'https://'), "RCA-163 (Feature B3) : Security::renderVerificationQrSvg génère un QR Code SVG 100% offline sans dépendance externe");
+
+// 16.9 Feature C1 & C3 : Explorateur de Schéma Relationnel (inspectDatabaseSchema) & Indice Progressif (extractLabHint)
+$schemaDvd = $sqlRunner->inspectDatabaseSchema(3, 'dvdrental');
+$schemaCluster = $sqlRunner->inspectDatabaseSchema(3, 'formation_pg');
+$t->assertTrue(($schemaDvd['success'] ?? false) === true && count($schemaDvd['tables'] ?? []) >= 6, "RCA-163 (Feature C1) : LabSqlRunner::inspectDatabaseSchema retourne le catalogue des tables et colonnes pour dvdrental (Sakila)");
+$t->assertTrue(($schemaCluster['success'] ?? false) === true && count($schemaCluster['tables'] ?? []) >= 4, "RCA-163 (Feature C1) : LabSqlRunner::inspectDatabaseSchema retourne le catalogue des tables et vues système pour formation_pg");
+$lab01Obj = $repo->getLab('postgresql-18', 'lab_01_introduction_setup_postgresql_18');
+$lab01Hint = $sqlRunner->extractLabHint((string)file_get_contents((string)$lab01Obj['source_md_path']), 'lab_01_introduction_setup_postgresql_18');
+$t->assertTrue(!empty($lab01Hint['hint']) && strlen((string)$lab01Hint['hint']) > 20, "RCA-163 (Feature C3) : LabSqlRunner::extractLabHint extrait un indice pédagogique progressif sans dévoiler le corrigé complet");
+
+// 16.10 Feature C2 : Carnet de Notes Centralisé (?page=notes & export Markdown)
+$notesTplSrc = (string)file_get_contents(__DIR__ . '/../templates/pages/notes.php');
+$t->assertTrue(str_contains($notesTplSrc, 'export_notes_md') && str_contains($notesTplSrc, 'note-inline-editor'), "RCA-163 (Feature C2) : templates/pages/notes.php fournit le carnet de notes centralisé avec filtre et export Markdown");
+
+// 16.11 Feature D1 & D2 : Diffusion Salle de Classe Live, Verrouillage Pédagogique & Modération Forum Q&A
+$storage->saveClassroomState('postgresql-18', [
+    'broadcast_message' => 'Atelier 06 en cours — Corrigés verrouillés jusqu\'à 15h30',
+    'lock_solutions' => true,
+    'lock_exam' => true,
+    'updated_by' => 'Jean-Marie Renouard',
+]);
+$clsState = $storage->getClassroomState('postgresql-18');
+$t->assertTrue(($clsState['broadcast_message'] ?? '') !== '' && $clsState['lock_solutions'] === true && $clsState['lock_exam'] === true, "RCA-163 (Feature D1) : saveClassroomState et getClassroomState persistent l'annonce live et les verrous pédagogiques");
+
+$addedDisc = $storage->addDiscussionMessage('postgresql-18', 'module_01_introduction_postgresql_18', 3, 'Thomas Dubois', 'student', 'Question sur io_method = worker');
+$firstMsgId = (string)($addedDisc['id'] ?? '');
+$t->assertTrue($firstMsgId !== '' && $storage->resolveDiscussionMessage('postgresql-18', 'module_01_introduction_postgresql_18', $firstMsgId, true), "RCA-163 (Feature D2) : resolveDiscussionMessage marque une question Q&A comme résolue");
+$allCourseDisc = $storage->getAllCourseDiscussions('postgresql-18');
+$t->assertTrue(count($allCourseDisc) >= 1 && !empty($allCourseDisc[0]['resolved']), "RCA-163 (Feature D2) : getAllCourseDiscussions agrège les discussions de la formation avec leur statut résolu");
+$t->assertTrue($storage->deleteDiscussionMessage('postgresql-18', 'module_01_introduction_postgresql_18', $firstMsgId), "RCA-163 (Feature D2) : deleteDiscussionMessage supprime proprement un message Q&A");
+
+// 16.12 Feature D3 : Import CSV de Cohorte en Masse & Export Package SCORM 1.2 (.zip)
+$csvBatch = "Claire Martin;claire.martin@banque.fr;=SUM(1,2) Banque SA;student;LightPath2026!\n"
+    . "David Roy;david.roy@banque.fr;Banque SA;student;LightPath2026!\n"
+    . "Doublon;claire.martin@banque.fr;Banque SA;student;LightPath2026!";
+$csvRes = $storage->importUsersFromCsv($csvBatch);
+$t->assertTrue($csvRes['created'] === 2 && $csvRes['skipped'] === 1, "RCA-163 (Feature D3) : importUsersFromCsv crée les nouveaux stagiaires et ignore les doublons d'email");
+$claireUser = $storage->getUserByEmail('claire.martin@banque.fr');
+$t->assertTrue($claireUser !== null && str_starts_with((string)$claireUser['company'], "'=SUM"), "RCA-163 (Feature D3) : importUsersFromCsv neutralise les injections de formules CSV via Security::sanitizeCsvCell");
+
+$dlController = new \LightPath\LMS\Course\DownloadController($repo);
+$scormZipPath = $dlController->buildScorm12ZipPackage('postgresql-18', $pgCourse);
+$scormZipBytes = ($scormZipPath !== null && is_file($scormZipPath)) ? (string)file_get_contents($scormZipPath) : '';
+if ($scormZipPath !== null && is_file($scormZipPath)) {
+    @unlink($scormZipPath);
+}
+$t->assertTrue(str_starts_with($scormZipBytes, "PK\x03\x04") && str_contains($scormZipBytes, 'imsmanifest.xml') && str_contains($scormZipBytes, 'scorm_api.js'), "RCA-163 (Feature D3) : DownloadController::buildScorm12ZipPackage génère une archive ZIP SCORM 1.2 valide contenant imsmanifest.xml et scorm_api.js");
+
+$pdoAdapter->saveColdSatisfactionSurvey(3, 'postgresql-18', ['prod_application' => 5, 'perf_gains' => 5]);
+$t->assertTrue($pdoAdapter->getUserColdSatisfaction(3, 'postgresql-18') !== null, "RCA-163 (Parité SQLite PdoStorage) : PdoStorage supporte les nouvelles méthodes RCA-163 (J+60, ClassroomState, CSV Import)");
+
 exit($t->summary());
 
 

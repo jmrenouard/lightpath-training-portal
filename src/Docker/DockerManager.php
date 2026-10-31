@@ -62,7 +62,13 @@ class DockerManager
         if (!is_dir($dir)) {
             @mkdir($dir, 0775, true);
         }
-        @file_put_contents($this->cacheFile, json_encode($cache, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $tmpPath = $this->cacheFile . '.tmp.' . getmypid() . '.' . mt_rand(1000, 9999);
+        $json = (string)json_encode($cache, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        @file_put_contents($tmpPath, $json, LOCK_EX);
+        if (!@rename($tmpPath, $this->cacheFile)) {
+            @copy($tmpPath, $this->cacheFile);
+            @unlink($tmpPath);
+        }
     }
 
     public function detectRuntime(bool $forceRefresh = false): array
