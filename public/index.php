@@ -105,12 +105,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'register') {
 }
 
 $currentUser = $auth->currentUser();
-if ($currentUser === null) {
+if ($currentUser === null && $page !== 'verify') {
     require __DIR__ . '/../templates/pages/login.php';
     exit;
 }
 
-$userId = (int)$currentUser['id'];
+$userId = (int)($currentUser['id'] ?? 0);
 // Initialiser le jeton CSRF en session puis libérer immédiatement le verrou de session sur les requêtes GET/API
 Security::getCsrfToken();
 if ($_SERVER['REQUEST_METHOD'] === 'GET' || str_starts_with($action, 'api_')) {
@@ -125,6 +125,16 @@ if ($action === 'download') {
     $itemId = (string)($_GET['id'] ?? '');
     $format = (string)($_GET['format'] ?? 'pdf');
     $inline = isset($_GET['inline']) && $_GET['inline'] === '1';
+
+    if ($type === 'lab') {
+        $classroomState = $storage->getClassroomState($currentCourseSlug);
+        $solutionsLocked = (!empty($classroomState['lock_solutions']) || !empty($classroomState['solutions_locked'])) && !$auth->isStaff($currentUser);
+        if ($solutionsLocked) {
+            http_response_code(403);
+            echo 'Le téléchargement et la consultation des énoncés/corrigés de labs sont temporairement verrouillés par le formateur.';
+            exit;
+        }
+    }
 
     $resolved = $downloader->resolveDownloadPath($currentCourseSlug, $type, $itemId, $format);
     if ($resolved === null) {
@@ -375,6 +385,19 @@ if (str_starts_with($action, 'api_')) {
             exit;
 
         case 'api_run_lab_solution':
+            $classroomState = $storage->getClassroomState($currentCourseSlug);
+            $solutionsLocked = (!empty($classroomState['lock_solutions']) || !empty($classroomState['solutions_locked'])) && !$auth->isStaff($currentUser);
+            if ($solutionsLocked) {
+                http_response_code(403);
+                echo json_encode([
+                    'success' => false,
+                    'passed' => false,
+                    'error' => 'Les corrigés officiels sont temporairement verrouillés par le formateur.',
+                    'message' => 'Les corrigés officiels sont temporairement verrouillés par le formateur.',
+                ]);
+                exit;
+            }
+
             $labId = (string)($payload['lab_id'] ?? '');
             $database = isset($payload['database']) && $payload['database'] !== '' ? (string)$payload['database'] : null;
             $labMeta = $courseRepo->getLab($currentCourseSlug, $labId);
@@ -669,7 +692,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($action === 'admin_import_users_csv') {
-            $csvRaw = trim((string)($_POST['csv_content'] ?? ''));
+            $csvRaw = trim((string)($_POST['csv_content'] ?? ($_POST['csv_payload'] ?? '')));
             $defaultPw = trim((string)($_POST['default_password'] ?? 'LightPath2026!'));
             $importRes = $storage->importUsersFromCsv($csvRaw, $defaultPw !== '' ? $defaultPw : 'LightPath2026!');
             $storage->logAuditEvent($currentUser['email'], 'ADMIN_CSV_IMPORT', "Import cohorte CSV : {$importRes['created']} créés, {$importRes['skipped']} ignorés");
@@ -739,13 +762,13 @@ if ($page === 'module' && !empty($_GET['id'])) {
     }
 }
 
-$userProgress = $storage->getUserProgress($userId, $currentCourseSlug);
-$userDiagnostic = $storage->getDiagnosticResult($userId, $currentCourseSlug);
-$userBestExam = $storage->getBestExamAttempt($userId, $currentCourseSlug);
-$userAttendance = $storage->getUserAttendance($userId, $currentCourseSlug);
+$userProgress = $userId > 0 ? $storage->getUserProgress($userId, $currentCourseSlug) : ['completed_modules' => [], 'completed_labs' => [], 'quiz_scores' => []];
+$userDiagnostic = $userId > 0 ? $storage->getDiagnosticResult($userId, $currentCourseSlug) : null;
+$userBestExam = $userId > 0 ? $storage->getBestExamAttempt($userId, $currentCourseSlug) : null;
+$userAttendance = $userId > 0 ? $storage->getUserAttendance($userId, $currentCourseSlug) : [];
 $userGamification = Gamification::computeUserBadgesAndXp($userProgress, $userDiagnostic, $userBestExam, $userAttendance);
 
-$dockerStatus = $docker->getCachedUserContainerStatus($userId);
+$dockerStatus = $userId > 0 ? $docker->getCachedUserContainerStatus($userId) : ['running' => false, 'container_name' => 'aucun', 'port' => 0, 'connection_string' => ''];
 $classroomState = $storage->getClassroomState($currentCourseSlug);
 $allCourses = $courseRepo->getAllCourses();
 

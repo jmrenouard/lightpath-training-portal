@@ -188,7 +188,21 @@ class DownloadController
                     $fp = fopen($fileInfo['path'], 'rb');
                     if ($fp !== false) {
                         fseek($fp, $start);
-                        echo fread($fp, $length);
+                        $remaining = $length;
+                        $chunkSize = 64 * 1024; // 64 KB
+                        while ($remaining > 0 && !feof($fp)) {
+                            $readSize = min($remaining, $chunkSize);
+                            $buffer = fread($fp, $readSize);
+                            if ($buffer === false || $buffer === '') {
+                                break;
+                            }
+                            echo $buffer;
+                            if (ob_get_level() > 0) {
+                                ob_flush();
+                            }
+                            flush();
+                            $remaining -= strlen($buffer);
+                        }
                         fclose($fp);
                     }
                     exit;

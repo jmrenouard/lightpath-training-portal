@@ -58,7 +58,7 @@ if (!in_array($labMode, ['enonce', 'corrige', 'full', 'html_preview', 'pdf_previ
 $classroomState = $storage->getClassroomState($currentCourseSlug);
 $solutionsLocked = (!empty($classroomState['lock_solutions']) || !empty($classroomState['solutions_locked'])) && !$auth->isStaff($currentUser);
 $lockedSolutionsNotice = false;
-if ($solutionsLocked && in_array($labMode, ['corrige', 'full'], true)) {
+if ($solutionsLocked && in_array($labMode, ['corrige', 'full', 'html_preview', 'pdf_preview'], true)) {
     $labMode = 'enonce';
     $lockedSolutionsNotice = true;
 }
@@ -105,10 +105,16 @@ $activeLabToc = match ($labMode) {
             <strong>Compétence Visée (Norme 7 Piliers Qualiopi) :</strong> <?= Security::e($lab['bloom']) ?>
         </p>
 
-        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-            <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted);">📥 Télécharger l'énoncé :</span>
-            <?= renderDownloadStrip($currentCourseSlug, 'lab', $labId, $lab['downloads'] ?? []) ?>
-        </div>
+        <?php if (!$solutionsLocked): ?>
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted);">📥 Télécharger l'énoncé :</span>
+                <?= renderDownloadStrip($currentCourseSlug, 'lab', $labId, $lab['downloads'] ?? []) ?>
+            </div>
+        <?php else: ?>
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                <span class="badge-code" style="color: var(--text-muted); border-color: var(--border-hairline);">🔒 Téléchargement des supports du lab verrouillé par le formateur</span>
+            </div>
+        <?php endif; ?>
     </div>
 
     <div style="display: flex; flex-direction: column; gap: 0.55rem; min-width: 240px;">
@@ -169,13 +175,13 @@ $activeLabToc = match ($labMode) {
                 <span>🔒 Corrigé Verrouillé (Phase Recherche)</span>
             </span>
         <?php endif; ?>
-        <?php if (isset($lab['downloads']['html'])): ?>
+        <?php if (!$solutionsLocked && isset($lab['downloads']['html'])): ?>
             <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=html_preview&course=<?= urlencode($currentCourseSlug) ?>"
                class="view-mode-tab <?= $labMode === 'html_preview' ? 'active' : '' ?>">
                 <span>🌐 Rendu Web Studio</span>
             </a>
         <?php endif; ?>
-        <?php if (isset($lab['downloads']['pdf'])): ?>
+        <?php if (!$solutionsLocked && isset($lab['downloads']['pdf'])): ?>
             <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=pdf_preview&course=<?= urlencode($currentCourseSlug) ?>"
                class="view-mode-tab <?= $labMode === 'pdf_preview' ? 'active' : '' ?>">
                 <span>📕 Support PDF</span>
@@ -348,11 +354,11 @@ $activeLabToc = match ($labMode) {
                         ◀ Atelier Précédent
                     </a>
                 <?php endif; ?>
-                <?php if ($labMode !== 'corrige'): ?>
+                <?php if (!$solutionsLocked && $labMode !== 'corrige'): ?>
                     <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=corrige&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald">
                         ✅ Consulter le Corrigé Complet & Débriefing REX
                     </a>
-                <?php else: ?>
+                <?php elseif ($labMode === 'corrige'): ?>
                     <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=enonce&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline">
                         📋 Retourner à l'Énoncé Pas-à-Pas
                     </a>

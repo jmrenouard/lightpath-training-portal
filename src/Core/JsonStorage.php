@@ -667,6 +667,30 @@ class JsonStorage implements StorageInterface
                             $userRecords[$hdKey]['trainer_hash'] = substr(hash('sha256', $tKey . '|' . $hdKey . '|' . $cleanTrainer . '|trainer'), 0, 16);
                         }
                     }
+                } elseif (preg_match('/^J([1-9]|1[01])(?:_DAY)?$/i', $halfDayKey, $matches)) {
+                    $dayNum = (int)$matches[1];
+                    $dayKeys = ["J{$dayNum}_AM", "J{$dayNum}_PM"];
+                    foreach ($dayKeys as $dk) {
+                        if (isset($userRecords[$dk]) && is_array($userRecords[$dk])) {
+                            $userRecords[$dk]['trainer_signed_at'] = $now;
+                            $userRecords[$dk]['trainer_name'] = $cleanTrainer;
+                            $userRecords[$dk]['trainer_hash'] = substr(hash('sha256', $tKey . '|' . $dk . '|' . $cleanTrainer . '|trainer'), 0, 16);
+                        } else {
+                            $userRecords[$dk] = [
+                                'user_id' => (int)explode(':', $tKey)[0],
+                                'course_slug' => $courseSlug,
+                                'half_day_key' => $dk,
+                                'signature' => 'Émargé en session',
+                                'signature_text' => 'Émargé en session',
+                                'signed_at' => $now,
+                                'ip' => '127.0.0.1',
+                                'hash' => substr(hash('sha256', $tKey . '|' . $dk), 0, 16),
+                                'trainer_signed_at' => $now,
+                                'trainer_name' => $cleanTrainer,
+                                'trainer_hash' => substr(hash('sha256', $tKey . '|' . $dk . '|' . $cleanTrainer . '|trainer'), 0, 16),
+                            ];
+                        }
+                    }
                 } elseif (Security::isValidHalfDayKey($halfDayKey)) {
                     $existing = $userRecords[$halfDayKey] ?? [
                         'user_id' => (int)explode(':', $tKey)[0],

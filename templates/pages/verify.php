@@ -49,8 +49,8 @@ $verifyUrl = rtrim((string)($appConfig['website'] ?? 'https://www.lightpath.fr')
 
 <?php if ($code !== ''): ?>
     <?php if ($certData !== null):
-        $holderName = (string)($certData['user_name'] ?? $certData['holder_name'] ?? $currentUser['name'] ?? 'Apprenant Certifié');
-        $holderCompany = (string)($certData['company'] ?? $currentUser['company'] ?? '');
+        $holderName = (string)($certData['user_name'] ?? $certData['holder_name'] ?? ($currentUser['name'] ?? 'Apprenant Certifié'));
+        $holderCompany = (string)($certData['company'] ?? ($currentUser['company'] ?? ''));
         $courseTitle = (string)($certData['course_title'] ?? $currentCourse['title'] ?? 'PostgreSQL 18 — Cursus Complet');
         $submittedAt = (string)($certData['submitted_at'] ?? $certData['issued_at'] ?? date('Y-m-d'));
         $scorePct = (int)($certData['percent'] ?? $certData['percentage'] ?? 0);

@@ -668,6 +668,52 @@ Valide avec php tests/run_tests.php.
   ```
 * **Statut :** ✅ Implémenté — voir Journal de Bord 2026-10-31
 
+---
+
+## Fiche d'Incident RCA-164 (`RCA-LMS-34`) : Remédiation des Constats de la Revue `/ponytail-review` sur le Portail LMS (Items 1, 2, 3, 4, 5, 7, 8, 12) & Suite de Tests Contractuels Section 17
+
+* **Date de détection :** 2026-11-01
+* **Issues GitHub associées :** `lightpath-training-portal#25`, `training_postgresql#101`
+* **Composant Affecté :** `templates/pages/{admin,verify,lab_view,module_view,attendance}.php`, `public/index.php`, `templates/layout.php`, `src/Course/{CourseRepository,DownloadController}.php`, `src/Core/JsonStorage.php`, `tests/run_tests.php`
+* **1. Mécanisme :**
+  La revue contradictoire `/ponytail-review` consécutive à l'audit RCA-163 a révélé 8 points d'amélioration et de remédiation sur le portail LMS :
+  1) **Item 1 (Import CSV cohorte) :** Désynchronisation entre le formulaire `templates/pages/admin.php` (`name="csv_payload"`) et le routeur `public/index.php` (`$_POST['csv_content']`), provoquant un import à vide (0 compte créé).
+  2) **Item 2 (Vérification publique de certificat) :** Le filtre d'authentification initial dans `public/index.php` redirigeait immédiatement vers `login.php` toute requête anonyme (`$currentUser === null`), bloquant l'accès externe direct aux QR codes des attestations de formation `?page=verify&code=...`.
+  3) **Item 3 (Verrouillage étanche des corrigés de labs) :** Le verrou formateur `lock_solutions` pouvait être contourné via l'appel API direct `api_run_lab_solution`, le téléchargement des énoncés complets de labs (`action=download&type=lab`), les onglets d'aperçu studio `html_preview` et `pdf_preview`, et le bouton vert de fin d'atelier dans `lab_view.php`.
+  4) **Item 4 (Transcription vidéo Studio) :** `CourseRepository` définissait la clé `video_transcript_path` tandis que `module_view.php` cherchait `transcript_md_path`, empêchant l'affichage de la transcription synchronisée sous le lecteur vidéo.
+  5) **Item 5 (Streaming vidéo Range 206) :** `DownloadController::streamFile()` chargeait la plage demandée en mémoire contiguë avec `fread($fp, $length)`, risquant la saturation mémoire `memory_limit` sur les requêtes initiales `Range: bytes=0-`.
+  6) **Item 7 (Contre-signature formateur et affichage fidèle) :** `JsonStorage::signTrainerAttendance()` ne reconnaissait pas les clés journalières `J<N>_DAY` ou `J<N>`, et `attendance.php` affichait « Contre-signé » pour la journée dès qu'une seule demi-journée était visée.
+  7) **Item 8 (Découverte des scripts SQL d'exemples) :** `CourseRepository::discoverExamples()` ne scannait pas le sous-dossier `04_ateliers_et_tp/pgexamples/sql/dbclients/*.sql`, privant la médiathèque de code des 9 exemples SQL relationnels.
+  8) **Item 12 (Cache catalogue & invalidation) :** Absence d'alias `loadCourse()`, absence de `clearCatalogCache()`, absence de `LOCK_EX` lors de l'écriture du cache sur disque, et salt de fingerprint `v7_rca163` devant être haussé à `v8_rca164`.
+* **2. Hypothèse :**
+  Corriger chaque point de manière minimale et chirurgicale, assurer la rétrocompatibilité (fallback de noms de champs, clés dupliquées, gestion propre de `$currentUser === null` dans le layout), découper le streaming HTTP 206 par blocs de 64 Ko avec `flush()`, étendre `signTrainerAttendance()` pour `J<N>_DAY`, et valider l'ensemble par une suite de tests contractuels Section 17 garantissant 100% de succès.
+* **3. Contre-mesure :**
+  - Harmonisation du champ textarea dans `admin.php` sur `name="csv_content"` et tolérance `$_POST['csv_content'] ?? ($_POST['csv_payload'] ?? '')` dans `index.php`.
+  - Autorisation de `$page === 'verify'` sans session active dans `index.php`, garde `$userId = 0`, sécurisation de `templates/layout.php` (widgets utilisateur masqués et bouton « 🔐 Connexion » propre) et protection de `verify.php`.
+  - Blocage HTTP 403 sur `api_run_lab_solution` et `action=download&type=lab` lorsque `lock_solutions` est actif pour les non-staff, masquage de la barre de téléchargement de lab, des onglets d'aperçu `html_preview`/`pdf_preview` et du bouton de corrigé de bas de page dans `lab_view.php`.
+  - Émission simultanée de `video_transcript_path` et `transcript_md_path` dans `CourseRepository`, et lecture avec repli dans `module_view.php`.
+  - Découpage du streaming partiel vidéo en chunks de 64 Ko (`65536` octets) avec `ob_flush()` et `flush()`.
+  - Support de `preg_match('/^J([1-9]|1[01])(?:_DAY)?$/i', $halfDayKey)` dans `JsonStorage::signTrainerAttendance()` et distinction visuelle fidèle (journée complète vs matin vs après-midi) avec soumission de `J<N>_DAY` dans `attendance.php`.
+  - Inclusion de `glob($exDir . '/sql/dbclients/*.sql') ?: []` dans `CourseRepository::discoverExamples()` (9 exemples SQL découverts, total porté à 27 exemples multi-langages).
+  - Ajout des méthodes `loadCourse()` et `clearCatalogCache()`, écriture du cache avec `LOCK_EX`, et mise à jour de l'empreinte avec `v8_rca164` incluant `sql/dbclients`.
+  - Ajout de la Section 17 dans `tests/run_tests.php` avec 18 assertions ciblées (suite portée à 316 tests passés à 100 %).
+* **4. Prompt LLM :**
+  ```text
+  Contexte : dépôt lightpath-training-portal. Lis la fiche RCA-164 (RCA-LMS-34) dans REGISTRE_RCA.md.
+  Tâche : Vérifier les remédiations de la revue Ponytail sur le portail LMS :
+  1) admin.php soumet name="csv_content" et index.php lit avec repli $_POST['csv_content'] ?? $_POST['csv_payload'].
+  2) ?page=verify est accessible sans session ($currentUser null), le layout adapte la topbar et verify.php ne lève pas d'avertissement.
+  3) lock_solutions bloque api_run_lab_solution (403), le download de lab (403), et lab_view.php masque téléchargement, prévisualisations et bouton de corrigé.
+  4) CourseRepository fournit video_transcript_path et transcript_md_path, lus avec repli par module_view.php.
+  5) DownloadController diffuse le streaming Range 206 par blocs de 64 Ko avec flush().
+  6) JsonStorage supporte la contre-signature formateur J<N>_DAY (matin et après-midi), et attendance.php envoie J<N>_DAY et affiche fidèlement les visas.
+  7) CourseRepository découvre les 9 exemples SQL de pgexamples/sql/dbclients/ (total 27 exemples).
+  8) CourseRepository expose loadCourse(), clearCatalogCache(), écrit avec LOCK_EX et calcule le fingerprint v8_rca164.
+  9) La suite de tests Section 17 passe à 100% avec au moins 316 assertions réussies.
+  Valide avec : php tests/run_tests.php.
+  ```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-11-01
+
 
 
 

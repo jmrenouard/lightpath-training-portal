@@ -351,8 +351,11 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
         ? sprintf('index.php?action=download&course=%s&type=module&id=%s&format=video_vtt&inline=1', urlencode($currentCourseSlug), urlencode($moduleId))
         : '';
     $transcriptHtml = '';
-    if (!empty($mod['transcript_md_path']) && is_file((string)$mod['transcript_md_path'])) {
-        $parsedTranscript = $mdParser->parseModuleFile((string)$mod['transcript_md_path'], $currentCourseSlug);
+    $transcriptPath = $mod['video_transcript_path']
+        ?? ($mod['transcript_md_path']
+        ?? ($mod['downloads']['video_transcript']['path'] ?? null));
+    if (!empty($transcriptPath) && is_file((string)$transcriptPath)) {
+        $parsedTranscript = $mdParser->parseModuleFile((string)$transcriptPath, $currentCourseSlug);
         $transcriptHtml = (string)($parsedTranscript['html'] ?? '');
     }
     ?>

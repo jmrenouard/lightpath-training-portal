@@ -330,13 +330,20 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
                 </a>
             <?php endif; ?>
 
-            <div class="nav-section-title" style="margin-top: 1rem;">Mon Compte</div>
-            <a href="index.php?page=profile&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'profile' ? 'active' : '' ?>">
-                <span>👤 Profil & Paramètres</span>
-            </a>
-            <a href="index.php?action=logout" class="nav-item" style="color: #FB7185;">
-                <span>🚪 Déconnexion</span>
-            </a>
+            <?php if ($currentUser !== null): ?>
+                <div class="nav-section-title" style="margin-top: 1rem;">Mon Compte</div>
+                <a href="index.php?page=profile&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'profile' ? 'active' : '' ?>">
+                    <span>👤 Profil & Paramètres</span>
+                </a>
+                <a href="index.php?action=logout" class="nav-item" style="color: #FB7185;">
+                    <span>🚪 Déconnexion</span>
+                </a>
+            <?php else: ?>
+                <div class="nav-section-title" style="margin-top: 1rem;">Accès Portail</div>
+                <a href="index.php?page=login" class="nav-item" style="color: var(--accent-cyan);">
+                    <span>🔐 Connexion</span>
+                </a>
+            <?php endif; ?>
         </nav>
 
         <div class="sidebar-footer">
@@ -378,30 +385,38 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
                     </button>
                 <?php endif; ?>
 
-                <!-- Statut du Conteneur Docker Personnel (rafraîchi en asynchrone sans bloquer la navigation) -->
-                <a href="index.php?page=dashboard&course=<?= urlencode($currentCourseSlug) ?>#docker-panel"
-                   id="topbar-docker-pill"
-                   class="docker-pill"
-                   title="État de votre conteneur PostgreSQL 18 dédié">
-                    <span id="topbar-docker-dot" class="status-dot <?= !empty($dockerStatus['running']) ? 'online' : 'offline' ?>"></span>
-                    <span id="topbar-docker-text" class="tabular-nums">
-                        🐳 <?= Security::e($dockerStatus['container_name']) ?>
-                        (Port <?= (int)$dockerStatus['port'] ?> : <?= !empty($dockerStatus['running']) ? 'ACTIF' : 'PRÊT' ?>)
-                    </span>
-                </a>
+                <?php if ($currentUser !== null): ?>
+                    <!-- Statut du Conteneur Docker Personnel (rafraîchi en asynchrone sans bloquer la navigation) -->
+                    <a href="index.php?page=dashboard&course=<?= urlencode($currentCourseSlug) ?>#docker-panel"
+                       id="topbar-docker-pill"
+                       class="docker-pill"
+                       title="État de votre conteneur PostgreSQL 18 dédié">
+                        <span id="topbar-docker-dot" class="status-dot <?= !empty($dockerStatus['running']) ? 'online' : 'offline' ?>"></span>
+                        <span id="topbar-docker-text" class="tabular-nums">
+                            🐳 <?= Security::e($dockerStatus['container_name']) ?>
+                            (Port <?= (int)$dockerStatus['port'] ?> : <?= !empty($dockerStatus['running']) ? 'ACTIF' : 'PRÊT' ?>)
+                        </span>
+                    </a>
 
-                <span class="badge-code tabular-nums" title="<?= Security::e($userGamification['rank'] ?? 'DBA PostgreSQL 18') ?>">
-                    ⚡ <?= (int)($userGamification['xp'] ?? 0) ?> XP • 🏅 <?= (int)($userGamification['unlocked_count'] ?? 0) ?>/<?= (int)($userGamification['total_badges'] ?? 8) ?>
-                </span>
+                    <span class="badge-code tabular-nums" title="<?= Security::e($userGamification['rank'] ?? 'DBA PostgreSQL 18') ?>">
+                        ⚡ <?= (int)($userGamification['xp'] ?? 0) ?> XP • 🏅 <?= (int)($userGamification['unlocked_count'] ?? 0) ?>/<?= (int)($userGamification['total_badges'] ?? 8) ?>
+                    </span>
+                <?php endif; ?>
 
                 <button type="button" id="btn-toggle-theme" class="btn btn-outline btn-sm" title="Basculer Thème Sombre / Clair">
                     🌗 Thème
                 </button>
 
-                <div class="user-chip">
-                    <span>👤 <strong><?= Security::e($currentUser['name']) ?></strong></span>
-                    <span class="role-badge role-<?= Security::e($currentUser['role']) ?>"><?= Security::e($currentUser['role']) ?></span>
-                </div>
+                <?php if ($currentUser !== null): ?>
+                    <div class="user-chip">
+                        <span>👤 <strong><?= Security::e($currentUser['name']) ?></strong></span>
+                        <span class="role-badge role-<?= Security::e($currentUser['role']) ?>"><?= Security::e($currentUser['role']) ?></span>
+                    </div>
+                <?php else: ?>
+                    <a href="index.php?page=login" class="btn btn-primary btn-sm">
+                        🔐 Connexion
+                    </a>
+                <?php endif; ?>
             </div>
         </header>
 

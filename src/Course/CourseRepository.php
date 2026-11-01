@@ -32,6 +32,28 @@ class CourseRepository
         return $result;
     }
 
+    public function loadCourse(string $slug): ?array
+    {
+        return $this->getCourse($slug);
+    }
+
+    public function clearCatalogCache(?string $slug = null): void
+    {
+        if ($slug !== null) {
+            unset($this->cache[$slug]);
+            $cacheFile = $this->cacheDir . '/catalog_cache_' . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $slug) . '.json';
+            if (is_file($cacheFile)) {
+                @unlink($cacheFile);
+            }
+        } else {
+            $this->cache = [];
+            $files = glob($this->cacheDir . '/catalog_cache_*.json') ?: [];
+            foreach ($files as $f) {
+                @unlink($f);
+            }
+        }
+    }
+
     public function getCourse(string $slug): ?array
     {
         if (isset($this->cache[$slug])) {
@@ -134,7 +156,7 @@ class CourseRepository
             'fingerprint' => $fingerprint,
             'generated_at' => date('c'),
             'payload' => $payload,
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
 
         $course = array_merge($cfg, $payload);
         $this->cache[$slug] = $course;
@@ -147,13 +169,14 @@ class CourseRepository
             $root . '/03_supports_de_cours',
             $root . '/04_ateliers_et_tp',
             $root . '/04_ateliers_et_tp/pgexamples',
+            $root . '/04_ateliers_et_tp/pgexamples/sql/dbclients',
             $root . '/05_cheatsheets/modules',
             $root . '/05_cheatsheets/labs',
             $root . '/01_programme_et_referentiel',
             $root . '/video_engine/output',
             $pgScriptsRoot,
         ];
-        $parts = ['v7_rca163', md5(json_encode($tracks) ?: '')];
+        $parts = ['v8_rca164', md5(json_encode($tracks) ?: '')];
         foreach ($dirs as $d) {
             $parts[] = is_dir($d) ? (string)@filemtime($d) : '0';
         }
@@ -477,6 +500,7 @@ class CourseRepository
                 'source_html_path' => is_file($dir . '/' . $baseName . '.html') ? ($dir . '/' . $baseName . '.html') : null,
                 'has_video' => isset($downloads['video_mp4']),
                 'video_transcript_path' => $downloads['video_transcript']['path'] ?? null,
+                'transcript_md_path' => $downloads['video_transcript']['path'] ?? null,
                 'downloads' => $downloads,
                 'linked_lab_id' => null,
                 'linked_lab_title' => null,
@@ -732,6 +756,7 @@ class CourseRepository
             glob($exDir . '/golang/*.go') ?: [],
             glob($exDir . '/php/*.php') ?: [],
             glob($exDir . '/sql/*.sql') ?: [],
+            glob($exDir . '/sql/dbclients/*.sql') ?: [],
             glob($exDir . '/README*.md') ?: []
         );
         natsort($files);
