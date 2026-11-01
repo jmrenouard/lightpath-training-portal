@@ -85,6 +85,9 @@ $loggedHours = $signedHalfDaysCount * 3.5;
     </div>
     <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
         <?php if ($isStaffUser): ?>
+            <a href="index.php?action=export_attendance_csv&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline-cyan btn-sm">
+                📊 Exporter Registre OPCO (CSV Détaillé)
+            </a>
             <form method="POST" action="index.php?page=attendance&action=sign_trainer_attendance&course=<?= urlencode($currentCourseSlug) ?>" style="display: inline;">
                 <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
                 <input type="hidden" name="target_user_id" value="<?= $userId ?>"/>

@@ -193,7 +193,7 @@ if ($action === 'export_notes_md') {
     exit;
 }
 
-if ($action === 'export_scorm_manifest') {
+if ($action === 'export_scorm_manifest' && $auth->isStaff($currentUser)) {
     $manifestXml = LmsCatalog::generateScormManifest($currentCourse ?? []);
     header('Content-Type: application/xml; charset=UTF-8');
     header('Content-Disposition: attachment; filename="imsmanifest.xml"');
@@ -201,7 +201,7 @@ if ($action === 'export_scorm_manifest') {
     exit;
 }
 
-if ($action === 'export_scorm_zip') {
+if ($action === 'export_scorm_zip' && $auth->isStaff($currentUser)) {
     $zipPath = $downloader->buildScorm12ZipPackage($currentCourseSlug, $currentCourse ?? []);
     if ($zipPath === null || !is_file($zipPath)) {
         http_response_code(500);
@@ -213,6 +213,44 @@ if ($action === 'export_scorm_zip') {
     header('Content-Length: ' . (int)filesize($zipPath));
     readfile($zipPath);
     @unlink($zipPath);
+    exit;
+}
+
+if ($action === 'export_attendance_csv' && $auth->isStaff($currentUser)) {
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="registre_emargement_opco_' . $currentCourseSlug . '_' . date('Ymd_His') . '.csv"');
+    $out = fopen('php://output', 'wb');
+    if ($out !== false) {
+        fwrite($out, "\xEF\xBB\xBF");
+        fputcsv($out, [
+            'User_ID', 'Nom', 'Email', 'Entreprise', 'Demi_Journee',
+            'Emarge_Le', 'Adresse_IP', 'Empreinte_SHA256',
+            'Contre_Signe_Le', 'Nom_Formateur', 'Visa_Formateur_Hash',
+        ], ';');
+        foreach ($storage->getUsers() as $u) {
+            $uid = (int)$u['id'];
+            $attRecords = $storage->getUserAttendance($uid, $currentCourseSlug);
+            foreach ($attRecords as $hdKey => $rec) {
+                if (!is_array($rec)) {
+                    continue;
+                }
+                fputcsv($out, [
+                    $uid,
+                    Security::sanitizeCsvCell($u['name'] ?? ''),
+                    Security::sanitizeCsvCell($u['email'] ?? ''),
+                    Security::sanitizeCsvCell($u['company'] ?? ''),
+                    Security::sanitizeCsvCell($rec['half_day_key'] ?? (string)$hdKey),
+                    Security::sanitizeCsvCell($rec['signed_at'] ?? ''),
+                    Security::sanitizeCsvCell($rec['ip'] ?? ''),
+                    Security::sanitizeCsvCell($rec['hash'] ?? ''),
+                    Security::sanitizeCsvCell($rec['trainer_signed_at'] ?? ''),
+                    Security::sanitizeCsvCell($rec['trainer_name'] ?? ''),
+                    Security::sanitizeCsvCell($rec['trainer_hash'] ?? ''),
+                ], ';');
+            }
+        }
+        fclose($out);
+    }
     exit;
 }
 
@@ -417,6 +455,7 @@ if (str_starts_with($action, 'api_')) {
                 'success' => true,
                 'learning_seconds' => $totalSec,
                 'formatted' => Gamification::formatDurationHours($totalSec),
+                'classroom_state' => $storage->getClassroomState($currentCourseSlug),
             ]);
             exit;
 
@@ -433,6 +472,11 @@ if (str_starts_with($action, 'api_')) {
             $level = (int)($payload['level'] ?? 2);
             $storage->saveFlashcardConfidence($userId, $currentCourseSlug, $cardId, $level);
             echo json_encode(['success' => true, 'card_id' => $cardId, 'level' => $level]);
+            exit;
+
+        case 'api_reset_flashcards':
+            $res = $storage->resetFlashcardReviews($userId, $currentCourseSlug);
+            echo json_encode(['success' => $res, 'message' => 'Évaluations SRS réinitialisées.']);
             exit;
 
         case 'api_post_discussion':
@@ -607,7 +651,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $itemId = trim((string)($_POST['item_id'] ?? ''));
         $msgId = trim((string)($_POST['message_id'] ?? ''));
         $modAction = trim((string)($_POST['mod_action'] ?? 'resolve'));
-        $returnPage = trim((string)($_POST['return_page'] ?? 'admin'));
+        $rawReturnPage = trim((string)($_POST['return_page'] ?? 'admin'));
+        $returnPage = in_array($rawReturnPage, ['admin', 'module', 'lab'], true) ? $rawReturnPage : 'admin';
         if ($itemId !== '' && $msgId !== '') {
             if ($modAction === 'delete') {
                 $storage->deleteDiscussionMessage($currentCourseSlug, $itemId, $msgId);
@@ -694,7 +739,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'admin_import_users_csv') {
             $csvRaw = trim((string)($_POST['csv_content'] ?? ($_POST['csv_payload'] ?? '')));
             $defaultPw = trim((string)($_POST['default_password'] ?? 'LightPath2026!'));
-            $importRes = $storage->importUsersFromCsv($csvRaw, $defaultPw !== '' ? $defaultPw : 'LightPath2026!');
+            $importRes = $storage->importUsersFromCsv($csvRaw, $defaultPw !== '' ? $defaultPw : 'LightPath2026!', $currentCourseSlug);
             $storage->logAuditEvent($currentUser['email'], 'ADMIN_CSV_IMPORT', "Import cohorte CSV : {$importRes['created']} créés, {$importRes['skipped']} ignorés");
             $_SESSION['flash_success'] = "Import CSV terminé : {$importRes['created']} compte(s) créé(s), {$importRes['skipped']} ligne(s) ignorée(s).";
             header('Location: index.php?page=admin&tab=users');

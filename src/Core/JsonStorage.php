@@ -598,6 +598,19 @@ class JsonStorage implements StorageInterface
         });
     }
 
+    public function resetFlashcardReviews(int $userId, string $courseSlug): bool
+    {
+        $key = $userId . ':' . $courseSlug;
+        return (bool)$this->mutateFile('progress', [], static function (array $all) use ($key): array {
+            if (isset($all[$key]) && is_array($all[$key])) {
+                $all[$key]['flashcard_confidence'] = [];
+                unset($all[$key]['flashcards']);
+                return [$all, true];
+            }
+            return [$all, true];
+        });
+    }
+
     public function addDiscussionMessage(string $courseSlug, string $itemId, int $userId, string $userName, string $userRole, string $message, ?string $parentId = null): array
     {
         $cleanMsg = function_exists('mb_substr')
@@ -778,8 +791,11 @@ class JsonStorage implements StorageInterface
                 if ($cid !== '' && $cid === $norm) {
                     $uid = (int)($attempt['user_id'] ?? explode(':', (string)$userCourseKey)[0]);
                     $user = $this->getUserById($uid);
+                    $passed = !empty($attempt['passed']);
                     return array_merge($attempt, [
                         'verified' => true,
+                        'passed' => $passed,
+                        'certified' => $passed,
                         'user_id' => $uid,
                         'user_name' => (string)($user['name'] ?? 'Apprenant Certifié LightPath'),
                         'user_email' => (string)($user['email'] ?? ''),
@@ -894,67 +910,90 @@ class JsonStorage implements StorageInterface
         return $result;
     }
 
-    public function importUsersFromCsv(string $csvContent, string $defaultPassword = 'LightPath2026!'): array
+    public function importUsersFromCsv(string $csvContent, string $defaultPassword = 'LightPath2026!', string $courseSlug = 'postgresql-18'): array
     {
         $lines = preg_split('/\r\n|\r|\n/', trim($csvContent)) ?: [];
-        $created = 0;
-        $skipped = 0;
-        $importedUsers = [];
+        $targetCourse = trim($courseSlug) !== '' ? trim($courseSlug) : 'postgresql-18';
 
-        foreach ($lines as $idx => $rawLine) {
-            $line = trim($rawLine);
-            if ($line === '' || str_starts_with($line, '#')) {
-                continue;
-            }
-            $delim = str_contains($line, ';') ? ';' : ',';
-            $cols = str_getcsv($line, $delim);
-            if (count($cols) < 2) {
-                $skipped++;
-                continue;
-            }
-            $name = trim((string)($cols[0] ?? ''));
-            $email = strtolower(trim((string)($cols[1] ?? '')));
-            $company = trim((string)($cols[2] ?? ''));
-            $role = strtolower(trim((string)($cols[3] ?? 'student')));
-            $password = trim((string)($cols[4] ?? '')) !== '' ? trim((string)$cols[4]) : $defaultPassword;
+        return (array)$this->mutateFile('users', [], static function (array $users) use ($lines, $defaultPassword, $targetCourse): array {
+            $created = 0;
+            $skipped = 0;
+            $importedUsers = [];
 
-            // Ignorer la ligne d'en-tête CSV éventuelle
-            if ($idx === 0 && (in_array(strtolower($name), ['name', 'nom', 'fullname', 'nom complet'], true) || in_array($email, ['email', 'courriel', 'mail'], true))) {
-                continue;
+            $existingEmails = [];
+            $maxId = 0;
+            foreach ($users as $u) {
+                if (isset($u['email'])) {
+                    $existingEmails[strtolower(trim((string)$u['email']))] = true;
+                }
+                $uId = (int)($u['id'] ?? 0);
+                if ($uId > $maxId) {
+                    $maxId = $uId;
+                }
             }
 
-            if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                $skipped++;
-                continue;
-            }
-            if ($this->getUserByEmail($email) !== null) {
-                $skipped++;
-                continue;
-            }
-            if (!in_array($role, ['student', 'trainer', 'admin'], true)) {
-                $role = 'student';
+            foreach ($lines as $idx => $rawLine) {
+                $line = trim($rawLine);
+                if ($line === '' || str_starts_with($line, '#')) {
+                    continue;
+                }
+                $delim = str_contains($line, ';') ? ';' : ',';
+                $cols = str_getcsv($line, $delim);
+                if (count($cols) < 2) {
+                    $skipped++;
+                    continue;
+                }
+                $name = trim((string)($cols[0] ?? ''));
+                $email = strtolower(trim((string)($cols[1] ?? '')));
+                $company = trim((string)($cols[2] ?? ''));
+                $role = strtolower(trim((string)($cols[3] ?? 'student')));
+                $password = trim((string)($cols[4] ?? '')) !== '' ? trim((string)$cols[4]) : $defaultPassword;
+
+                // Ignorer la ligne d'en-tête CSV éventuelle
+                if ($idx === 0 && (in_array(strtolower($name), ['name', 'nom', 'fullname', 'nom complet'], true) || in_array($email, ['email', 'courriel', 'mail'], true))) {
+                    continue;
+                }
+
+                if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $skipped++;
+                    continue;
+                }
+                if (isset($existingEmails[$email])) {
+                    $skipped++;
+                    continue;
+                }
+                if (!in_array($role, ['student', 'trainer', 'admin'], true)) {
+                    $role = 'student';
+                }
+
+                $safeName = Security::sanitizeCsvCell($name);
+                $safeCompany = Security::sanitizeCsvCell($company);
+
+                $maxId++;
+                $newUser = [
+                    'id' => $maxId,
+                    'name' => $safeName,
+                    'email' => $email,
+                    'password_hash' => password_hash($password, PASSWORD_BCRYPT),
+                    'role' => $role,
+                    'company' => $safeCompany,
+                    'active' => true,
+                    'enrolled_courses' => array_values(array_unique([$targetCourse, 'postgresql-18'])),
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'last_login' => null,
+                ];
+
+                $users[] = $newUser;
+                $existingEmails[$email] = true;
+                $created++;
+                $importedUsers[] = $newUser;
             }
 
-            $safeName = Security::sanitizeCsvCell($name);
-            $safeCompany = Security::sanitizeCsvCell($company);
-
-            $saved = $this->saveUser([
-                'name' => $safeName,
-                'email' => $email,
-                'password_hash' => password_hash($password, PASSWORD_BCRYPT),
-                'role' => $role,
-                'company' => $safeCompany,
-                'active' => true,
-                'enrolled_courses' => ['postgresql-18'],
-            ]);
-            $created++;
-            $importedUsers[] = $saved;
-        }
-
-        return [
-            'created' => $created,
-            'skipped' => $skipped,
-            'users' => $importedUsers,
-        ];
+            return [$users, [
+                'created' => $created,
+                'skipped' => $skipped,
+                'users' => $importedUsers,
+            ]];
+        });
     }
 }

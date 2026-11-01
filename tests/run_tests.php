@@ -857,6 +857,82 @@ $t->assertTrue(str_contains($repoCode, 'v8_rca164'), "RCA-164 (Item 12) : Course
 $t->assertTrue(method_exists($repoFresh, 'loadCourse') && method_exists($repoFresh, 'clearCatalogCache'), "RCA-164 (Item 12) : CourseRepository expose loadCourse() et clearCatalogCache()");
 $t->assertTrue(str_contains($repoCode, 'LOCK_EX'), "RCA-164 (Item 12) : CourseRepository écrit le cache avec verrouillage exclusif LOCK_EX");
 
+// =========================================================================
+// 18. Tests Contrats RCA-165 / RCA-LMS-35 (Fonctionnalités & Robustesse LMS)
+// =========================================================================
+echo "\n--- 18. Tests Contrats RCA-165 / RCA-LMS-35 (Fonctionnalités & Robustesse LMS) ---\n";
+
+// 18.1 Sécurité Docker : Injection du statement_timeout et lock_timeout dans executeSql
+$runnerCode = (string)file_get_contents(__DIR__ . '/../src/Docker/LabSqlRunner.php');
+$t->assertTrue(
+    str_contains($runnerCode, 'statement_timeout=15000') && str_contains($runnerCode, 'lock_timeout=10000'),
+    "RCA-LMS-35 (Item 1) : LabSqlRunner::executeSql injecte statement_timeout et lock_timeout pour éviter les blocages workers"
+);
+
+// 18.2 Intégrité Certificat : Distingue réussite certifiante (passed) et échec
+$failedEval = \LightPath\LMS\Course\LmsCatalog::evaluateFinalExam([], 120);
+$failedAttempt = $storage->saveExamAttempt(2, 'postgresql-18', $failedEval);
+$failedCertCode = (string)($failedAttempt['certificate_id'] ?? '');
+$lookedUpFailed = $storage->findCertificateByCode($failedCertCode);
+$t->assertTrue(
+    $lookedUpFailed !== null && empty($lookedUpFailed['passed']),
+    "RCA-LMS-35 (Item 2) : findCertificateByCode signale fidèlement passed=false pour une tentative d'examen sous le seuil de 75%"
+);
+
+// 18.3 Concurrence & Cours Cible dans l'Import CSV de Cohorte
+$batchCsvMulti = "Test User;test.user.rca165@lightpath.fr;LightPath Corp;student;LightPath2026!";
+$importResMulti = $storage->importUsersFromCsv($batchCsvMulti, 'LightPath2026!', 'postgresql-18');
+$importedUserObj = $storage->getUserByEmail('test.user.rca165@lightpath.fr');
+$t->assertTrue(
+    $importResMulti['created'] === 1 && $importedUserObj !== null && in_array('postgresql-18', $importedUserObj['enrolled_courses'] ?? [], true),
+    "RCA-LMS-35 (Item 3) : importUsersFromCsv inscrit l'utilisateur dans le cours cible spécifié sous verrou atomique"
+);
+
+// 18.4 Réinitialisation Flashcards SRS
+$storage->saveFlashcardConfidence(3, 'postgresql-18', 'fc_01', 3);
+$t->assertTrue(
+    method_exists($storage, 'resetFlashcardReviews') && $storage->resetFlashcardReviews(3, 'postgresql-18'),
+    "RCA-LMS-35 (Item 4) : StorageInterface et JsonStorage exposent resetFlashcardReviews pour recommencer un cycle SRS"
+);
+$progAfterReset = $storage->getUserProgress(3, 'postgresql-18');
+$t->assertTrue(
+    empty($progAfterReset['flashcard_confidence']),
+    "RCA-LMS-35 (Item 4) : resetFlashcardReviews réinitialise intégralement la progression SRS de l'apprenant"
+);
+
+// 18.5 Protection RBAC des Exports SCORM 1.2
+$indexCode = (string)file_get_contents(__DIR__ . '/../public/index.php');
+$t->assertTrue(
+    str_contains($indexCode, "action === 'export_scorm_manifest' && \$auth->isStaff(\$currentUser)")
+    && str_contains($indexCode, "action === 'export_scorm_zip' && \$auth->isStaff(\$currentUser)"),
+    "RCA-LMS-35 (Item 5) : Les exports SCORM 1.2 sont strictement restreints au personnel formateur et administrateur"
+);
+
+// 18.6 Registre d'Émargement Détaillé OPCO (export_attendance_csv)
+$t->assertTrue(
+    str_contains($indexCode, "action === 'export_attendance_csv'"),
+    "RCA-LMS-35 (Item 6) : public/index.php expose la route export_attendance_csv pour les audits d'assiduité OPCO/Qualiopi"
+);
+
+// 18.7 Battement de Cœur et Diffusion Salle en Direct
+$t->assertTrue(
+    str_contains($indexCode, "'classroom_state' => \$storage->getClassroomState"),
+    "RCA-LMS-35 (Item 7) : api_heartbeat retourne l'état actuel de la salle de classe pour diffusion temps réel"
+);
+
+// 18.8 Sécurisation de la Redirection dans la Modération Q&A
+$t->assertTrue(
+    str_contains($indexCode, "in_array(\$rawReturnPage, ['admin', 'module', 'lab'], true)"),
+    "RCA-LMS-35 (Item 8) : moderate_discussion applique une liste blanche stricte sur return_page"
+);
+
+// 18.9 Préservation du cours dans la recherche globale
+$appJsCode = (string)file_get_contents(__DIR__ . '/../public/assets/js/app.js');
+$t->assertTrue(
+    str_contains($appJsCode, 'index.php?page=search&q=${encodeURIComponent(q)}&course=${encodeURIComponent(currentCourse)}'),
+    "RCA-LMS-35 (Item 9) : app.js préserve le paramètre &course lors de la recherche globale sur Entrée"
+);
+
 exit($t->summary());
 
 

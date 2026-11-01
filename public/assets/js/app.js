@@ -5,6 +5,11 @@
 document.addEventListener('DOMContentLoaded', () => {
     const csrfMeta = document.querySelector('meta[name="csrf-token"]');
     const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+    const courseMeta = document.querySelector('meta[name="current-course"]');
+    const currentCourse = (courseMeta ? courseMeta.getAttribute('content') : '')
+        || new URLSearchParams(window.location.search).get('course')
+        || (document.getElementById('course-switcher') ? document.getElementById('course-switcher').value : '')
+        || 'postgresql-18';
 
     // ------------------------------------------------------------------------
     // 1. Bascule Thème Sombre / Clair & Logos Adaptatifs (Dark / Light)
@@ -621,7 +626,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const q = searchInput.value.trim();
                 if (q !== '') {
                     e.preventDefault();
-                    window.location.href = `index.php?page=search&q=${encodeURIComponent(q)}`;
+                    window.location.href = `index.php?page=search&q=${encodeURIComponent(q)}&course=${encodeURIComponent(currentCourse)}`;
                 }
             }
         });
@@ -1060,11 +1065,34 @@ document.addEventListener('DOMContentLoaded', () => {
     if (csrfToken) {
         setInterval(() => {
             if (document.visibilityState === 'visible') {
-                fetch('index.php?action=api_heartbeat', {
+                fetch(`index.php?action=api_heartbeat&course=${encodeURIComponent(currentCourse)}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
                     body: JSON.stringify({ csrf_token: csrfToken, seconds: 60 })
-                }).catch(() => {});
+                })
+                .then((r) => r.json())
+                .then((data) => {
+                    if (data && data.classroom_state) {
+                        const bText = (data.classroom_state.broadcast_message || '').trim();
+                        const bCont = document.getElementById('classroom-broadcast-container');
+                        const bMsg = document.getElementById('classroom-broadcast-text');
+                        const bMeta = document.getElementById('classroom-broadcast-meta');
+                        if (bCont && bMsg) {
+                            if (bText !== '') {
+                                bMsg.textContent = bText;
+                                if (bMeta) {
+                                    const by = data.classroom_state.updated_by || '';
+                                    const at = (data.classroom_state.updated_at || '').substring(11, 16);
+                                    bMeta.textContent = by ? `(${by}${at ? ' • ' + at : ''})` : '';
+                                }
+                                bCont.style.display = '';
+                            } else {
+                                bCont.style.display = 'none';
+                            }
+                        }
+                    }
+                })
+                .catch(() => {});
             }
         }, 60000);
     }

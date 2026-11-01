@@ -714,6 +714,54 @@ Valide avec php tests/run_tests.php.
   ```
 * **Statut :** ✅ Implémenté — voir Journal de Bord 2026-11-01
 
+---
+
+## Fiche d'Incident RCA-165 (`RCA-LMS-35`) : Robustesse & Sécurité Interactive du Portail LMS (Timeout Docker, Conformité Certificats Qualiopi, Concurrence Import CSV, SRS Reset, RBAC SCORM, Registre OPCO, Diffusion Salle Live, Redirection Q&A & Recherche)
+
+* **Date de détection :** 2026-11-02
+* **Issues GitHub associées :** `lightpath-training-portal#27`
+* **Composant Affecté :** `src/Docker/LabSqlRunner.php`, `src/Core/{JsonStorage,StorageInterface,PdoStorage}.php`, `templates/pages/{verify,flashcards,attendance}.php`, `public/index.php`, `templates/layout.php`, `public/assets/js/app.js`, `tests/run_tests.php`
+* **1. Mécanisme :**
+  L'investigation et l'audit de robustesse du portail LMS (Boucle 2 — Pilier 4) ont relevé 9 vulnérabilités et axes d'amélioration opérationnels :
+  1) **Sécurité Docker SQL (`LabSqlRunner`) :** L'exécuteur `psql` appelait le conteneur sans aucun timeout de requête (`statement_timeout`) ni de verrou (`lock_timeout`). Une requête longue ou un verrou bloquant suspendait indéfiniment les workers PHP.
+  2) **Conformité Qualiopi Certificats (`findCertificateByCode`, `verify.php`) :** L'identifiant `LP-PG18-CERT-...` était attribué à toutes les tentatives d'examen, et `verify.php` affichait le bandeau vert de certification authentique même pour un score inférieur au seuil requis de 75% (`passed === false`).
+  3) **Concurrence & Inscription Import CSV (`importUsersFromCsv`) :** Pour chaque ligne du CSV, `importUsersFromCsv` effectuait des E/S fichiers répétées et verrouillages unitaires, et inscrivait les stagiaires dans un cours figé `'postgresql-18'` sans paramètre de cours cible.
+  4) **Réinitialisation Flashcards SRS (`StorageInterface`, `JsonStorage`, `PdoStorage`, `flashcards.php`) :** Aucune méthode ni route ne permettait à un apprenant de réinitialiser ses évaluations SRS pour redémarrer une session d'entraînement à blanc.
+  5) **Contrôle d'Accès Exports SCORM 1.2 (`public/index.php`) :** Les routes de téléchargement `export_scorm_manifest` et `export_scorm_zip` n'étaient pas restreintes au rôle staff (`$auth->isStaff($currentUser)`).
+  6) **Registre d'Émargement Détaillé OPCO (`export_attendance_csv`, `attendance.php`) :** Seuls les totaux agrégés étaient exportés en CSV ; les auditeurs OPCO et Qualiopi exigent le détail nominatif horodaté de chaque émargement individuel avec IP, hash SHA-256 et visa formateur.
+  7) **Diffusion Salle de Classe Live en Temps Réel (`api_heartbeat`, `app.js`) :** La réponse JSON de `api_heartbeat` ne renvoyait pas `classroom_state`, empêchant la mise à jour dynamique immédiate des annonces du formateur sans rafraîchissement manuel.
+  8) **Sécurisation de la Redirection Q&A (`moderate_discussion`) :** Le paramètre `return_page` n'était pas filtré contre une liste blanche stricte `['admin', 'module', 'lab']`.
+  9) **Préservation du Cours en Recherche Globale (`app.js`) :** L'appui sur Entrée dans `#global-search-input` omettait le paramètre `&course=...`, basculant silencieusement sur le cours par défaut.
+* **2. Hypothèse :**
+  1) Injecter `PGOPTIONS="-c statement_timeout=15000 -c lock_timeout=10000"` dans `LabSqlRunner::executeSql()`.
+  2) Conditionner l'authentification officielle du certificat à `passed === true` dans `findCertificateByCode()` et afficher une notice d'attestation de suivi sans certification officielle si `passed === false`.
+  3) Refactoriser `importUsersFromCsv()` sous un verrou atomique unique `mutateFile('users')` et supporter le paramètre `$courseSlug`.
+  4) Ajouter `resetFlashcardReviews()` dans `StorageInterface`, `JsonStorage`, `PdoStorage`, la route `api_reset_flashcards` et le bouton de réinitialisation avec état vide dans `flashcards.php`.
+  5) Restreindre `export_scorm_manifest` et `export_scorm_zip` à `$auth->isStaff($currentUser)`.
+  6) Ajouter la route réservée au staff `export_attendance_csv` produisant le registre d'audit OPCO complet et ajouter son lien de téléchargement dans `attendance.php`.
+  7) Inclure `'classroom_state' => $storage->getClassroomState($currentCourseSlug)` dans la réponse de `api_heartbeat` et mettre à jour le DOM client en temps réel.
+  8) Restreindre strictement `return_page` à `in_array($rawReturnPage, ['admin', 'module', 'lab'], true)`.
+  9) Transmettre `&course=${encodeURIComponent(currentCourse)}` lors de la soumission Entrée de la recherche globale.
+* **3. Contre-mesure :**
+  Implémentation des 9 améliorations sur les composants cibles, ajout de la Section 18 dans `tests/run_tests.php` validant 100% des contrats (326/326 tests réussis, 0 régression).
+* **4. Prompt LLM :**
+  ```text
+  Contexte : dépôt lightpath-training-portal. Lis la fiche RCA-165 (RCA-LMS-35) dans REGISTRE_RCA.md.
+  Tâche : Vérifier les 9 améliorations de robustesse et sécurité du LMS :
+  1) LabSqlRunner::executeSql injecte statement_timeout=15000 et lock_timeout=10000.
+  2) findCertificateByCode et verify.php distinguent passed=true (certificat authentique) et passed=false (attestation de suivi sans certification, seuil 75% non atteint).
+  3) importUsersFromCsv exécute sous verrou atomique mutateFile('users') et inscrit les utilisateurs dans $courseSlug.
+  4) resetFlashcardReviews réinitialise flashcard_confidence et route api_reset_flashcards opérationnelle avec bouton dans flashcards.php.
+  5) export_scorm_manifest et export_scorm_zip sont strictement restreints à $auth->isStaff($currentUser).
+  6) export_attendance_csv génère le registre détaillé d'émargement OPCO avec lien dans attendance.php.
+  7) api_heartbeat inclut classroom_state et app.js met à jour l'annonce en direct.
+  8) moderate_discussion restreint return_page à ['admin', 'module', 'lab'].
+  9) Recherche globale sur Entrée conserve le paramètre &course=.
+  10) Section 18 de tests/run_tests.php passe à 100% (326 tests).
+  Valide avec : php tests/run_tests.php.
+  ```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-11-02
+
 
 
 

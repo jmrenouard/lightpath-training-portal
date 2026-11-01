@@ -140,6 +140,7 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <meta name="csrf-token" content="<?= Security::e($csrfToken) ?>"/>
+    <meta name="current-course" content="<?= Security::e($currentCourseSlug) ?>"/>
     <title><?= Security::e($currentCourse['short_title'] ?? 'Formation') ?> — <?= Security::e($appConfig['app_name']) ?></title>
     <link rel="icon" href="assets/img/favicon.ico"/>
     <link rel="stylesheet" href="assets/css/app.css"/>
@@ -425,19 +426,17 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
             $classroomState = $storage->getClassroomState($currentCourseSlug);
             $broadcastMsg = trim((string)($classroomState['broadcast_message'] ?? ''));
             ?>
-            <?php if ($broadcastMsg !== ''): ?>
-                <div class="flash-banner" style="background: rgba(56, 189, 248, 0.14); border: 1px solid rgba(56, 189, 248, 0.45); color: var(--text-primary); display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+            <div id="classroom-broadcast-container" style="<?= $broadcastMsg !== '' ? '' : 'display: none;' ?>">
+                <div class="flash-banner" id="classroom-broadcast-banner" style="background: rgba(56, 189, 248, 0.14); border: 1px solid rgba(56, 189, 248, 0.45); color: var(--text-primary); display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem;">
                     <div>
                         <span class="badge-code" style="margin-right: 0.45rem;">📢 MESSAGE SALLE EN DIRECT</span>
-                        <strong><?= Security::e($broadcastMsg) ?></strong>
-                        <?php if (!empty($classroomState['updated_by'])): ?>
-                            <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: 0.5rem;">
-                                (<?= Security::e((string)$classroomState['updated_by']) ?> • <?= Security::e(substr((string)($classroomState['updated_at'] ?? ''), 11, 5)) ?>)
-                            </span>
-                        <?php endif; ?>
+                        <strong id="classroom-broadcast-text"><?= Security::e($broadcastMsg) ?></strong>
+                        <span id="classroom-broadcast-meta" style="font-size: 0.75rem; color: var(--text-muted); margin-left: 0.5rem;">
+                            <?= !empty($classroomState['updated_by']) ? '(' . Security::e((string)$classroomState['updated_by']) . ' • ' . Security::e(substr((string)($classroomState['updated_at'] ?? ''), 11, 5)) . ')' : '' ?>
+                        </span>
                     </div>
                 </div>
-            <?php endif; ?>
+            </div>
             <?php if ($flashError): ?>
                 <div class="flash-banner flash-error"><?= Security::e($flashError) ?></div>
             <?php endif; ?>

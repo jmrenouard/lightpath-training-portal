@@ -246,6 +246,24 @@
   9. **Item 9 (Section 17 de Tests TDD) :** Ajout de 18 assertions contractuelles couvrant l'ensemble des points RCA-164 / RCA-LMS-34 dans `tests/run_tests.php`.
 * **Tests post-correction :** ✅ 316 / 316 passés dans `php tests/run_tests.php` (100% de réussite, 0 régression)
 
+---
+
+### Correction RCA-165 — Robustesse & Sécurité Interactive du Portail LMS (`RCA-LMS-35`)
+* **Date :** 2026-11-02 00:20
+* **Issue GitHub associée :** `lightpath-training-portal#27`
+* **Fichiers modifiés :**
+  - `src/Docker/LabSqlRunner.php` (injection de `PGOPTIONS="-c statement_timeout=15000 -c lock_timeout=10000"` dans `executeSql()`)
+  - `src/Core/JsonStorage.php`, `templates/pages/verify.php` (conditionnement de `passed` et `certified` dans `findCertificateByCode()` et affichage distinct dans `verify.php` : certificat vert si `passed === true`, attestation d'évaluation ambre avec mention d'échec au seuil de 75% si `passed === false`)
+  - `src/Core/StorageInterface.php`, `src/Core/JsonStorage.php`, `src/Core/PdoStorage.php` (refonte de `importUsersFromCsv()` sous verrou atomique unique `mutateFile('users')` avec inscription dans `$courseSlug` ; ajout de `resetFlashcardReviews()`)
+  - `public/index.php` (protection RBAC staff sur `export_scorm_manifest` et `export_scorm_zip` ; route `export_attendance_csv` pour le registre OPCO détaillé ; route `api_reset_flashcards` ; ajout de `classroom_state` dans `api_heartbeat` ; whitelist stricte de `return_page` dans `moderate_discussion`)
+  - `templates/pages/attendance.php` (ajout du lien d'export CSV du registre d'émargement OPCO pour le staff)
+  - `templates/pages/flashcards.php` (ajout du bouton `🔄 Réinitialiser SRS` avec confirmation et appel AJAX `api_reset_flashcards` ; gestion de l'état vide de filtrage)
+  - `templates/layout.php`, `public/assets/js/app.js` (balise meta `current-course` ; conservation de `&course=` lors de l'appui sur Entrée dans la recherche globale ; mise à jour dynamique du bandeau d'annonce salle live via `api_heartbeat`)
+  - `tests/run_tests.php` (ajout de la Section 18 couvrant l'ensemble des 9 contrats RCA-165 / RCA-LMS-35)
+  - `REGISTRE_RCA.md`, `JOURNAL_DE_BORD.md`
+* **Nature de la correction :** Implémentation des 9 améliorations contractuelles de robustesse, sécurité interactive et conformité Qualiopi pour le LMS (Milestone B2-M2).
+* **Tests post-correction :** ✅ 326 / 326 tests passés dans `php tests/run_tests.php` (100% de réussite, 0 régression)
+
 
 
 
