@@ -44,6 +44,7 @@ interface StorageInterface
     public function toggleBookmark(int $userId, string $courseSlug, string $itemType, string $itemId = '', string $title = ''): array;
     public function recordLastVisited(int $userId, string $courseSlug, string $itemType, string $itemId, string $title, string $mode = 'reader'): void;
     public function saveFlashcardConfidence(int $userId, string $courseSlug, string $cardId, int|string $level): void;
+    public function resetFlashcardReviews(int $userId, string $courseSlug): bool;
     public function addDiscussionMessage(string $courseSlug, string $itemId, int $userId, string $userName, string $userRole, string $message, ?string $parentId = null): array;
     public function getDiscussions(string $courseSlug, string $itemId = ''): array;
 
@@ -57,5 +58,5 @@ interface StorageInterface
     public function resolveDiscussionMessage(string $courseSlug, string $itemId, string $messageId, bool $resolved = true): bool;
     public function deleteDiscussionMessage(string $courseSlug, string $itemId, string $messageId): bool;
     public function getAllCourseDiscussions(string $courseSlug = 'postgresql-18'): array;
-    public function importUsersFromCsv(string $csvContent, string $defaultPassword = 'LightPath2026!'): array;
+    public function importUsersFromCsv(string $csvContent, string $defaultPassword = 'LightPath2026!', string $courseSlug = 'postgresql-18'): array;
 }

@@ -120,6 +120,9 @@ $distinctModules = array_values($distinctModules);
                 <button type="button" id="btn-fc-focus-toggle" class="btn btn-outline-cyan btn-sm">
                     🎯 Mode Focus (Carte par Carte)
                 </button>
+                <button type="button" id="btn-fc-reset" class="btn btn-outline btn-sm" style="color: #F87171; border-color: rgba(248, 113, 113, 0.4);" title="Réinitialiser toutes vos auto-évaluations SRS pour ce cours">
+                    🔄 Réinitialiser SRS
+                </button>
             </div>
         </div>
 
@@ -134,6 +137,9 @@ $distinctModules = array_values($distinctModules);
     </div>
 
     <div class="card-grid" id="flashcards-grid">
+        <div id="fc-empty-state" class="lms-card" style="display: none; text-align: center; padding: 2rem; border-style: dashed; color: var(--text-muted); grid-column: 1 / -1;">
+            <p style="margin: 0; font-size: 1rem;">🔍 Aucune flashcard ne correspond aux filtres sélectionnés.</p>
+        </div>
         <?php foreach ($flashcards as $idx => $fc):
             $cid = $fc['id'];
             $modCode = (string)($fc['module'] ?? 'M01');
@@ -230,6 +236,11 @@ $distinctModules = array_values($distinctModules);
             }
             allCards.forEach(function (c) { c.style.display = 'none'; });
 
+            var emptyEl = document.getElementById('fc-empty-state');
+            if (emptyEl) {
+                emptyEl.style.display = filteredCards.length === 0 ? 'block' : 'none';
+            }
+
             if (!isFocusMode) {
                 filteredCards.forEach(function (c) { c.style.display = ''; });
                 if (focusControls) focusControls.style.display = 'none';
@@ -245,6 +256,33 @@ $distinctModules = array_values($distinctModules);
                     focusPos.textContent = '0 / 0 carte';
                 }
             }
+        }
+
+        var resetBtn = document.getElementById('btn-fc-reset');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', function () {
+                if (!confirm('Voulez-vous vraiment réinitialiser toutes vos auto-évaluations SRS pour ce cours ?')) {
+                    return;
+                }
+                var courseSlug = <?= json_encode($currentCourseSlug) ?>;
+                var csrf = window.__CSRF_TOKEN__ || (document.querySelector('meta[name="csrf-token"]') ? document.querySelector('meta[name="csrf-token"]').getAttribute('content') : '');
+                resetBtn.disabled = true;
+                fetch('index.php?action=api_reset_flashcards&course=' + encodeURIComponent(courseSlug), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+                    body: JSON.stringify({ csrf_token: csrf })
+                }).then(function (r) { return r.json(); }).then(function (data) {
+                    resetBtn.disabled = false;
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        alert(data.message || 'Erreur lors de la réinitialisation.');
+                    }
+                }).catch(function () {
+                    resetBtn.disabled = false;
+                    window.location.reload();
+                });
+            });
         }
 
         if (modSelect) modSelect.addEventListener('change', applyFlashcardFilters);

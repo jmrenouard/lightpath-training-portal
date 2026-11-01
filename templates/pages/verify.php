@@ -55,56 +55,112 @@ $verifyUrl = rtrim((string)($appConfig['website'] ?? 'https://www.lightpath.fr')
         $submittedAt = (string)($certData['submitted_at'] ?? $certData['issued_at'] ?? date('Y-m-d'));
         $scorePct = (int)($certData['percent'] ?? $certData['percentage'] ?? 0);
         $mention = (string)($certData['mention'] ?? ($scorePct >= 75 ? 'Certifié LightPath' : 'Attestation de suivi'));
+        $isPassed = !empty($certData['passed']);
     ?>
-        <div class="lms-card" style="border-color: #10B981; background: linear-gradient(180deg, rgba(16, 185, 129, 0.08) 0%, var(--bg-surface) 100%);">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1.5rem;">
-                <div style="flex: 1; min-width: 280px;">
-                    <span class="badge-completed" style="font-size: 0.85rem; padding: 0.35rem 0.75rem;">
-                        ✔ CERTIFICAT AUTHENTIQUE & VÉRIFIÉ PAR LIGHTPATH SARL
-                    </span>
-                    <h2 style="font-size: 1.45rem; margin: 0.75rem 0 0.25rem;">
-                        Titulaire : <?= Security::e($holderName) ?>
-                        <?php if ($holderCompany !== ''): ?>
-                            <span style="font-size: 0.95rem; color: var(--text-secondary); font-weight: 500;">(<?= Security::e($holderCompany) ?>)</span>
-                        <?php endif; ?>
-                    </h2>
-                    <p style="color: var(--text-secondary); margin: 0 0 1rem; font-size: 0.92rem;">
-                        Formation : <strong><?= Security::e($courseTitle) ?></strong>
-                    </p>
+        <?php if ($isPassed): ?>
+            <div class="lms-card" style="border-color: #10B981; background: linear-gradient(180deg, rgba(16, 185, 129, 0.08) 0%, var(--bg-surface) 100%);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1.5rem;">
+                    <div style="flex: 1; min-width: 280px;">
+                        <span class="badge-completed" style="font-size: 0.85rem; padding: 0.35rem 0.75rem;">
+                            ✔ CERTIFICAT AUTHENTIQUE & VÉRIFIÉ PAR LIGHTPATH SARL
+                        </span>
+                        <h2 style="font-size: 1.45rem; margin: 0.75rem 0 0.25rem;">
+                            Titulaire : <?= Security::e($holderName) ?>
+                            <?php if ($holderCompany !== ''): ?>
+                                <span style="font-size: 0.95rem; color: var(--text-secondary); font-weight: 500;">(<?= Security::e($holderCompany) ?>)</span>
+                            <?php endif; ?>
+                        </h2>
+                        <p style="color: var(--text-secondary); margin: 0 0 1rem; font-size: 0.92rem;">
+                            Formation : <strong><?= Security::e($courseTitle) ?></strong>
+                        </p>
 
-                    <div class="kpi-grid" style="margin-top: 1rem;">
-                        <div class="kpi-card">
-                            <div class="kpi-label">Code Certificat</div>
-                            <div class="kpi-value tabular-nums" style="font-size: 1rem; font-family: var(--font-mono); color: var(--brand-cyan-light);">
-                                <?= Security::e($code) ?>
+                        <div class="kpi-grid" style="margin-top: 1rem;">
+                            <div class="kpi-card">
+                                <div class="kpi-label">Code Certificat</div>
+                                <div class="kpi-value tabular-nums" style="font-size: 1rem; font-family: var(--font-mono); color: var(--brand-cyan-light);">
+                                    <?= Security::e($code) ?>
+                                </div>
+                                <div class="kpi-sub">Référence unique infalsifiable</div>
                             </div>
-                            <div class="kpi-sub">Référence unique infalsifiable</div>
-                        </div>
-                        <div class="kpi-card">
-                            <div class="kpi-label">Score Sommatif</div>
-                            <div class="kpi-value tabular-nums" style="color: #34D399; font-size: 1.65rem;">
-                                <?= $scorePct ?>%
+                            <div class="kpi-card">
+                                <div class="kpi-label">Score Sommatif</div>
+                                <div class="kpi-value tabular-nums" style="color: #34D399; font-size: 1.65rem;">
+                                    <?= $scorePct ?>%
+                                </div>
+                                <div class="kpi-sub"><?= Security::e($mention) ?></div>
                             </div>
-                            <div class="kpi-sub"><?= Security::e($mention) ?></div>
-                        </div>
-                        <div class="kpi-card">
-                            <div class="kpi-label">Date d'Obtention</div>
-                            <div class="kpi-value tabular-nums" style="font-size: 1.15rem;">
-                                <?= Security::e(substr($submittedAt, 0, 16)) ?>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Date d'Obtention</div>
+                                <div class="kpi-value tabular-nums" style="font-size: 1.15rem;">
+                                    <?= Security::e(substr($submittedAt, 0, 16)) ?>
+                                </div>
+                                <div class="kpi-sub">Formateur : <?= Security::e($appConfig['trainer_name'] ?? 'Jean-Marie Renouard') ?></div>
                             </div>
-                            <div class="kpi-sub">Formateur : <?= Security::e($appConfig['trainer_name'] ?? 'Jean-Marie Renouard') ?></div>
                         </div>
                     </div>
-                </div>
 
-                <div style="text-align: center; padding: 1rem; background: var(--bg-base); border-radius: var(--radius-md); border: 1px solid var(--border-hairline);">
-                    <?= Security::renderVerificationQrSvg($verifyUrl, $code) ?>
-                    <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.35rem;" class="tabular-nums">
-                        Empreinte QR autonome
+                    <div style="text-align: center; padding: 1rem; background: var(--bg-base); border-radius: var(--radius-md); border: 1px solid var(--border-hairline);">
+                        <?= Security::renderVerificationQrSvg($verifyUrl, $code) ?>
+                        <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.35rem;" class="tabular-nums">
+                            Empreinte QR autonome
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        <?php else: ?>
+            <div class="lms-card" style="border-color: #F59E0B; background: linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, var(--bg-surface) 100%);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1.5rem;">
+                    <div style="flex: 1; min-width: 280px;">
+                        <span class="badge-code" style="color: #FBBF24; border-color: rgba(245, 158, 11, 0.4); font-size: 0.85rem; padding: 0.35rem 0.75rem;">
+                            ⚠️ ATTESTATION D'ÉVALUATION SOMMATIVE — SEUIL NON ATTEINT
+                        </span>
+                        <h2 style="font-size: 1.45rem; margin: 0.75rem 0 0.25rem;">
+                            Participant : <?= Security::e($holderName) ?>
+                            <?php if ($holderCompany !== ''): ?>
+                                <span style="font-size: 0.95rem; color: var(--text-secondary); font-weight: 500;">(<?= Security::e($holderCompany) ?>)</span>
+                            <?php endif; ?>
+                        </h2>
+                        <p style="color: var(--text-secondary); margin: 0 0 0.5rem; font-size: 0.92rem;">
+                            Formation : <strong><?= Security::e($courseTitle) ?></strong>
+                        </p>
+                        <div style="background: rgba(245, 158, 11, 0.12); border-left: 3px solid #F59E0B; padding: 0.65rem 0.9rem; border-radius: var(--radius-sm); margin-bottom: 1rem; font-size: 0.88rem; color: var(--text-primary);">
+                            Notice d'évaluation : Le score obtenu (<strong><?= $scorePct ?>%</strong>) est inférieur au seuil de certification requis de <strong>75%</strong>. Ce document constitue une attestation de passage et de suivi de formation sans délivrance du certificat officiel.
+                        </div>
+
+                        <div class="kpi-grid" style="margin-top: 1rem;">
+                            <div class="kpi-card">
+                                <div class="kpi-label">Référence Attestation</div>
+                                <div class="kpi-value tabular-nums" style="font-size: 1rem; font-family: var(--font-mono); color: var(--brand-cyan-light);">
+                                    <?= Security::e($code) ?>
+                                </div>
+                                <div class="kpi-sub">Identifiant d'épreuve enregistré</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Score Obtenu</div>
+                                <div class="kpi-value tabular-nums" style="color: #FBBF24; font-size: 1.65rem;">
+                                    <?= $scorePct ?>%
+                                </div>
+                                <div class="kpi-sub">Seuil de certification : 75%</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Date de l'Épreuve</div>
+                                <div class="kpi-value tabular-nums" style="font-size: 1.15rem;">
+                                    <?= Security::e(substr($submittedAt, 0, 16)) ?>
+                                </div>
+                                <div class="kpi-sub">Organisme : LightPath SARL</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="text-align: center; padding: 1rem; background: var(--bg-base); border-radius: var(--radius-md); border: 1px solid var(--border-hairline);">
+                        <?= Security::renderVerificationQrSvg($verifyUrl, $code) ?>
+                        <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.35rem;" class="tabular-nums">
+                            Empreinte QR autonome
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
     <?php else: ?>
         <div class="lms-card" style="border-color: #F43F5E; background: rgba(244, 63, 94, 0.08);">
             <span class="badge-code" style="color: #FDA4AF; border-color: rgba(244, 63, 94, 0.4);">

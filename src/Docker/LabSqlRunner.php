@@ -50,7 +50,7 @@ class LabSqlRunner
         if ($targetContainer !== null) {
             $b64 = base64_encode($sql);
             $cmd = sprintf(
-                'exec %s sh -c "echo %s | base64 -d | psql -U postgres -d %s -P pager=off"',
+                'exec %s sh -c "echo %s | base64 -d | PGOPTIONS=\"-c statement_timeout=15000 -c lock_timeout=10000\" psql -U postgres -d %s -P pager=off"',
                 $targetContainer,
                 $b64,
                 $db
