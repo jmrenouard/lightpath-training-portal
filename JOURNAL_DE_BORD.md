@@ -228,6 +228,24 @@
      - **Axe D :** Diffusion d'annonce salle de classe en direct et verrouillage pédagogique des corrigés/examen (`getClassroomState` / `saveClassroomState`) ; modération formateur du forum Q&A (`resolveDiscussionMessage`, `deleteDiscussionMessage`, `getAllCourseDiscussions` + onglet `💬 Questions Q&A` dans `admin.php`) ; import CSV de cohorte en masse (`importUsersFromCsv`) et export de package `.zip` SCORM 1.2 complet (`DownloadController::buildScorm12ZipPackage`).
 * **Tests post-correction :** ✅ 298 / 298 passés dans `php tests/run_tests.php` (0 régression)
 
+---
+
+### Correction RCA-164 (`RCA-LMS-34`) — Remédiation des Constats de la Revue `/ponytail-review` sur le Portail LMS (Items 1, 2, 3, 4, 5, 7, 8, 12) & Suite de Tests Contractuels Section 17
+* **Date :** 2026-11-01 22:42
+* **Issues GitHub associées :** `lightpath-training-portal#25`, `training_postgresql#101`
+* **Fichiers modifiés :** `templates/pages/{admin,verify,lab_view,module_view,attendance}.php`, `public/index.php`, `templates/layout.php`, `src/Course/{CourseRepository,DownloadController}.php`, `src/Core/JsonStorage.php`, `tests/run_tests.php`, `REGISTRE_RCA.md`, `JOURNAL_DE_BORD.md`
+* **Nature de la correction :**
+  1. **Item 1 (Import CSV) :** Remplacement de `name="csv_payload"` par `name="csv_content"` dans `templates/pages/admin.php:L275` et lecture tolérante `$_POST['csv_content'] ?? ($_POST['csv_payload'] ?? '')` dans `public/index.php:L672`.
+  2. **Item 2 (Vérification Publique Certificat) :** Autorisation d'accès à `?page=verify` sans session active (`$currentUser === null`) dans `public/index.php:L108-L113`, initialisation propre de `$userId = 0`, sécurisation du layout (`templates/layout.php`) avec masquage des widgets personnels et affichage d'un bouton « 🔐 Connexion », et protection contre `$currentUser === null` dans `templates/pages/verify.php:L52-L53`.
+  3. **Item 3 (Verrouillage Corrigés) :** Contrôle de `lock_solutions` / `solutions_locked` pour les non-staff dans `api_run_lab_solution` (retour 403 JSON) et dans `action === 'download' && $type === 'lab'` (retour 403 HTTP) dans `public/index.php` ; filtrage des modes `html_preview` et `pdf_preview` en mode verrouillé, masquage de la barre de téléchargement de lab et masquage du bouton d'accès au corrigé de bas de page dans `templates/pages/lab_view.php`.
+  4. **Item 4 (Transcription Vidéo Studio) :** Émission simultanée des clés `'video_transcript_path'` et `'transcript_md_path'` dans `CourseRepository.php:L479`, et lecture tolérante avec repli dans `templates/pages/module_view.php:L354`.
+  5. **Item 5 (Streaming Vidéo Chunked) :** Remplacement de l'allocation mémoire globale `echo fread($fp, $length)` par une boucle de streaming par blocs de 64 Ko (`$readSize = min($remaining, $chunkSize)`) avec `ob_flush()` et `flush()` dans `DownloadController.php:L188-L194`.
+  6. **Item 7 (Contre-signature Formateur J1) :** Prise en charge des clés `J<N>_DAY` et `J<N>` via `preg_match('/^J([1-9]|1[01])(?:_DAY)?$/i', $halfDayKey)` dans `JsonStorage.php:L660-L688` pour viser matin et après-midi en 1 clic ; envoi de `J<?= $dayNum ?>_DAY` et affichage fidèle de la contre-signature (journée complète vs matin vs après-midi) dans `templates/pages/attendance.php:L164-L185`.
+  7. **Item 8 (Découverte Exemples SQL) :** Ajout de `glob($exDir . '/sql/dbclients/*.sql') ?: []` dans `CourseRepository.php:L758`, découvrant les 9 exemples SQL de `dbclients` (total porté à 27 exemples multi-langages).
+  8. **Item 12 (Cache Catalogue & Invalidation) :** Ajout de l'alias `loadCourse(string $slug)`, ajout de `clearCatalogCache(?string $slug = null)`, sécurisation de l'écriture cache avec `LOCK_EX`, et actualisation de l'empreinte avec `v8_rca164` incluant le dossier `sql/dbclients` dans `CourseRepository.php`.
+  9. **Item 9 (Section 17 de Tests TDD) :** Ajout de 18 assertions contractuelles couvrant l'ensemble des points RCA-164 / RCA-LMS-34 dans `tests/run_tests.php`.
+* **Tests post-correction :** ✅ 316 / 316 passés dans `php tests/run_tests.php` (100% de réussite, 0 régression)
+
 
 
 

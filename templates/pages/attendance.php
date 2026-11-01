@@ -161,11 +161,21 @@ $loggedHours = $signedHalfDaysCount * 3.5;
                             <?php endif; ?>
                         </td>
                         <td>
-                            <?php if ($trainerSignedAm || $trainerSignedPm): ?>
-                                <span class="badge-completed">✔ Contre-signé par <?= Security::e($trainerName) ?></span>
+                            <?php if ($trainerSignedAm && $trainerSignedPm): ?>
+                                <span class="badge-completed">✔ Journée contre-signée</span>
                                 <div style="font-size: 0.72rem; color: var(--text-muted);" class="tabular-nums">
-                                    <?= Security::e(substr((string)($sigAm['trainer_signed_at'] ?? $sigPm['trainer_signed_at'] ?? ''), 0, 16)) ?>
+                                    <?= Security::e(substr((string)($sigPm['trainer_signed_at'] ?? $sigAm['trainer_signed_at'] ?? ''), 0, 16)) ?> (<?= Security::e($trainerName) ?>)
                                 </div>
+                            <?php elseif ($trainerSignedAm): ?>
+                                <span class="badge-completed">✔ Matin contre-signé</span>
+                                <?php if ($sigPm !== null): ?>
+                                    <div style="margin-top: 0.2rem;"><span class="badge-code">⏳ Visa PM en attente</span></div>
+                                <?php endif; ?>
+                            <?php elseif ($trainerSignedPm): ?>
+                                <span class="badge-completed">✔ Après-midi contre-signé</span>
+                                <?php if ($sigAm !== null): ?>
+                                    <div style="margin-top: 0.2rem;"><span class="badge-code">⏳ Visa AM en attente</span></div>
+                                <?php endif; ?>
                             <?php elseif ($sigAm !== null || $sigPm !== null): ?>
                                 <span class="badge-code">⏳ En attente visa formateur</span>
                             <?php else: ?>
@@ -177,7 +187,7 @@ $loggedHours = $signedHalfDaysCount * 3.5;
                                     <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
                                     <input type="hidden" name="target_user_id" value="<?= $userId ?>"/>
                                     <input type="hidden" name="day_num" value="<?= $dayNum ?>"/>
-                                    <input type="hidden" name="half_day_key" value="<?= $sigAm !== null && !$trainerSignedAm ? Security::e($keyAm) : Security::e($keyPm) ?>"/>
+                                    <input type="hidden" name="half_day_key" value="J<?= $dayNum ?>_DAY"/>
                                     <button type="submit" class="btn btn-outline-cyan btn-sm" style="font-size: 0.74rem;">
                                         ✒️ Contre-signer J<?= $dayNum ?>
                                     </button>

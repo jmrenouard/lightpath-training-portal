@@ -272,7 +272,7 @@ $allCourseDiscussions = $storage->getAllCourseDiscussions($currentCourseSlug);
             <form method="POST" action="index.php?page=admin&tab=users&action=admin_import_users_csv&course=<?= urlencode($currentCourseSlug) ?>">
                 <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
                 <div class="form-group">
-                    <textarea name="csv_payload" class="form-control" rows="4" required placeholder="Claire Martin;claire@banque.fr;Banque SA;student;LightPath2026!&#10;David Roy;david@banque.fr;Banque SA;student;LightPath2026!"></textarea>
+                    <textarea name="csv_content" class="form-control" rows="4" required placeholder="Claire Martin;claire@banque.fr;Banque SA;student;LightPath2026!&#10;David Roy;david@banque.fr;Banque SA;student;LightPath2026!"></textarea>
                 </div>
                 <button type="submit" class="btn btn-primary btn-sm" style="width: 100%;">
                     📥 Importer la Cohorte CSV

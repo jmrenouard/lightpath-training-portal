@@ -804,6 +804,59 @@ $t->assertTrue(str_starts_with($scormZipBytes, "PK\x03\x04") && str_contains($sc
 $pdoAdapter->saveColdSatisfactionSurvey(3, 'postgresql-18', ['prod_application' => 5, 'perf_gains' => 5]);
 $t->assertTrue($pdoAdapter->getUserColdSatisfaction(3, 'postgresql-18') !== null, "RCA-163 (Parité SQLite PdoStorage) : PdoStorage supporte les nouvelles méthodes RCA-163 (J+60, ClassroomState, CSV Import)");
 
+// =========================================================================
+// 17. Tests Contrats RCA-164 / RCA-LMS-34 (12 Constats Revue Ponytail-Review)
+// =========================================================================
+echo "\n--- 17. Tests Contrats RCA-164 / RCA-LMS-34 (12 Constats Revue Ponytail-Review) ---\n";
+
+// 17.1 Item 1 : Import CSV de Cohorte dans admin.php & public/index.php
+$adminTpl = (string)file_get_contents(__DIR__ . '/../templates/pages/admin.php');
+$indexCode = (string)file_get_contents(__DIR__ . '/../public/index.php');
+$t->assertTrue(str_contains($adminTpl, 'name="csv_content"'), "RCA-164 (Item 1) : admin.php soumet le champ textarea sous le nom name=\"csv_content\"");
+$t->assertTrue(str_contains($indexCode, "\$_POST['csv_content'] ?? (\$_POST['csv_payload'] ?? '')"), "RCA-164 (Item 1) : public/index.php lit avec repli \$_POST['csv_content'] ?? \$_POST['csv_payload']");
+
+// 17.2 Item 2 : Accès public à la page de vérification ?page=verify sans session
+$t->assertTrue(str_contains($indexCode, "\$page !== 'verify'"), "RCA-164 (Item 2) : public/index.php autorise l'accès public à ?page=verify pour les auditeurs sans compte");
+$verifyTpl = (string)file_get_contents(__DIR__ . '/../templates/pages/verify.php');
+$t->assertTrue(str_contains($verifyTpl, "\$currentUser['name'] ?? 'Apprenant Certifié'"), "RCA-164 (Item 2) : verify.php gère les accès sans session active (\$currentUser null)");
+
+// 17.3 Item 3 : Verrouillage hermétique des corrigés de labs
+$t->assertTrue(str_contains($indexCode, "lock_solutions") && str_contains($indexCode, "api_run_lab_solution"), "RCA-164 (Item 3) : api_run_lab_solution vérifie le verrouillage lock_solutions avant exécution");
+$t->assertTrue(str_contains($indexCode, "\$type === 'lab'") && str_contains($indexCode, "solutionsLocked"), "RCA-164 (Item 3) : route download bloque le téléchargement des énoncés/corrigés de labs si les solutions sont verrouillées");
+$labTpl = (string)file_get_contents(__DIR__ . '/../templates/pages/lab_view.php');
+$t->assertTrue(str_contains($labTpl, "!\$solutionsLocked && \$labMode !== 'corrige'"), "RCA-164 (Item 3) : lab_view.php masque le bouton de corrigé de bas de page si les solutions sont verrouillées");
+$t->assertTrue(str_contains($labTpl, "in_array(\$labMode, ['corrige', 'full', 'html_preview', 'pdf_preview'], true)"), "RCA-164 (Item 3) : lab_view.php bloque les modes html_preview et pdf_preview si les solutions sont verrouillées");
+
+// 17.4 Item 4 : Harmonisation des clés de transcription vidéo
+$modTpl = (string)file_get_contents(__DIR__ . '/../templates/pages/module_view.php');
+$repoCode = (string)file_get_contents(__DIR__ . '/../src/Course/CourseRepository.php');
+$t->assertTrue(str_contains($modTpl, "\$mod['video_transcript_path']") && str_contains($modTpl, "\$mod['transcript_md_path']"), "RCA-164 (Item 4) : module_view.php lit video_transcript_path et transcript_md_path avec repli");
+$t->assertTrue(str_contains($repoCode, "'video_transcript_path'") && str_contains($repoCode, "'transcript_md_path'"), "RCA-164 (Item 4) : CourseRepository renvoie les deux clés transcript pour compatibilité");
+
+// 17.5 Item 5 : Streaming vidéo HTTP 206 découpé par blocs (chunked 64 Ko)
+$dlCode = (string)file_get_contents(__DIR__ . '/../src/Course/DownloadController.php');
+$t->assertTrue(str_contains($dlCode, 'fread($fp, $readSize)') && str_contains($dlCode, 'flush()'), "RCA-164 (Item 5) : DownloadController diffuse la vidéo par blocs de streaming sans saturer la RAM PHP");
+
+// 17.7 Item 7 : Contre-signature formateur J<N>_DAY et affichage fidèle
+$attTestRes = $storage->signTrainerAttendance(3, 'postgresql-18', 'J1_DAY', 'Jean-Marie Renouard');
+$user3Att = $storage->getUserAttendance(3, 'postgresql-18');
+$t->assertTrue(!empty($user3Att['J1_AM']['trainer_signed_at']) && !empty($user3Att['J1_PM']['trainer_signed_at']), "RCA-164 (Item 7) : signTrainerAttendance('J1_DAY') contre-signe le matin et l'après-midi du Jour 1");
+$attTpl = (string)file_get_contents(__DIR__ . '/../templates/pages/attendance.php');
+$t->assertTrue(str_contains($attTpl, 'value="J<?= $dayNum ?>_DAY"'), "RCA-164 (Item 7) : attendance.php envoie J<N>_DAY pour contre-signer la journée complète");
+$t->assertTrue(str_contains($attTpl, '$trainerSignedAm && $trainerSignedPm'), "RCA-164 (Item 7) : attendance.php distingue la journée complète des demi-journées isolées");
+
+// 17.8 Item 8 : Découverte des exemples SQL dbclients
+$repoFresh = new CourseRepository($coursesConfig, [], sys_get_temp_dir());
+$pgCourseFresh = $repoFresh->getCourse('postgresql-18');
+$examplesFresh = $pgCourseFresh['examples'] ?? [];
+$sqlExamples = array_filter($examplesFresh, static fn($e) => ($e['language'] ?? '') === 'SQL Schéma');
+$t->assertGreaterThanOrEqual(9, count($sqlExamples), "RCA-164 (Item 8) : CourseRepository::discoverExamples découvre au moins 9 scripts SQL de dbclients");
+
+// 17.12 Item 12 : Invalidation, alias loadCourse et empreinte du cache catalogue
+$t->assertTrue(str_contains($repoCode, 'v8_rca164'), "RCA-164 (Item 12) : CourseRepository computeCatalogFingerprint utilise le salt v8_rca164");
+$t->assertTrue(method_exists($repoFresh, 'loadCourse') && method_exists($repoFresh, 'clearCatalogCache'), "RCA-164 (Item 12) : CourseRepository expose loadCourse() et clearCatalogCache()");
+$t->assertTrue(str_contains($repoCode, 'LOCK_EX'), "RCA-164 (Item 12) : CourseRepository écrit le cache avec verrouillage exclusif LOCK_EX");
+
 exit($t->summary());
 
 
