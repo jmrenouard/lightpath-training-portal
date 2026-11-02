@@ -264,6 +264,20 @@
 * **Nature de la correction :** Implémentation des 9 améliorations contractuelles de robustesse, sécurité interactive et conformité Qualiopi pour le LMS (Milestone B2-M2).
 * **Tests post-correction :** ✅ 326 / 326 tests passés dans `php tests/run_tests.php` (100% de réussite, 0 régression)
 
+---
+
+### Correction RCA-166 — Conformité du Rendu Markdown, Callouts CSS du Lecteur & Badges de Syntaxe (`RCA-LMS-36`)
+* **Date :** 2026-11-02 01:05
+* **Issue GitHub associée :** `lightpath-training-portal#29`
+* **Fichiers modifiés :**
+  - `public/assets/css/app.css` (ajout de la classe `.lms-callout-note` avec Cyan LightPath `#00B0F0`, définition de `.lms-code-badge` et règles de coloration syntaxique avec `tabular-nums` en palette Emil Kowalski Obsidian/Cyan)
+  - `src/Course/MarkdownParser.php` (ajout de la méthode publique `parse()`, ajout de la classe `.lms-code-badge` sur le label de langage)
+  - `storage/data/parsed_cache/` (invalidation et purge des 694 fichiers de cache Markdown obsolètes)
+  - `tests/run_tests.php` (ajout de la Section 19 validant les alertes callouts, `.lms-callout-note`, les tags de code et la méthode `MarkdownParser::parse()`)
+  - `REGISTRE_RCA.md`, `JOURNAL_DE_BORD.md`
+* **Nature de la correction :** Résolution des anomalies de rendu Markdown du lecteur de formation LMS et des styles CSS manquants (Milestone B3-M2 / LMS).
+* **Tests post-correction :** ✅ 342 / 342 tests passés dans `php tests/run_tests.php` (100% de réussite, 0 régression)
+
 
 
 

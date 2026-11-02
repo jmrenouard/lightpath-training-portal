@@ -20,6 +20,16 @@ class MarkdownParser
         }
     }
 
+    /**
+     * Analyse et convertit une chaîne Markdown en rendu HTML structuré.
+     * Alias ergonomique de renderMarkdown, invocable statiquement ou d'instance.
+     */
+    public static function parse(string $markdown, string $courseSlug = 'postgresql-18', bool $isLab = false): array
+    {
+        $instance = new self();
+        return $instance->renderMarkdown($markdown, $courseSlug, $isLab);
+    }
+
     public function parseModuleFile(string $mdPath, string $courseSlug = 'postgresql-18'): array
     {
         if (!is_file($mdPath)) {
@@ -567,7 +577,7 @@ class MarkdownParser
                         }
                         $html[] = '<div class="lms-code-block">'
                             . '<div class="lms-code-toolbar">'
-                            . '<span class="lms-code-lang">' . Security::e($langLabel) . '</span>'
+                            . '<span class="lms-code-lang lms-code-badge">' . Security::e($langLabel) . '</span>'
                             . '<div class="lms-code-actions">'
                             . $runBtn
                             . '<button type="button" class="btn-code-action btn-copy-code">📋 Copier</button>'

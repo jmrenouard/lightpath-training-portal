@@ -762,6 +762,42 @@ Valide avec php tests/run_tests.php.
   ```
 * **Statut :** ✅ Implémenté — voir Journal de Bord 2026-11-02
 
+---
+
+## Fiche d'Incident RCA-166 (`RCA-LMS-36`) : Conformité du Rendu Markdown, Callouts CSS du Lecteur & Badges de Syntaxe
+
+* **Date de détection :** 2026-11-02
+* **Issues GitHub associées :** `lightpath-training-portal#29`
+* **Composant Affecté :** `public/assets/css/app.css`, `src/Course/MarkdownParser.php`, `storage/data/parsed_cache/`, `tests/run_tests.php`
+* **1. Mécanisme :**
+  L'audit approfondi du Pilier 2 (Conformité des documents et lecteur LMS) a identifié plusieurs incohérences visuelles et contractuelles sur le portail LMS :
+  1) **Classe CSS Callout Manquante (`.lms-callout-note`) :** Le parseur Markdown `MarkdownParser.php` génère la classe `<div class="lms-callout lms-callout-note">` pour l'ensemble des alertes `[!NOTE]`. Dans `app.css`, les classes `lms-callout-important`, `lms-callout-warning`, `lms-callout-caution` et `lms-callout-tip` étaient définies, mais `.lms-callout-note` était totalement absente, privant les notes techniques de bordure Cyan et de fond translucide.
+  2) **Coloration Syntaxique & Badges de Langage (`.lms-code-badge`) :** Les blocs de code affichaient le code brut sans styles de jetons (`token-keyword`, `token-string`, `token-comment`, etc.) et le badge de langage dans la barre d'outils n'était pas harmonisé avec la palette Obsidian/Cyan d'Emil Kowalski ni en chiffres tabulaires (`font-variant-numeric: tabular-nums`).
+  3) **Cache de Parsing Statique Obsolète :** Le répertoire `storage/data/parsed_cache/` contenait des caches pré-générés pouvant conserver des fragments HTML antérieurs aux corrections visuelles.
+  4) **Absence de Tests de Non-Régression Rendu Markdown :** La suite de tests `tests/run_tests.php` ne vérifiait pas contractuellement la déclaration des 5 types d'alertes dans `app.css`, la méthode d'entrée `MarkdownParser::parse()`, ni la préservation des tags de syntaxe sur les blocs de code.
+* **2. Hypothèse :**
+  1) Ajouter dans `public/assets/css/app.css` la règle `.lms-callout-note { border-left-color: #00B0F0; background: rgba(0, 176, 240, 0.08); }`.
+  2) Ajouter les styles pour `.lms-code-badge`, les jetons de code et `tabular-nums` dans `app.css` et associer la classe `.lms-code-badge` dans `MarkdownParser.php`.
+  3) Exposer la méthode publique statique et d'instance `MarkdownParser::parse(string $markdown, ...)` pour convertir directement du Markdown en HTML et TOC.
+  4) Invalider et vider le cache `storage/data/parsed_cache/`.
+  5) Ajouter la Section 19 dans `tests/run_tests.php` pour certifier l'ensemble des contrats de rendu.
+* **3. Contre-mesure :**
+  Implémentation de l'ensemble des correctifs dans `public/assets/css/app.css` et `src/Course/MarkdownParser.php`, nettoyage du cache `storage/data/parsed_cache/`, et ajout de la Section 19 dans `tests/run_tests.php` (342/342 tests passés à 100%).
+* **4. Prompt LLM :**
+  ```text
+  Contexte : dépôt lightpath-training-portal. Lis la fiche RCA-166 (RCA-LMS-36) dans REGISTRE_RCA.md.
+  Tâche : Vérifier la conformité du rendu Markdown et des callouts CSS du lecteur LMS :
+  1) public/assets/css/app.css définit .lms-callout-note avec border-left-color: #00B0F0 et background: rgba(0, 176, 240, 0.08).
+  2) public/assets/css/app.css définit .lms-code-badge et les classes de jetons syntaxiques en palette Emil Kowalski Obsidian/Cyan avec font-variant-numeric: tabular-nums.
+  3) src/Course/MarkdownParser.php expose public static function parse() et applique la classe lms-code-badge sur l'en-tête de bloc de code.
+  4) Les 5 types d'alertes GitHub (TIP, NOTE, IMPORTANT, WARNING, CAUTION) sont correctement traduits en classes CSS lms-callout-* correspondantes.
+  5) Les blocs de code préservent les tags de langage lang-sql, lang-bash, lang-python.
+  6) Le cache storage/data/parsed_cache/ est purgé et reconstruit à chaud.
+  7) La suite Section 19 de tests/run_tests.php passe à 100% avec 342 tests passés.
+  Valide avec : php tests/run_tests.php.
+  ```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-11-02
+
 
 
 

@@ -933,6 +933,68 @@ $t->assertTrue(
     "RCA-LMS-35 (Item 9) : app.js préserve le paramètre &course lors de la recherche globale sur Entrée"
 );
 
+// 19. Tests Contrats RCA-166 / RCA-LMS-36 (Conformité Rendu Markdown, Callouts & Badges de Syntaxe)
+echo "\n--- 19. Tests Contrats RCA-166 / RCA-LMS-36 (Rendu Markdown, Alertes Callouts & Badges de Syntaxe) ---\n";
+
+// 19.1 Feuille de style : Présence de la classe .lms-callout-note et badge .lms-code-badge
+$appCss = (string)file_get_contents(__DIR__ . '/../public/assets/css/app.css');
+$t->assertTrue(
+    str_contains($appCss, '.lms-callout-note') && str_contains($appCss, '#00B0F0'),
+    "RCA-LMS-36 (Item 1) : app.css définit la classe .lms-callout-note avec la couleur Cyan LightPath (#00B0F0)"
+);
+$t->assertTrue(
+    str_contains($appCss, '.lms-code-badge') && str_contains($appCss, 'tabular-nums'),
+    "RCA-LMS-36 (Item 2) : app.css définit .lms-code-badge et le style de coloration avec tabular-nums (palette Emil Kowalski)"
+);
+
+// 19.2 Conversion de [!NOTE] en .lms-callout-note via MarkdownParser::parse()
+$noteSample = "> [!NOTE]\n> Recommandation PostgreSQL 18 sur les statistiques multivariées.";
+$noteParsed = MarkdownParser::parse($noteSample);
+$noteHtml = is_array($noteParsed) ? ($noteParsed['html'] ?? '') : (string)$noteParsed;
+$t->assertTrue(
+    str_contains($noteHtml, 'class="lms-callout lms-callout-note"') && str_contains($noteHtml, 'Information Technique'),
+    "RCA-LMS-36 (Item 3) : MarkdownParser::parse() convertit fidèlement [!NOTE] en .lms-callout-note"
+);
+
+// 19.3 Les 5 types d'alertes GitHub (TIP, NOTE, IMPORTANT, WARNING, CAUTION) et leurs classes CSS spécifiques
+$alertTypes = [
+    'TIP' => 'lms-callout-tip',
+    'NOTE' => 'lms-callout-note',
+    'IMPORTANT' => 'lms-callout-important',
+    'WARNING' => 'lms-callout-warning',
+    'CAUTION' => 'lms-callout-caution',
+];
+foreach ($alertTypes as $alertTag => $expectedCssClass) {
+    $alertMd = "> [!{$alertTag}]\n> Alerte de type {$alertTag} pour DBA PostgreSQL.";
+    $alertParsed = MarkdownParser::parse($alertMd);
+    $alertHtml = is_array($alertParsed) ? ($alertParsed['html'] ?? '') : (string)$alertParsed;
+    $t->assertTrue(
+        str_contains($alertHtml, $expectedCssClass),
+        "RCA-LMS-36 (Item 4) : L'alerte [!{$alertTag}] est rendue avec la classe CSS spécifique .{$expectedCssClass}"
+    );
+    $t->assertTrue(
+        str_contains($appCss, '.' . $expectedCssClass),
+        "RCA-LMS-36 (Item 4) : La classe CSS .{$expectedCssClass} est rigoureusement déclarée dans app.css"
+    );
+}
+
+// 19.4 Préservation des tags de syntaxe et badges de langage sur les blocs de code
+$codeSample = "```sql\nSELECT relname, n_dead_tup FROM pg_stat_user_tables;\n```\n\n```bash\npgbench -i -s 50 formation_pg\n```\n\n```python\nimport psycopg\n```";
+$codeParsed = MarkdownParser::parse($codeSample);
+$codeHtml = is_array($codeParsed) ? ($codeParsed['html'] ?? '') : (string)$codeParsed;
+$t->assertTrue(
+    str_contains($codeHtml, 'lang-sql') && str_contains($codeHtml, 'lms-code-badge') && str_contains($codeHtml, '>SQL<'),
+    "RCA-LMS-36 (Item 5) : Les blocs SQL préservent le tag de syntaxe lang-sql et affichent le badge .lms-code-badge SQL"
+);
+$t->assertTrue(
+    str_contains($codeHtml, 'lang-bash') && str_contains($codeHtml, '>BASH<'),
+    "RCA-LMS-36 (Item 5) : Les blocs Bash préservent le tag de syntaxe lang-bash et affichent le badge .lms-code-badge BASH"
+);
+$t->assertTrue(
+    str_contains($codeHtml, 'lang-python') && str_contains($codeHtml, '>PYTHON<'),
+    "RCA-LMS-36 (Item 5) : Les blocs Python préservent le tag de syntaxe lang-python et affichent le badge .lms-code-badge PYTHON"
+);
+
 exit($t->summary());
 
 
