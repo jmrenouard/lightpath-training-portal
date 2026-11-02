@@ -223,22 +223,25 @@ if ($action === 'export_attendance_csv' && $auth->isStaff($currentUser)) {
     if ($out !== false) {
         fwrite($out, "\xEF\xBB\xBF");
         fputcsv($out, [
-            'User_ID', 'Nom', 'Email', 'Entreprise', 'Demi_Journee',
+            'User_ID', 'Nom', 'Email', 'Entreprise', 'Role', 'Demi_Journee',
             'Emarge_Le', 'Adresse_IP', 'Empreinte_SHA256',
             'Contre_Signe_Le', 'Nom_Formateur', 'Visa_Formateur_Hash',
         ], ';');
         foreach ($storage->getUsers() as $u) {
             $uid = (int)$u['id'];
+            $uRole = (string)($u['role'] ?? 'student');
+            $isStaff = $auth->isStaff($u);
             $attRecords = $storage->getUserAttendance($uid, $currentCourseSlug);
             if (empty($attRecords)) {
-                // FIX-13: Inclure les inscrits n'ayant aucun émargement pour l'exhaustivité des audits OPCO
+                // FIX-13 & LMS-38-02: Inclure les inscrits n'ayant aucun émargement avec distinction staff / stagiaire
                 fputcsv($out, [
                     $uid,
                     Security::sanitizeCsvCell($u['name'] ?? ''),
                     Security::sanitizeCsvCell($u['email'] ?? ''),
                     Security::sanitizeCsvCell($u['company'] ?? ''),
-                    'AUCUNE (ABSENT)',
-                    'ABSENT (0h)',
+                    Security::sanitizeCsvCell($uRole),
+                    $isStaff ? 'PERSONNEL FORMATEUR' : 'AUCUNE (ABSENT)',
+                    $isStaff ? 'STAFF (N/A)' : 'ABSENT (0h)',
                     '—',
                     '—',
                     '—',
@@ -256,6 +259,7 @@ if ($action === 'export_attendance_csv' && $auth->isStaff($currentUser)) {
                     Security::sanitizeCsvCell($u['name'] ?? ''),
                     Security::sanitizeCsvCell($u['email'] ?? ''),
                     Security::sanitizeCsvCell($u['company'] ?? ''),
+                    Security::sanitizeCsvCell($uRole),
                     Security::sanitizeCsvCell($rec['half_day_key'] ?? (string)$hdKey),
                     Security::sanitizeCsvCell($rec['signed_at'] ?? ''),
                     Security::sanitizeCsvCell($rec['ip'] ?? ''),
@@ -618,7 +622,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $storage->signTrainerAttendance($targetUid, $currentCourseSlug, $halfDayKey, $currentUser['name']);
         $storage->logAuditEvent($currentUser['email'], 'TRAINER_ATTENDANCE_COUNTERSIGN', "Contre-signature formateur ({$halfDayKey}) pour cible #{$targetUid}");
         $_SESSION['flash_success'] = "Contre-signature formateur Qualiopi apposée avec succès ({$halfDayKey}).";
-        header('Location: index.php?page=attendance&course=' . urlencode($currentCourseSlug));
+        $redirectUrl = 'index.php?page=attendance&course=' . urlencode($currentCourseSlug);
+        $returnStudentId = (int)($_POST['return_student_id'] ?? 0);
+        if ($returnStudentId > 0) {
+            $redirectUrl .= '&student_id=' . $returnStudentId;
+        }
+        $returnTrack = trim((string)($_POST['return_track'] ?? ''));
+        if ($returnTrack !== '') {
+            $redirectUrl .= '&track=' . urlencode($returnTrack);
+        }
+        header('Location: ' . $redirectUrl);
         exit;
     }
 

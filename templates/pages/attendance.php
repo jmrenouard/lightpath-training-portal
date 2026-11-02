@@ -94,6 +94,8 @@ $loggedHours = $signedHalfDaysCount * 3.5;
                 <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
                 <input type="hidden" name="target_user_id" value="0"/>
                 <input type="hidden" name="half_day_key" value="ALL"/>
+                <input type="hidden" name="return_student_id" value="<?= $inspectedUserId ?>"/>
+                <input type="hidden" name="return_track" value="<?= Security::e($selectedTrack) ?>"/>
                 <button type="submit" class="btn btn-emerald btn-sm">
                     ✔ Contre-signer toutes les demi-journées émargées (Promotion)
                 </button>
@@ -142,12 +144,16 @@ $loggedHours = $signedHalfDaysCount * 3.5;
                                     <code><?= Security::e((string)($sigAm['signature_text'] ?? $currentUser['name'])) ?></code>
                                 </div>
                             <?php else: ?>
-                                <form method="POST" action="index.php?page=attendance&action=sign_attendance&course=<?= urlencode($currentCourseSlug) ?>" style="display: flex; gap: 0.4rem; align-items: center;">
-                                    <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
-                                    <input type="hidden" name="half_day_key" value="<?= Security::e($keyAm) ?>"/>
-                                    <input type="hidden" name="signature_text" value="Lu et approuvé — <?= Security::e($currentUser['name']) ?>"/>
-                                    <button type="submit" class="btn btn-primary btn-sm">✍️ Émarger Matin (J<?= $dayNum ?>)</button>
-                                </form>
+                                <?php if ($inspectedUserId === $userId): ?>
+                                    <form method="POST" action="index.php?page=attendance&action=sign_attendance&course=<?= urlencode($currentCourseSlug) ?>" style="display: flex; gap: 0.4rem; align-items: center;">
+                                        <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
+                                        <input type="hidden" name="half_day_key" value="<?= Security::e($keyAm) ?>"/>
+                                        <input type="hidden" name="signature_text" value="Lu et approuvé — <?= Security::e($currentUser['name']) ?>"/>
+                                        <button type="submit" class="btn btn-primary btn-sm">✍️ Émarger Matin (J<?= $dayNum ?>)</button>
+                                    </form>
+                                <?php else: ?>
+                                    <span style="font-size: 0.78rem; color: var(--text-muted);">— Non émargé —</span>
+                                <?php endif; ?>
                             <?php endif; ?>
                         </td>
                         <td>
@@ -157,12 +163,16 @@ $loggedHours = $signedHalfDaysCount * 3.5;
                                     <code><?= Security::e((string)($sigPm['signature_text'] ?? $currentUser['name'])) ?></code>
                                 </div>
                             <?php else: ?>
-                                <form method="POST" action="index.php?page=attendance&action=sign_attendance&course=<?= urlencode($currentCourseSlug) ?>" style="display: flex; gap: 0.4rem; align-items: center;">
-                                    <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
-                                    <input type="hidden" name="half_day_key" value="<?= Security::e($keyPm) ?>"/>
-                                    <input type="hidden" name="signature_text" value="Lu et approuvé — <?= Security::e($currentUser['name']) ?>"/>
-                                    <button type="submit" class="btn btn-emerald btn-sm">✍️ Émarger Après-Midi (J<?= $dayNum ?>)</button>
-                                </form>
+                                <?php if ($inspectedUserId === $userId): ?>
+                                    <form method="POST" action="index.php?page=attendance&action=sign_attendance&course=<?= urlencode($currentCourseSlug) ?>" style="display: flex; gap: 0.4rem; align-items: center;">
+                                        <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
+                                        <input type="hidden" name="half_day_key" value="<?= Security::e($keyPm) ?>"/>
+                                        <input type="hidden" name="signature_text" value="Lu et approuvé — <?= Security::e($currentUser['name']) ?>"/>
+                                        <button type="submit" class="btn btn-emerald btn-sm">✍️ Émarger Après-Midi (J<?= $dayNum ?>)</button>
+                                    </form>
+                                <?php else: ?>
+                                    <span style="font-size: 0.78rem; color: var(--text-muted);">— Non émargé —</span>
+                                <?php endif; ?>
                             <?php endif; ?>
                         </td>
                         <td>
@@ -193,6 +203,8 @@ $loggedHours = $signedHalfDaysCount * 3.5;
                                     <input type="hidden" name="target_user_id" value="<?= $inspectedUserId ?>"/>
                                     <input type="hidden" name="day_num" value="<?= $dayNum ?>"/>
                                     <input type="hidden" name="half_day_key" value="J<?= $dayNum ?>_DAY"/>
+                                    <input type="hidden" name="return_student_id" value="<?= $inspectedUserId ?>"/>
+                                    <input type="hidden" name="return_track" value="<?= Security::e($selectedTrack) ?>"/>
                                     <button type="submit" class="btn btn-outline-cyan btn-sm" style="font-size: 0.74rem;">
                                         ✒️ Contre-signer J<?= $dayNum ?>
                                     </button>

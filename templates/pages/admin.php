@@ -493,8 +493,25 @@ $allCourseDiscussions = $storage->getAllCourseDiscussions($currentCourseSlug);
         </aside>
     </div>
 
+<?php elseif ($adminTab === 'system'): ?>
+    <!-- 5. GESTION DU SYSTÈME & DES CACHES DE RENDU -->
+    <section class="lms-card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+        <span class="badge-code">⚙️ GESTION DU SYSTÈME & DES CACHES DE RENDU</span>
+        <h3 style="font-size: 1.25rem; margin: 0.5rem 0 1rem;">Invalidation & Purge Immédiate des Caches</h3>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">
+            Le portail met en cache le catalogue multi-formations et le rendu HTML des modules/ateliers Markdown pour des performances optimales.
+            En cas de mise à jour manuelle des supports de cours ou des scripts SQL, utilisez cette action pour forcer la recompilation immédiate.
+        </p>
+        <form method="POST" action="index.php?page=admin&tab=system&action=admin_clear_cache&course=<?= urlencode($currentCourseSlug) ?>">
+            <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
+            <button type="submit" class="btn btn-primary" onclick="return confirm('Purger tous les caches de catalogue et de rendu Markdown ?');">
+                🧹 Vider les Caches Catalogue & Markdown
+            </button>
+        </form>
+    </section>
+
 <?php else: ?>
-    <!-- 5. JOURNAL D'AUDIT ET TRAÇABILITÉ QUALIOPI -->
+    <!-- 6. JOURNAL D'AUDIT ET TRAÇABILITÉ QUALIOPI -->
     <h2 style="font-size: 1.3rem; margin-bottom: 1rem;">📜 Journal d'Audit & Traçabilité Qualiopi</h2>
     <div class="lms-table-wrap">
         <table class="lms-table">
@@ -518,22 +535,5 @@ $allCourseDiscussions = $storage->getAllCourseDiscussions($currentCourseSlug);
             </tbody>
         </table>
     </div>
-<?php endif; ?>
-
-<?php if ($adminTab === 'system'): ?>
-    <section class="lms-card" style="padding: 1.5rem; margin-bottom: 1.5rem;">
-        <span class="badge-code">⚙️ GESTION DU SYSTÈME & DES CACHES DE RENDU</span>
-        <h3 style="font-size: 1.25rem; margin: 0.5rem 0 1rem;">Invalidation & Purge Immédiate des Caches</h3>
-        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">
-            Le portail met en cache le catalogue multi-formations et le rendu HTML des modules/ateliers Markdown pour des performances optimales.
-            En cas de mise à jour manuelle des supports de cours ou des scripts SQL, utilisez cette action pour forcer la recompilation immédiate.
-        </p>
-        <form method="POST" action="index.php?page=admin&tab=system&action=admin_clear_cache&course=<?= urlencode($currentCourseSlug) ?>">
-            <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
-            <button type="submit" class="btn btn-primary" onclick="return confirm('Purger tous les caches de catalogue et de rendu Markdown ?');">
-                🧹 Vider les Caches Catalogue & Markdown
-            </button>
-        </form>
-    </section>
 <?php endif; ?>
 

@@ -10,7 +10,7 @@ $allAttempts = $storage->getExamAttempts($userId, $currentCourseSlug);
 $latestAttempt = !empty($allAttempts) ? $allAttempts[0] : null;
 $showRetake = isset($_GET['retake']) && $_GET['retake'] === '1';
 $classroomState = $storage->getClassroomState($currentCourseSlug);
-$isExamLockedForStudent = !empty($classroomState['lock_exam']) && (($currentUser['role'] ?? 'student') === 'student');
+$isExamLockedForStudent = !empty($classroomState['lock_exam']) && !$auth->isStaff($currentUser);
 ?>
 
 <div class="hero-banner" style="padding: 1.5rem 2rem;">
