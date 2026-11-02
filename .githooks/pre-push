@@ -1,6 +1,8 @@
 #!/usr/bin/env sh
-branch="$(git rev-parse --abbrev-ref HEAD)"
+# Protection against direct push to remote main branch
+branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
 if [ "$branch" = "main" ]; then
-  echo "[ERREUR] Push direct sur 'main' interdit. Ouvrez une Pull Request."
+  echo "❌ [ERROR] Direct push to 'main' branch is prohibited. Please open a Pull Request via 'gh pr create'." >&2
   exit 1
 fi
+exit 0
