@@ -1134,6 +1134,88 @@ $t->assertTrue(str_contains($adminTpl, "tab=system"), "RCA-LMS-37 (FIX-16) : tem
 $attTplCheck = (string)file_get_contents(__DIR__ . '/../templates/pages/attendance.php');
 $t->assertTrue(str_contains($attTplCheck, 'name="target_user_id" value="0"'), "RCA-LMS-37 (FIX-08) : templates/pages/attendance.php envoie target_user_id=0 pour la promotion");
 
+// ============================================================================
+// 21. Tests Contrats RCA-168 / RCA-LMS-38 (Polissage Final, Export OPCO & Durcissement)
+// ============================================================================
+echo "\n--- 21. Tests Contrats RCA-168 / RCA-LMS-38 (Polissage Final, Export OPCO & Durcissement) ---\n";
+
+// 21.1 LMS-38-01 : Onglet system intégré dans l'échelle conditionnelle admin.php
+$adminTplCode = (string)file_get_contents(__DIR__ . '/../templates/pages/admin.php');
+$t->assertTrue(
+    str_contains($adminTplCode, "elseif (\$adminTab === 'system'):"),
+    "RCA-LMS-38 (LMS-38-01) : templates/pages/admin.php intègre l'onglet system dans l'échelle elseif"
+);
+$t->assertFalse(
+    (bool)preg_match('/<\?php\s+endif;\s*\?>\s*<\?php\s+if\s*\(\$adminTab\s*===\s*\'system\'\)/', $adminTplCode),
+    "RCA-LMS-38 (LMS-38-01) : Suppression du bloc séparé causant le double affichage de l'audit Qualiopi sur l'onglet système"
+);
+
+// 21.2 LMS-38-02 : Colonne Role et qualification staff dans export_attendance_csv
+$indexCodeB5 = (string)file_get_contents(__DIR__ . '/../public/index.php');
+$t->assertTrue(
+    str_contains($indexCodeB5, "'Role'"),
+    "RCA-LMS-38 (LMS-38-02) : export_attendance_csv expose la colonne 'Role' dans l'en-tête CSV"
+);
+$t->assertTrue(
+    str_contains($indexCodeB5, "PERSONNEL FORMATEUR"),
+    "RCA-LMS-38 (LMS-38-02) : export_attendance_csv qualifie les comptes formateur en 'PERSONNEL FORMATEUR'"
+);
+$t->assertTrue(
+    str_contains($indexCodeB5, "STAFF (N/A)"),
+    "RCA-LMS-38 (LMS-38-02) : export_attendance_csv qualifie les heures du staff en 'STAFF (N/A)'"
+);
+
+// 21.3 LMS-38-03 : Masquage des boutons d'émargement actif sur vue tiers et préservation du contexte formateur
+$attTplCodeB5 = (string)file_get_contents(__DIR__ . '/../templates/pages/attendance.php');
+$t->assertTrue(
+    str_contains($attTplCodeB5, "\$inspectedUserId === \$userId"),
+    "RCA-LMS-38 (LMS-38-03) : attendance.php conditionne l'émargement actif à \$inspectedUserId === \$userId"
+);
+$t->assertTrue(
+    str_contains($attTplCodeB5, 'name="return_student_id"'),
+    "RCA-LMS-38 (LMS-38-03) : attendance.php transmet return_student_id dans la contre-signature formateur"
+);
+$t->assertTrue(
+    str_contains($attTplCodeB5, 'name="return_track"'),
+    "RCA-LMS-38 (LMS-38-03) : attendance.php transmet return_track dans la contre-signature formateur"
+);
+$t->assertTrue(
+    str_contains($indexCodeB5, "return_student_id"),
+    "RCA-LMS-38 (LMS-38-03) : public/index.php réinjecte return_student_id dans la redirection HTTP"
+);
+$t->assertTrue(
+    str_contains($indexCodeB5, "return_track"),
+    "RCA-LMS-38 (LMS-38-03) : public/index.php réinjecte return_track dans la redirection HTTP"
+);
+
+// 21.4 LMS-38-04 : Blocage préventif des commandes interactives psql dans LabSqlRunner
+$blockedCommands = [
+    '\\e' => 'invocation éditeur système \e',
+    '\\ef my_func' => 'édition de fonction \ef',
+    '\\ev my_view' => 'édition de vue \ev',
+    '\\prompt my_var' => 'invite interactive \prompt',
+    '\\watch 2' => 'boucle infinie \watch',
+    '\\setenv PAGER cat' => 'altération environnement \setenv',
+    "/* comment */ \\e" => 'contournement par commentaire \e',
+    "SELECT 1; \\watch 5" => 'enchaînement avec point-virgule \watch',
+];
+foreach ($blockedCommands as $cmdSql => $cmdLabel) {
+    $blockedRes = $sqlRunnerTest->runSql(1, $cmdSql, 'formation_pg');
+    $t->assertFalse($blockedRes['success'], "RCA-LMS-38 (LMS-38-04) : LabSqlRunner bloque {$cmdLabel}");
+    $t->assertEquals('blocked', $blockedRes['container'], "RCA-LMS-38 (LMS-38-04) : Container est 'blocked' pour {$cmdLabel}");
+}
+
+// 21.5 LMS-38-05 : Harmonisation verrou examen final dans exam.php
+$examTplCodeB5 = (string)file_get_contents(__DIR__ . '/../templates/pages/exam.php');
+$t->assertTrue(
+    str_contains($examTplCodeB5, "!\$auth->isStaff(\$currentUser)"),
+    "RCA-LMS-38 (LMS-38-05) : templates/pages/exam.php utilise !\$auth->isStaff(\$currentUser) pour le verrou examen"
+);
+$t->assertFalse(
+    str_contains($examTplCodeB5, "(\$currentUser['role'] ?? 'student') === 'student'"),
+    "RCA-LMS-38 (LMS-38-05) : templates/pages/exam.php a éliminé l'ancienne condition fragile sur le rôle student"
+);
+
 exit($t->summary());
 
 

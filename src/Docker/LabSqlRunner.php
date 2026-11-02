@@ -49,9 +49,9 @@ class LabSqlRunner
             return ['success' => false, 'database' => $db, 'output' => 'Requête SQL vide.', 'duration_ms' => 0];
         }
 
-        // FIX-06: Rejeter TOUTES les commandes d'échappement psql interactives et injections shell (\!, \copy, \o, \w, \i, \gexec, \connect, \cd, \c)
+        // FIX-06 & LMS-38-04: Rejeter TOUTES les commandes d'échappement psql interactives et injections shell (\!, \copy, \o, \w, \i, \gexec, \connect, \cd, \c, \e, \ef, \ev, \prompt, \watch, \setenv)
         // y compris après des commentaires (/* ... */) ou sur la même ligne après point-virgule (;)
-        if (preg_match('/(?:^|[\r\n;]|\*\/)\s*\\\\(?:!|copy|o|w|i|gexec|connect|cd|c\b)/i', $sql)) {
+        if (preg_match('/(?:^|[\r\n;]|\*\/)\s*\\\\(?:!|copy|o|w|i|gexec|connect|cd|c\b|e\b|ef\b|ev\b|prompt\b|watch\b|setenv\b)/i', $sql)) {
             return [
                 'success' => false,
                 'container' => 'blocked',

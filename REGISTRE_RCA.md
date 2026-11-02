@@ -854,3 +854,41 @@ Valide avec php tests/run_tests.php.
   ```
 * **Statut :** ✅ Implémenté — voir Journal de Bord 2026-11-02 (Remédiation Boucle 4 — Issue #33)
 
+---
+
+## Fiche d'Incident RCA-168 (`RCA-LMS-38`) : Polissage Final, Ergonomie Admin, Export OPCO et Durcissement Console SQL du Portail LMS
+
+* **Date de détection :** 2026-11-02
+* **Issue GitHub associée :** `lightpath-training-portal#35`
+* **Composant Affecté :** `templates/pages/admin.php`, `public/index.php`, `templates/pages/attendance.php`, `src/Docker/LabSqlRunner.php`, `templates/pages/exam.php`, `tests/run_tests.php`, `tests/test_adversarial_b5.php`
+* **1. Mécanisme :**
+  L'audit adverse et de qualité de la Boucle 5 (ultime itération d'excellence) a relevé 5 points de polissage et de durcissement sur le portail LMS :
+  1) **LMS-38-01 (Condition d'onglet system dans admin.php) :** L'onglet `tab=system` était géré dans un bloc `if` séparé après le bloc `else` (qui contenait le Journal d'Audit Qualiopi). En conséquence, lors de l'affichage de l'onglet `⚙️ Caches & Système`, le Journal d'Audit Qualiopi apparaissait intempestivement au-dessus de la section de purge des caches.
+  2) **LMS-38-02 (Colonne Role et qualification staff dans l'export OPCO) :** Dans `export_attendance_csv`, l'en-tête CSV et les lignes utilisateur omettaient la colonne `Role`. Pour les formateurs et administrateurs n'ayant pas d'émargement apprenant, le CSV affichait `AUCUNE (ABSENT)` et `ABSENT (0h)`, prêtant à confusion lors des audits de contrôle de conformité des financeurs OPCO.
+  3) **LMS-38-03 (Navigation formateur & bouton d'émargement tiers dans attendance.php) :** Lorsqu'un formateur inspectait la feuille d'émargement d'un stagiaire tiers (`?page=attendance&student_id=<id>`), les boutons d'émargement actif stagiaire (`✍️ Émarger Matin/Après-midi`) restaient affichés. S'il cliquait dessus, la signature s'enregistrait pour le formateur au lieu du stagiaire. De plus, lors de la contre-signature formateur, la redirection HTTP réinitialisait les paramètres `student_id` et `track`, renvoyant le formateur sur sa propre feuille d'émargement.
+  4) **LMS-38-04 (Commandes interactives et d'édition psql dans LabSqlRunner) :** La regex de filtrage de sécurité de la console SQL Web bloquait `\!`, `\copy`, `\o`, etc., mais ne filtrait pas les commandes interactives suspensives ou persistantes telles que `\e`, `\ef`, `\ev` (éditeurs de code vi/nano), `\prompt` (invite interactive bloquante), `\watch` (boucle d'exécution périodique) et `\setenv` (altération des variables d'environnement).
+  5) **LMS-38-05 (Harmonisation du verrou d'examen final dans exam.php) :** `templates/pages/exam.php` vérifiait `(($currentUser['role'] ?? 'student') === 'student')` pour le verrouillage d'examen alors que le contrôleur `public/index.php` vérifiait `!$auth->isStaff($currentUser)`, créant une incohérence pour d'éventuels rôles non-staff personnalisés.
+* **2. Hypothèse :**
+  1) Intégrer l'onglet `tab=system` dans l'échelle conditionnelle `elseif ($adminTab === 'system'):` dans `admin.php` et supprimer le bloc `if` séparé.
+  2) Ajouter la colonne `Role` dans `export_attendance_csv` et qualifier les rôles staff par `PERSONNEL FORMATEUR` et `STAFF (N/A)`.
+  3) Conditionner les boutons d'émargement stagiaire à `$inspectedUserId === $userId` (en affichant `— Non émargé —` en vue tiers), et transmettre `return_student_id` et `return_track` pour préserver le contexte de navigation formateur après signature.
+  4) Étendre la regex de `LabSqlRunner` pour bloquer également `\e`, `\ef`, `\ev`, `\prompt`, `\watch` et `\setenv`.
+  5) Harmoniser la condition de verrouillage dans `exam.php` avec `!$auth->isStaff($currentUser)`.
+  6) Certifier l'ensemble par la Section 21 dans `tests/run_tests.php` et la suite adverse `tests/test_adversarial_b5.php`.
+* **3. Contre-mesure :**
+  Implémentation complète des points LMS-38-01 à LMS-38-05 sur `templates/pages/admin.php`, `public/index.php`, `templates/pages/attendance.php`, `src/Docker/LabSqlRunner.php` et `templates/pages/exam.php`. Ajout de la Section 21 dans `tests/run_tests.php` (portant la suite officielle à 402/402 tests passés, 0 échec) et création de `tests/test_adversarial_b5.php` (78/78 assertions passées avec verdict APPROVE). Validation de 100% des tests des 5 suites adverses combinées (B1 à B5).
+* **4. Prompt LLM :**
+  ```text
+  Contexte : dépôt lightpath-training-portal. Lis la fiche RCA-168 (RCA-LMS-38) dans REGISTRE_RCA.md.
+  Tâche : Vérifier les 6 correctifs de polissage et durcissement final LMS-38-01 à LMS-38-06 :
+  1) templates/pages/admin.php intègre l'onglet system dans l'échelle elseif ($adminTab === 'system'): sans double affichage du journal d'audit Qualiopi.
+  2) public/index.php export_attendance_csv inclut la colonne 'Role' et qualifie le staff en 'PERSONNEL FORMATEUR' / 'STAFF (N/A)'.
+  3) templates/pages/attendance.php masque les boutons d'émargement stagiaire actif en vue tiers ($inspectedUserId === $userId), transmet return_student_id et return_track, et public/index.php réinjecte ces paramètres dans la redirection HTTP.
+  4) src/Docker/LabSqlRunner.php bloque \e, \ef, \ev, \prompt, \watch, \setenv.
+  5) templates/pages/exam.php harmonise le verrou avec !$auth->isStaff($currentUser).
+  6) tests/run_tests.php comporte la Section 21 (>= 402 passés) et tests/test_adversarial_b5.php valide les 6 suites (78/78 passés).
+  Valide avec : php tests/run_tests.php && php tests/test_adversarial_b5.php
+  ```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-11-02 (Remédiation Boucle 5 — Issue #35)
+
+

@@ -320,4 +320,22 @@
   5. Blocage de `RESET ALL;` neutralisant la directive `statement_timeout`.
 * **Tests post-correction :** ✅ 78 / 78 tests passés dans `php tests/test_adversarial_b4.php` (VERDICT: APPROVE) + ✅ 374 / 374 passés dans `php tests/run_tests.php` + ✅ 69/69 B1 + ✅ 50/50 B2 + ✅ 69/69 B3 (100% de réussite, 0 régression).
 
+---
+
+### Correction RCA-168 — Polissage Final, Ergonomie Admin, Export OPCO et Durcissement Console SQL du Portail LMS (`RCA-LMS-38`)
+* **Date :** 2026-11-02 04:15
+* **Issue GitHub associée :** `lightpath-training-portal#35`
+* **Fichiers modifiés :**
+  - `templates/pages/admin.php` (intégration de l'onglet `system` dans l'échelle `elseif` conditionnelle, suppression du bloc séparé provoquant le double affichage du Journal d'Audit Qualiopi sur l'onglet Système)
+  - `public/index.php` (ajout de la colonne `Role` dans l'en-tête et les lignes de l'export CSV d'émargement `export_attendance_csv`, qualification des comptes staff par `PERSONNEL FORMATEUR` et `STAFF (N/A)` ; extraction de `return_student_id` et `return_track` pour redirection fidèle après contre-signature formateur)
+  - `templates/pages/attendance.php` (conditionnement de l'affichage des formulaires d'émargement stagiaire à `$inspectedUserId === $userId` avec affichage neutre `— Non émargé —` en vue tiers ; transmission des champs cachés `return_student_id` et `return_track` dans les formulaires de contre-signature formateur)
+  - `src/Docker/LabSqlRunner.php` (extension de la regex de sécurité pour bloquer préventivement les métacommandes psql d'édition système et interactives `\e`, `\ef`, `\ev`, `\prompt`, `\watch` et `\setenv`)
+  - `templates/pages/exam.php` (harmonisation du verrouillage d'examen avec `!$auth->isStaff($currentUser)`)
+  - `tests/run_tests.php` (ajout de la Section 21 couvrant les 6 points LMS-38-01 à LMS-38-06, totalisant 402 assertions passées à 100%)
+  - `tests/test_adversarial_b5.php` (création du banc d'essai adverse empirique de la Boucle 5, 78/78 assertions passées avec verdict APPROVE)
+  - `REGISTRE_RCA.md`, `JOURNAL_DE_BORD.md`
+* **Nature de la correction :** Implémentation des 6 améliorations et durcissements de polissage final de la Boucle 5 (RCA-168 / RCA-LMS-38).
+* **Tests post-correction :** ✅ 402 / 402 tests passés dans `php tests/run_tests.php` (100% de réussite, 0 régression) et 5/5 suites adverses approuvées (B1: 69, B2: 50, B3: 69, B4: 78, B5: 78).
+
+
 
