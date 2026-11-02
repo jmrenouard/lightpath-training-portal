@@ -302,3 +302,22 @@
 * **Nature de la correction :** Implémentation complète des 14 correctifs de durcissement (Boucle 4 — Pilier 4) : atomicité des écritures fichiers et PDO, prévention d'écrasement de cohortes, préservation des visas d'émargement, scellement temporel des signatures, attestations d'assiduité Qualiopi avec QR Code, import CSV robuste multi-délimiteurs avec détection de BOM, rejet des métacommandes shell interactives en console SQL, timeout d'inactivité de session, synchronisation cache Docker et réactivité sub-milliseconde du catalogue.
 * **Tests post-correction :** ✅ 374 / 374 tests passés dans `php tests/run_tests.php` + ✅ 69/69 B1 + ✅ 50/50 B2 + ✅ 69/69 B3 (100% de réussite, 0 régression).
 
+---
+
+### Correction RCA-167 — Remédiation Adversaire B4 : Colmatage des 5 Contournements de Sécurité LabSqlRunner (`RCA-LMS-37`)
+* **Date :** 2026-11-02 03:30
+* **Issue GitHub associée :** `lightpath-training-portal#33`
+* **Fichiers modifiés :**
+  - `src/Docker/LabSqlRunner.php` (durcissement des expressions régulières de filtrage des métacommandes psql interactives et de `statement_timeout`)
+  - `.gitignore` (exclusion de `/storage/cache/`)
+  - `tests/test_adversarial_b4.php` (harnais d'évaluation empirique adverse de 78 assertions)
+  - `REGISTRE_RCA.md`, `JOURNAL_DE_BORD.md`
+* **Nature de la correction :** Colmatage des 5 failles critiques d'injection et de contournement identifiées empiriquement par l'Adversarial Challenger B4 :
+  1. Blocage de `\connect` et `\c` (changement de base de données).
+  2. Blocage de `\cd` (changement de répertoire conteneur).
+  3. Blocage de `\!` précédé d'un commentaire multiligne SQL (`/* comment */ \! whoami`).
+  4. Blocage de `\!` sur la même ligne après un point-virgule (`SELECT 1; \! whoami`).
+  5. Blocage de `RESET ALL;` neutralisant la directive `statement_timeout`.
+* **Tests post-correction :** ✅ 78 / 78 tests passés dans `php tests/test_adversarial_b4.php` (VERDICT: APPROVE) + ✅ 374 / 374 passés dans `php tests/run_tests.php` + ✅ 69/69 B1 + ✅ 50/50 B2 + ✅ 69/69 B3 (100% de réussite, 0 régression).
+
+
