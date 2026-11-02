@@ -59,7 +59,7 @@ class MarkdownParser
             'quiz' => $quiz,
             'slides' => $slides,
         ];
-        @file_put_contents($cacheFile, json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $this->writeCacheFile($cacheFile, $result);
         return $result;
     }
 
@@ -105,8 +105,47 @@ class MarkdownParser
             'corrige_toc' => $renderedCorrige['toc'],
             'sql_snippets' => $sqlSnippets,
         ];
-        @file_put_contents($cacheFile, json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $this->writeCacheFile($cacheFile, $result);
         return $result;
+    }
+
+    /**
+     * Écrit le résultat de parsing dans le cache fichier avec renommage atomique et verrouillage LOCK_EX.
+     */
+    private function writeCacheFile(string $cacheFile, array $result): void
+    {
+        $dir = dirname($cacheFile);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        $tmp = $cacheFile . '.tmp.' . getmypid() . '.' . mt_rand(1000, 9999);
+        $json = json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($json !== false && $json !== '') {
+            @file_put_contents($tmp, $json, LOCK_EX);
+            if (!@rename($tmp, $cacheFile)) {
+                @copy($tmp, $cacheFile);
+                @unlink($tmp);
+            }
+        }
+    }
+
+    /**
+     * Purge l'ensemble des fichiers de cache de rendu Markdown.
+     */
+    public function clearParsedCache(): int
+    {
+        $count = 0;
+        if (is_dir($this->cacheDir)) {
+            $files = @glob($this->cacheDir . '/*.json') ?: [];
+            foreach ($files as $f) {
+                if (is_file($f)) {
+                    if (@unlink($f)) {
+                        $count++;
+                    }
+                }
+            }
+        }
+        return $count;
     }
 
     /**

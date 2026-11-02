@@ -4,10 +4,12 @@ declare(strict_types=1);
 use LightPath\LMS\Core\Security;
 use LightPath\LMS\Core\Gamification;
 
-$userAttendance = $storage->getUserAttendance($userId, $currentCourseSlug);
+$isStaffUser = in_array($currentUser['role'] ?? '', ['trainer', 'admin'], true);
+$inspectedUserId = ($isStaffUser && !empty($_GET['student_id'])) ? (int)$_GET['student_id'] : $userId;
+$inspectedUser = ($inspectedUserId !== $userId) ? ($storage->getUserById($inspectedUserId) ?? $currentUser) : $currentUser;
+$userAttendance = $storage->getUserAttendance($inspectedUserId, $currentCourseSlug);
 $learningSeconds = (int)($userProgress['learning_seconds'] ?? 0);
 $selectedTrack = (string)($_GET['track'] ?? 'cursus-complet');
-$isStaffUser = in_array($currentUser['role'] ?? '', ['trainer', 'admin'], true);
 
 $attendanceTracks = [
     'cursus-complet' => [
@@ -90,10 +92,10 @@ $loggedHours = $signedHalfDaysCount * 3.5;
             </a>
             <form method="POST" action="index.php?page=attendance&action=sign_trainer_attendance&course=<?= urlencode($currentCourseSlug) ?>" style="display: inline;">
                 <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
-                <input type="hidden" name="target_user_id" value="<?= $userId ?>"/>
+                <input type="hidden" name="target_user_id" value="0"/>
                 <input type="hidden" name="half_day_key" value="ALL"/>
                 <button type="submit" class="btn btn-emerald btn-sm">
-                    ✔ Contre-signer toutes les demi-journées émargées
+                    ✔ Contre-signer toutes les demi-journées émargées (Promotion)
                 </button>
             </form>
         <?php endif; ?>
@@ -188,7 +190,7 @@ $loggedHours = $signedHalfDaysCount * 3.5;
                             <?php if ($isStaffUser && ($sigAm !== null || $sigPm !== null) && !($trainerSignedAm && $trainerSignedPm)): ?>
                                 <form method="POST" action="index.php?page=attendance&action=sign_trainer_attendance&course=<?= urlencode($currentCourseSlug) ?>" style="margin-top: 0.35rem;">
                                     <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
-                                    <input type="hidden" name="target_user_id" value="<?= $userId ?>"/>
+                                    <input type="hidden" name="target_user_id" value="<?= $inspectedUserId ?>"/>
                                     <input type="hidden" name="day_num" value="<?= $dayNum ?>"/>
                                     <input type="hidden" name="half_day_key" value="J<?= $dayNum ?>_DAY"/>
                                     <button type="submit" class="btn btn-outline-cyan btn-sm" style="font-size: 0.74rem;">

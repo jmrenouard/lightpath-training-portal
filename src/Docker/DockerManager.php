@@ -62,12 +62,24 @@ class DockerManager
         if (!is_dir($dir)) {
             @mkdir($dir, 0775, true);
         }
-        $tmpPath = $this->cacheFile . '.tmp.' . getmypid() . '.' . mt_rand(1000, 9999);
-        $json = (string)json_encode($cache, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        @file_put_contents($tmpPath, $json, LOCK_EX);
-        if (!@rename($tmpPath, $this->cacheFile)) {
-            @copy($tmpPath, $this->cacheFile);
-            @unlink($tmpPath);
+        $lockFile = $dir . '/docker_status_cache.lock';
+        $lockFp = @fopen($lockFile, 'c+b');
+        if ($lockFp !== false) {
+            flock($lockFp, LOCK_EX);
+        }
+        try {
+            $tmpPath = $this->cacheFile . '.tmp.' . getmypid() . '.' . mt_rand(1000, 9999);
+            $json = (string)json_encode($cache, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            @file_put_contents($tmpPath, $json, LOCK_EX);
+            if (!@rename($tmpPath, $this->cacheFile)) {
+                @copy($tmpPath, $this->cacheFile);
+                @unlink($tmpPath);
+            }
+        } finally {
+            if ($lockFp !== false) {
+                flock($lockFp, LOCK_UN);
+                fclose($lockFp);
+            }
         }
     }
 
@@ -241,9 +253,31 @@ class DockerManager
 
     private function saveUserStatusCache(int $userId, array $status): void
     {
-        $cache = $this->readStatusCache();
-        $cache['users'][(string)$userId] = $status;
-        $this->writeStatusCache($cache);
+        $dir = dirname($this->cacheFile);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        $lockFile = $dir . '/docker_status_cache.lock';
+        $lockFp = @fopen($lockFile, 'c+b');
+        if ($lockFp !== false) {
+            flock($lockFp, LOCK_EX);
+        }
+        try {
+            $cache = $this->readStatusCache();
+            $cache['users'][(string)$userId] = $status;
+            $tmpPath = $this->cacheFile . '.tmp.' . getmypid() . '.' . mt_rand(1000, 9999);
+            $json = (string)json_encode($cache, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            @file_put_contents($tmpPath, $json, LOCK_EX);
+            if (!@rename($tmpPath, $this->cacheFile)) {
+                @copy($tmpPath, $this->cacheFile);
+                @unlink($tmpPath);
+            }
+        } finally {
+            if ($lockFp !== false) {
+                flock($lockFp, LOCK_UN);
+                fclose($lockFp);
+            }
+        }
     }
 
     public function startUserContainer(int $userId, string $userEmail = 'student'): array

@@ -32,6 +32,11 @@ class LabSqlRunner
         return 'formation_pg';
     }
 
+    public function runSql(int $userId, string $sql, string $database = 'formation_pg'): array
+    {
+        return $this->executeSql($userId, $sql, $database);
+    }
+
     /**
      * Exécute une requête SQL sur le conteneur dédié de l'utilisateur
      * (ou sur pg_formation_primary si disponible) et retourne le résultat tabulaire.
@@ -42,6 +47,28 @@ class LabSqlRunner
         $db = $this->normalizeDatabase($database);
         if ($sql === '') {
             return ['success' => false, 'database' => $db, 'output' => 'Requête SQL vide.', 'duration_ms' => 0];
+        }
+
+        // FIX-06: Rejeter les commandes d'échappement psql interactives et injections shell (\!, \copy, \o, \w, \i, \gexec)
+        if (preg_match('/^\s*\\\\(?:!|copy|o|w|i|gexec)/mi', $sql)) {
+            return [
+                'success' => false,
+                'container' => 'blocked',
+                'database' => $db,
+                'output' => 'Commandes backslash interactives non autorisées dans la console Web.',
+                'duration_ms' => 0,
+            ];
+        }
+
+        // FIX-06: Empêcher le contournement ou la neutralisation de statement_timeout
+        if (preg_match('/(?:SET|RESET)\s+(?:LOCAL\s+)?statement_timeout/i', $sql)) {
+            return [
+                'success' => false,
+                'container' => 'blocked',
+                'database' => $db,
+                'output' => 'Modification du paramètre statement_timeout interdite dans la console Web.',
+                'duration_ms' => 0,
+            ];
         }
 
         $start = microtime(true);

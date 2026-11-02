@@ -42,7 +42,10 @@ $filteredTotalItems = max(1, $filteredTotalModules + $filteredTotalLabs);
 $filteredCompletionPct = min(100, (int)round((($filteredDoneModules + $filteredDoneLabs) / $filteredTotalItems) * 100));
 
 $certCode = (string)($userBestExam['certificate_id'] ?? sprintf('LP-PG18-ATT-%d-%s', (int)$userId, date('Ymd')));
-$verifyUrl = rtrim((string)($appConfig['website'] ?? 'https://www.lightpath.fr'), '/') . '/index.php?page=verify&code=' . urlencode($certCode);
+$proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (!empty($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443) ? 'https' : 'http';
+$host = $_SERVER['HTTP_HOST'] ?? '';
+$baseUrl = ($host !== '') ? "{$proto}://{$host}" : rtrim((string)($appConfig['website'] ?? 'https://www.lightpath.fr'), '/');
+$verifyUrl = $baseUrl . '/index.php?page=verify&code=' . urlencode($certCode);
 ?>
 
 <div class="no-print" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.5rem;">

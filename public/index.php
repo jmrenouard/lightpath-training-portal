@@ -230,6 +230,23 @@ if ($action === 'export_attendance_csv' && $auth->isStaff($currentUser)) {
         foreach ($storage->getUsers() as $u) {
             $uid = (int)$u['id'];
             $attRecords = $storage->getUserAttendance($uid, $currentCourseSlug);
+            if (empty($attRecords)) {
+                // FIX-13: Inclure les inscrits n'ayant aucun émargement pour l'exhaustivité des audits OPCO
+                fputcsv($out, [
+                    $uid,
+                    Security::sanitizeCsvCell($u['name'] ?? ''),
+                    Security::sanitizeCsvCell($u['email'] ?? ''),
+                    Security::sanitizeCsvCell($u['company'] ?? ''),
+                    'AUCUNE (ABSENT)',
+                    'ABSENT (0h)',
+                    '—',
+                    '—',
+                    '—',
+                    '—',
+                    '—',
+                ], ';');
+                continue;
+            }
             foreach ($attRecords as $hdKey => $rec) {
                 if (!is_array($rec)) {
                     continue;
@@ -685,6 +702,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($auth->isAdmin($currentUser)) {
+        // FIX-16: Action d'invalidation et purge des caches catalogue et markdown
+        if ($action === 'admin_clear_cache') {
+            $catCleared = $courseRepo->clearCatalogCache();
+            $parsedCleared = $mdParser->clearParsedCache();
+            $storage->logAuditEvent($currentUser['email'], 'ADMIN_CACHE_CLEAR', "Purge des caches : catalogue ({$catCleared}) et markdown ({$parsedCleared})");
+            $_SESSION['flash_success'] = "Caches purgés avec succès : catalogue réinitialisé, {$parsedCleared} fichier(s) Markdown recompilés.";
+            header('Location: index.php?page=admin&tab=system&course=' . urlencode($currentCourseSlug));
+            exit;
+        }
+
         if ($action === 'admin_create_user') {
             $uName = trim((string)($_POST['name'] ?? ''));
             $uEmail = trim((string)($_POST['email'] ?? ''));
