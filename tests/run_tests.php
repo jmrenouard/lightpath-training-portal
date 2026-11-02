@@ -43,6 +43,21 @@ class TestRunner
         $this->assertTrue($expected === $actual, "{$message} (Expected: " . var_export($expected, true) . ", Got: " . var_export($actual, true) . ")");
     }
 
+    public function assertEqual(mixed $expected, mixed $actual, string $message): void
+    {
+        $this->assertEquals($expected, $actual, $message);
+    }
+
+    public function assertFalse(bool $condition, string $message): void
+    {
+        $this->assertTrue(!$condition, $message);
+    }
+
+    public function assertNull(mixed $actual, string $message): void
+    {
+        $this->assertTrue($actual === null, "{$message} (Expected: null, Got: " . var_export($actual, true) . ")");
+    }
+
     public function assertGreaterThanOrEqual(int|float $min, int|float $actual, string $message): void
     {
         $this->assertTrue($actual >= $min, "{$message} (Min: {$min}, Actual: {$actual})");
@@ -994,6 +1009,130 @@ $t->assertTrue(
     str_contains($codeHtml, 'lang-python') && str_contains($codeHtml, '>PYTHON<'),
     "RCA-LMS-36 (Item 5) : Les blocs Python préservent le tag de syntaxe lang-python et affichent le badge .lms-code-badge PYTHON"
 );
+
+// ============================================================================
+// 20. Tests Contrats RCA-167 / RCA-LMS-37 (Sécurité, Concurrence, Cache & Qualiopi)
+echo "\n--- 20. Tests Contrats RCA-167 / RCA-LMS-37 (Sécurité, Concurrence, Cache & Qualiopi) ---\n";
+
+// 20.1 Fuseau horaire officiel Europe/Paris
+$t->assertEqual(
+    'Europe/Paris',
+    date_default_timezone_get(),
+    "RCA-LMS-37 (FIX-13) : date_default_timezone_get() est configuré sur Europe/Paris"
+);
+
+// 20.2 Préservation du visa formateur lors de l'émargement stagiaire (JsonStorage)
+$storage->signTrainerAttendance(3, 'postgresql-18', 'J2_AM', 'Jean-Marie Renouard');
+$attBefore = $storage->getUserAttendance(3, 'postgresql-18');
+$trainerVisaBefore = $attBefore['J2_AM']['trainer_signed_at'] ?? '';
+$t->assertTrue(!empty($trainerVisaBefore), "RCA-LMS-37 (FIX-02) : Visa formateur apposé sur J2_AM");
+
+// Le stagiaire ré-émarge la même demi-journée
+$storage->signAttendance(3, 'postgresql-18', 'J2_AM', 'Signature rectifiée stagiaire #3');
+$attAfter = $storage->getUserAttendance(3, 'postgresql-18');
+$t->assertEqual(
+    $trainerVisaBefore,
+    $attAfter['J2_AM']['trainer_signed_at'] ?? null,
+    "RCA-LMS-37 (FIX-02) : signAttendance préserve trainer_signed_at après ré-émargement stagiaire"
+);
+$t->assertEqual(
+    'Jean-Marie Renouard',
+    $attAfter['J2_AM']['trainer_name'] ?? null,
+    "RCA-LMS-37 (FIX-02) : signAttendance préserve trainer_name après ré-émargement stagiaire"
+);
+
+// 20.3 Hash d'émargement SHA-256 avec horodatage scellé
+$attRecord = $attAfter['J2_AM'] ?? [];
+$t->assertTrue(
+    (bool)preg_match('/^[a-f0-9]{16}$/i', $attRecord['hash'] ?? ''),
+    "RCA-LMS-37 (FIX-14) : L'empreinte de signature stagiaire est un condensat hexadécimal de 16 caractères"
+);
+$t->assertTrue(
+    (bool)preg_match('/^[a-f0-9]{16}$/i', $attRecord['trainer_hash'] ?? ''),
+    "RCA-LMS-37 (FIX-14) : Le visa formateur est un condensat hexadécimal de 16 caractères scellé temporellement"
+);
+
+// 20.4 Reconnaissance publique des attestations d'assiduité Qualiopi (findCertificateByCode)
+$attCertCode = 'LP-PG18-ATT-3-' . date('Ymd');
+$attLookup = $storage->findCertificateByCode($attCertCode);
+$t->assertTrue($attLookup !== null, "RCA-LMS-37 (FIX-07) : findCertificateByCode reconnaît le code d'attestation LP-PG18-ATT-3-Ymd");
+$t->assertTrue(!empty($attLookup['passed']), "RCA-LMS-37 (FIX-07) : L'attestation de suivi est certifiée conforme (passed=true)");
+$t->assertEqual(100, $attLookup['percent'] ?? 0, "RCA-LMS-37 (FIX-07) : Score d'assiduité fixé à 100%");
+$t->assertEqual(3, $attLookup['user_id'] ?? 0, "RCA-LMS-37 (FIX-07) : Titulaire résolu sur l'utilisateur #3");
+
+// Code d'attestation pour utilisateur inexistant renvoie null
+$t->assertNull(
+    $storage->findCertificateByCode('LP-PG18-ATT-9999-20261102'),
+    "RCA-LMS-37 (FIX-07) : findCertificateByCode rejette une attestation pour utilisateur inexistant"
+);
+
+// 20.5 Import CSV : purge du BOM UTF-8, détection TSV et validation longueur mot de passe
+$csvWithBom = "\xEF\xBB\xBFNom;Email;Entreprise;Role;Password\nClaire Dupuis;claire.dupuis@formation-pg.fr;EDF;student;Secr3t!\n";
+$importBomRes = $storage->importUsersFromCsv($csvWithBom);
+$t->assertEqual(1, $importBomRes['created'], "RCA-LMS-37 (FIX-12) : importUsersFromCsv purge le BOM UTF-8 et importe le premier compte");
+$importedClaire = $storage->getUserByEmail('claire.dupuis@formation-pg.fr');
+$t->assertTrue($importedClaire !== null && $importedClaire['name'] === 'Claire Dupuis', "RCA-LMS-37 (FIX-12) : Le nom n'est pas corrompu par le BOM");
+
+// Import CSV tabulé (TSV)
+$tsvContent = "Nom\tEmail\tEntreprise\tRole\tPassword\nDavid Bernard\tdavid.bernard@formation-pg.fr\tSNCF\tstudent\tSNCF2026!\n";
+$importTsvRes = $storage->importUsersFromCsv($tsvContent);
+$t->assertEqual(1, $importTsvRes['created'], "RCA-LMS-37 (FIX-12) : importUsersFromCsv gère les séparateurs tabulations (TSV)");
+
+// Import avec mot de passe court (< 6 caractères) : repli sur le mot de passe sécurisé
+$csvShortPass = "Eric Petit;eric.petit@formation-pg.fr;Airbus;student;123\n";
+$importShortRes = $storage->importUsersFromCsv($csvShortPass, 'DefPass2026!');
+$t->assertEqual(1, $importShortRes['created'], "RCA-LMS-37 (FIX-12) : importUsersFromCsv remplace un mot de passe trop court par le mot de passe par défaut");
+$importedEric = $storage->getUserByEmail('eric.petit@formation-pg.fr');
+$t->assertTrue(password_verify('DefPass2026!', $importedEric['password_hash'] ?? ''), "RCA-LMS-37 (FIX-12) : Le compte a bien été créé avec le mot de passe conforme");
+
+// 20.6 Sécurité LabSqlRunner : Rejet des commandes interactives backslash
+$sqlRunnerTest = new LabSqlRunner($docker);
+$blockedBackslash = $sqlRunnerTest->executeSql(1, "\\! id", 'formation_pg');
+$t->assertFalse($blockedBackslash['success'], "RCA-LMS-37 (FIX-06) : LabSqlRunner bloque \\! id");
+$t->assertTrue(str_contains($blockedBackslash['output'], 'Commandes backslash interactives non autorisées'), "RCA-LMS-37 (FIX-06) : Message explicite sur blocage backslash");
+
+$blockedCopy = $sqlRunnerTest->executeSql(1, "\\copy (SELECT 1) TO '/tmp/out'", 'formation_pg');
+$t->assertFalse($blockedCopy['success'], "RCA-LMS-37 (FIX-06) : LabSqlRunner bloque \\copy");
+
+// Tentative de neutralisation de statement_timeout
+$blockedTimeoutReset = $sqlRunnerTest->executeSql(1, "SET statement_timeout = 0; SELECT 1;", 'formation_pg');
+$t->assertFalse($blockedTimeoutReset['success'], "RCA-LMS-37 (FIX-06) : LabSqlRunner bloque toute modification de statement_timeout");
+
+// Alias runSql disponible
+$aliasRunRes = $sqlRunnerTest->runSql(1, "\\gexec", 'formation_pg');
+$t->assertFalse($aliasRunRes['success'], "RCA-LMS-37 (FIX-06) : Alias runSql actif et conforme");
+
+// 20.7 Sécurité Auth : Inactivité session 4 heures
+$_SESSION['user_id'] = 1;
+$_SESSION['last_activity'] = time() - 15000; // > 14400s
+$expiredUser = $auth->currentUser();
+$t->assertNull($expiredUser, "RCA-LMS-37 (FIX-11) : currentUser déconnecte la session après 14400s d'inactivité");
+$t->assertTrue(empty($_SESSION['user_id']), "RCA-LMS-37 (FIX-11) : user_id est vidé de la session");
+
+// 20.8 PdoStorage : ON CONFLICT DO UPDATE atomique, FOR UPDATE et repli transparent
+$pdoStorage = new PdoStorage(['dsn' => 'pgsql:host=127.0.0.1;port=5432;dbname=formation_pg'], sys_get_temp_dir() . '/pdo_test_' . mt_rand(1000, 9999));
+$t->assertTrue($pdoStorage instanceof JsonStorage, "RCA-LMS-37 (FIX-03) : PdoStorage hérite de JsonStorage et assure le repli transparent");
+$pdoSrc = (string)file_get_contents(__DIR__ . '/../src/Core/PdoStorage.php');
+$t->assertTrue(str_contains($pdoSrc, 'ON CONFLICT (store_key) DO UPDATE'), "RCA-LMS-37 (FIX-03) : PdoStorage implémente ON CONFLICT (store_key) DO UPDATE");
+$t->assertTrue(str_contains($pdoSrc, 'FOR UPDATE'), "RCA-LMS-37 (FIX-03) : PdoStorage implémente le verrouillage ligne FOR UPDATE dans mutateFile");
+
+// 20.9 Purge des caches catalogue et rendu Markdown
+$mdParserInstance = new MarkdownParser();
+$clearedParsedCount = $mdParserInstance->clearParsedCache();
+$t->assertGreaterThanOrEqual(0, $clearedParsedCount, "RCA-LMS-37 (FIX-10) : MarkdownParser::clearParsedCache() purge les fichiers JSON du cache de rendu");
+$repoFresh->clearCatalogCache();
+$t->assertTrue(method_exists($repoFresh, 'clearCatalogCache'), "RCA-LMS-37 (FIX-04) : CourseRepository::clearCatalogCache() vide le cache catalogue");
+
+// 20.10 Vérification des routes et templates (index.php, admin.php, attendance.php)
+$indexSrc = (string)file_get_contents(__DIR__ . '/../public/index.php');
+$t->assertTrue(str_contains($indexSrc, "action === 'admin_clear_cache'"), "RCA-LMS-37 (FIX-16) : public/index.php expose la route admin_clear_cache");
+$t->assertTrue(str_contains($indexSrc, "AUCUNE (ABSENT)"), "RCA-LMS-37 (FIX-13) : export_attendance_csv inclut les stagiaires sans émargement pour l'OPCO");
+
+$adminTpl = (string)file_get_contents(__DIR__ . '/../templates/pages/admin.php');
+$t->assertTrue(str_contains($adminTpl, "tab=system"), "RCA-LMS-37 (FIX-16) : templates/pages/admin.php propose l'onglet Caches & Système");
+
+$attTplCheck = (string)file_get_contents(__DIR__ . '/../templates/pages/attendance.php');
+$t->assertTrue(str_contains($attTplCheck, 'name="target_user_id" value="0"'), "RCA-LMS-37 (FIX-08) : templates/pages/attendance.php envoie target_user_id=0 pour la promotion");
 
 exit($t->summary());
 

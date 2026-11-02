@@ -8,6 +8,7 @@ class CourseRepository
     private array $coursesConfig;
     private array $cache = [];
     private string $cacheDir;
+    private static array $fingerprintCache = [];
 
     public function __construct(array $coursesConfig, array $customCourses = [], ?string $cacheDir = null)
     {
@@ -39,6 +40,7 @@ class CourseRepository
 
     public function clearCatalogCache(?string $slug = null): void
     {
+        self::$fingerprintCache = [];
         if ($slug !== null) {
             unset($this->cache[$slug]);
             $cacheFile = $this->cacheDir . '/catalog_cache_' . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $slug) . '.json';
@@ -165,6 +167,11 @@ class CourseRepository
 
     private function computeCatalogFingerprint(string $root, string $pgScriptsRoot, array $tracks): string
     {
+        $cacheKey = $root . '|' . $pgScriptsRoot . '|' . md5(json_encode($tracks) ?: '');
+        if (isset(self::$fingerprintCache[$cacheKey])) {
+            return self::$fingerprintCache[$cacheKey];
+        }
+
         $dirs = [
             $root . '/03_supports_de_cours',
             $root . '/04_ateliers_et_tp',
@@ -180,7 +187,32 @@ class CourseRepository
         foreach ($dirs as $d) {
             $parts[] = is_dir($d) ? (string)@filemtime($d) : '0';
         }
-        return implode(':', $parts);
+
+        // FIX-04: Scanner les mtimes réels des fichiers sources Markdown (module_*.md, lab_*.md) pour invalidation automatique ultra-rapide
+        $contentDirs = [
+            $root . '/03_supports_de_cours',
+            $root . '/04_ateliers_et_tp',
+        ];
+        $maxFileMtime = 0;
+        foreach ($contentDirs as $cd) {
+            if (is_dir($cd)) {
+                $entries = @scandir($cd) ?: [];
+                foreach ($entries as $e) {
+                    if ($e[0] === '.') {
+                        continue;
+                    }
+                    if (str_starts_with($e, 'module_') || str_starts_with($e, 'lab_')) {
+                        $fmt = (int)@filemtime($cd . '/' . $e);
+                        if ($fmt > $maxFileMtime) {
+                            $maxFileMtime = $fmt;
+                        }
+                    }
+                }
+            }
+        }
+        $parts[] = (string)$maxFileMtime;
+        $fp = implode(':', $parts);
+        return self::$fingerprintCache[$cacheKey] = $fp;
     }
 
     public function getModule(string $courseSlug, string $moduleId): ?array

@@ -48,6 +48,9 @@ class JsonStorage implements StorageInterface
         $path = $this->dataDir . '/' . $name . '.json';
         $tmpPath = $path . '.tmp.' . getmypid() . '.' . mt_rand(1000, 9999);
         $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($json === false || $json === '') {
+            throw new \RuntimeException("Échec de l'encodage JSON pour le fichier '$name'");
+        }
         file_put_contents($tmpPath, $json, LOCK_EX);
         if (!@rename($tmpPath, $path)) {
             copy($tmpPath, $path);
@@ -67,7 +70,16 @@ class JsonStorage implements StorageInterface
             flock($lockFp, LOCK_EX);
         }
         try {
+            $path = $this->dataDir . '/' . $name . '.json';
+            $targetHasData = is_file($path) && (int)@filesize($path) > 0;
             $current = $this->readFile($name, $default);
+            if ($targetHasData && $current === $default) {
+                $rawCheck = @file_get_contents($path);
+                $trimmed = trim((string)$rawCheck);
+                if ($trimmed !== '[]' && $trimmed !== '{}') {
+                    throw new \RuntimeException("Données corrompues ou illisibles détectées pour '$name'. Écriture interrompue pour éviter l'écrasement.");
+                }
+            }
             [$updated, $result] = $mutator($current);
             if ($updated !== null) {
                 $this->writeFile($name, $updated);
@@ -439,7 +451,9 @@ class JsonStorage implements StorageInterface
         $key = $userId . ':' . $courseSlug;
         return (array)$this->mutateFile('attendance', [], static function (array $all) use ($key, $userId, $courseSlug, $halfDayKey, $signatureText, $ip): array {
             $userRecords = $all[$key] ?? [];
+            $existing = $userRecords[$halfDayKey] ?? [];
             $sig = trim($signatureText) !== '' ? trim($signatureText) : 'Signé numériquement';
+            $signedAt = date('Y-m-d H:i:s');
 
             $entry = [
                 'user_id' => $userId,
@@ -447,10 +461,21 @@ class JsonStorage implements StorageInterface
                 'half_day_key' => $halfDayKey,
                 'signature' => $sig,
                 'signature_text' => $sig,
-                'signed_at' => date('Y-m-d H:i:s'),
+                'signed_at' => $signedAt,
                 'ip' => $ip !== '' ? $ip : '127.0.0.1',
-                'hash' => substr(hash('sha256', $userId . '|' . $courseSlug . '|' . $halfDayKey . '|' . $sig), 0, 16),
+                'hash' => substr(hash('sha256', $userId . '|' . $courseSlug . '|' . $halfDayKey . '|' . $sig . '|' . $signedAt), 0, 16),
             ];
+
+            // FIX-02: préserver le visa formateur si déjà contre-signé
+            if (!empty($existing['trainer_signed_at'])) {
+                $entry['trainer_signed_at'] = $existing['trainer_signed_at'];
+            }
+            if (!empty($existing['trainer_name'])) {
+                $entry['trainer_name'] = $existing['trainer_name'];
+            }
+            if (!empty($existing['trainer_hash'])) {
+                $entry['trainer_hash'] = $existing['trainer_hash'];
+            }
 
             $userRecords[$halfDayKey] = $entry;
             $all[$key] = $userRecords;
@@ -677,7 +702,7 @@ class JsonStorage implements StorageInterface
                         if (is_array($rec)) {
                             $userRecords[$hdKey]['trainer_signed_at'] = $now;
                             $userRecords[$hdKey]['trainer_name'] = $cleanTrainer;
-                            $userRecords[$hdKey]['trainer_hash'] = substr(hash('sha256', $tKey . '|' . $hdKey . '|' . $cleanTrainer . '|trainer'), 0, 16);
+                            $userRecords[$hdKey]['trainer_hash'] = substr(hash('sha256', $tKey . '|' . $hdKey . '|' . $cleanTrainer . '|trainer|' . $now), 0, 16);
                         }
                     }
                 } elseif (preg_match('/^J([1-9]|1[01])(?:_DAY)?$/i', $halfDayKey, $matches)) {
@@ -687,7 +712,7 @@ class JsonStorage implements StorageInterface
                         if (isset($userRecords[$dk]) && is_array($userRecords[$dk])) {
                             $userRecords[$dk]['trainer_signed_at'] = $now;
                             $userRecords[$dk]['trainer_name'] = $cleanTrainer;
-                            $userRecords[$dk]['trainer_hash'] = substr(hash('sha256', $tKey . '|' . $dk . '|' . $cleanTrainer . '|trainer'), 0, 16);
+                            $userRecords[$dk]['trainer_hash'] = substr(hash('sha256', $tKey . '|' . $dk . '|' . $cleanTrainer . '|trainer|' . $now), 0, 16);
                         } else {
                             $userRecords[$dk] = [
                                 'user_id' => (int)explode(':', $tKey)[0],
@@ -697,10 +722,10 @@ class JsonStorage implements StorageInterface
                                 'signature_text' => 'Émargé en session',
                                 'signed_at' => $now,
                                 'ip' => '127.0.0.1',
-                                'hash' => substr(hash('sha256', $tKey . '|' . $dk), 0, 16),
+                                'hash' => substr(hash('sha256', $tKey . '|' . $dk . '|' . $now), 0, 16),
                                 'trainer_signed_at' => $now,
                                 'trainer_name' => $cleanTrainer,
-                                'trainer_hash' => substr(hash('sha256', $tKey . '|' . $dk . '|' . $cleanTrainer . '|trainer'), 0, 16),
+                                'trainer_hash' => substr(hash('sha256', $tKey . '|' . $dk . '|' . $cleanTrainer . '|trainer|' . $now), 0, 16),
                             ];
                         }
                     }
@@ -713,11 +738,11 @@ class JsonStorage implements StorageInterface
                         'signature_text' => 'Émargé en session',
                         'signed_at' => $now,
                         'ip' => '127.0.0.1',
-                        'hash' => substr(hash('sha256', $tKey . '|' . $halfDayKey), 0, 16),
+                        'hash' => substr(hash('sha256', $tKey . '|' . $halfDayKey . '|' . $now), 0, 16),
                     ];
                     $existing['trainer_signed_at'] = $now;
                     $existing['trainer_name'] = $cleanTrainer;
-                    $existing['trainer_hash'] = substr(hash('sha256', $tKey . '|' . $halfDayKey . '|' . $cleanTrainer . '|trainer'), 0, 16);
+                    $existing['trainer_hash'] = substr(hash('sha256', $tKey . '|' . $halfDayKey . '|' . $cleanTrainer . '|trainer|' . $now), 0, 16);
                     $userRecords[$halfDayKey] = $existing;
                 }
                 $all[$tKey] = $userRecords;
@@ -778,6 +803,37 @@ class JsonStorage implements StorageInterface
         if ($norm === '') {
             return null;
         }
+
+        // FIX-07: Reconnaissance des attestations de formation & assiduité Qualiopi (LP-PG18-ATT-<uid>-<date>)
+        if (preg_match('/^LP-(?:[A-Z0-9]+-)?ATT-(\d+)-(\d{6,8})$/i', $norm, $m)) {
+            $uid = (int)$m[1];
+            $user = $this->getUserById($uid);
+            if ($user !== null) {
+                $rawDate = (string)$m[2];
+                $formattedDate = strlen($rawDate) === 8
+                    ? substr($rawDate, 0, 4) . '-' . substr($rawDate, 4, 2) . '-' . substr($rawDate, 6, 2)
+                    : date('Y-m-d');
+                return [
+                    'certificate_id' => $norm,
+                    'user_id' => $uid,
+                    'user_name' => (string)($user['name'] ?? 'Apprenant LightPath'),
+                    'user_email' => (string)($user['email'] ?? ''),
+                    'company' => (string)($user['company'] ?? ''),
+                    'course_slug' => 'postgresql-18',
+                    'course_title' => 'PostgreSQL 18 — Cursus Complet (Administration & Optimisation)',
+                    'certificate_type' => 'attendance',
+                    'mention' => 'Attestation de Formation & Assiduité Qualiopi',
+                    'percentage' => 100,
+                    'percent' => 100,
+                    'passed' => true,
+                    'certified' => true,
+                    'verified' => true,
+                    'submitted_at' => $formattedDate . ' 17:30:00',
+                    'issued_at' => $formattedDate,
+                ];
+            }
+        }
+
         $allExams = $this->getAllExamAttempts();
         foreach ($allExams as $userCourseKey => $attempts) {
             if (!is_array($attempts)) {
@@ -912,7 +968,9 @@ class JsonStorage implements StorageInterface
 
     public function importUsersFromCsv(string $csvContent, string $defaultPassword = 'LightPath2026!', string $courseSlug = 'postgresql-18'): array
     {
-        $lines = preg_split('/\r\n|\r|\n/', trim($csvContent)) ?: [];
+        // FIX-12: Purger le BOM UTF-8 (\xEF\xBB\xBF) en début de fichier exporté par Excel
+        $cleanContent = preg_replace('/^\xEF\xBB\xBF/', '', trim($csvContent));
+        $lines = preg_split('/\r\n|\r|\n/', (string)$cleanContent) ?: [];
         $targetCourse = trim($courseSlug) !== '' ? trim($courseSlug) : 'postgresql-18';
 
         return (array)$this->mutateFile('users', [], static function (array $users) use ($lines, $defaultPassword, $targetCourse): array {
@@ -937,17 +995,34 @@ class JsonStorage implements StorageInterface
                 if ($line === '' || str_starts_with($line, '#')) {
                     continue;
                 }
-                $delim = str_contains($line, ';') ? ';' : ',';
+
+                // FIX-12: Détection automatique du délimiteur (;, ,, \t)
+                $semis = substr_count($line, ';');
+                $tabs = substr_count($line, "\t");
+                $commas = substr_count($line, ',');
+                $delim = ',';
+                if ($tabs > $commas && $tabs > $semis) {
+                    $delim = "\t";
+                } elseif ($semis >= $commas && $semis > 0) {
+                    $delim = ';';
+                }
+
                 $cols = str_getcsv($line, $delim);
                 if (count($cols) < 2) {
                     $skipped++;
                     continue;
                 }
-                $name = trim((string)($cols[0] ?? ''));
+                $name = trim(preg_replace('/^\xEF\xBB\xBF/', '', (string)($cols[0] ?? '')));
                 $email = strtolower(trim((string)($cols[1] ?? '')));
                 $company = trim((string)($cols[2] ?? ''));
                 $role = strtolower(trim((string)($cols[3] ?? 'student')));
-                $password = trim((string)($cols[4] ?? '')) !== '' ? trim((string)$cols[4]) : $defaultPassword;
+
+                // FIX-12: Imposer une longueur minimale de 6 caractères pour le mot de passe
+                $rawPass = trim((string)($cols[4] ?? ''));
+                $password = (strlen($rawPass) >= 6) ? $rawPass : $defaultPassword;
+                if (strlen($password) < 6) {
+                    $password = 'LightPath2026!';
+                }
 
                 // Ignorer la ligne d'en-tête CSV éventuelle
                 if ($idx === 0 && (in_array(strtolower($name), ['name', 'nom', 'fullname', 'nom complet'], true) || in_array($email, ['email', 'courriel', 'mail'], true))) {

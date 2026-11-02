@@ -9,7 +9,10 @@ if ($code === '' && !empty($userBestExam['certificate_id'])) {
 }
 
 $certData = ($code !== '') ? $storage->findCertificateByCode($code) : null;
-$verifyUrl = rtrim((string)($appConfig['website'] ?? 'https://www.lightpath.fr'), '/') . '/index.php?page=verify&code=' . urlencode($code);
+$proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (!empty($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443) ? 'https' : 'http';
+$host = $_SERVER['HTTP_HOST'] ?? '';
+$baseUrl = ($host !== '') ? "{$proto}://{$host}" : rtrim((string)($appConfig['website'] ?? 'https://www.lightpath.fr'), '/');
+$verifyUrl = $baseUrl . '/index.php?page=verify&code=' . urlencode($code);
 ?>
 
 <div class="hero-banner" style="padding: 1.5rem 2rem;">

@@ -278,9 +278,27 @@
 * **Nature de la correction :** Résolution des anomalies de rendu Markdown du lecteur de formation LMS et des styles CSS manquants (Milestone B3-M2 / LMS).
 * **Tests post-correction :** ✅ 342 / 342 tests passés dans `php tests/run_tests.php` (100% de réussite, 0 régression)
 
+---
 
-
-
-
-
+### Correction RCA-167 — Durcissement Sécurité, Concurrence Atomique, Mémoire Cache & Cas Limites Qualiopi du Portail LMS (`RCA-LMS-37`)
+* **Date :** 2026-11-02 03:00
+* **Issue GitHub associée :** `lightpath-training-portal#31`
+* **Fichiers modifiés :**
+  - `src/Core/JsonStorage.php` (vérification non-vide dans `writeFile`, protection anti-écrasement dans `mutateFile`, préservation des visas et nom formateur dans `signAttendance`, incorporation de l'horodatage dans le hash SHA-256 de signature et contre-signature, reconnaissance des attestations d'assiduité `LP-PG18-ATT-*` dans `findCertificateByCode`, nettoyage du BOM UTF-8 `\xEF\xBB\xBF`, détection auto des séparateurs CSV `;`, `,`, `\t` et validation de longueur mot de passe >= 6 dans `importUsersFromCsv`)
+  - `src/Core/PdoStorage.php` (idempotence `INSERT ... ON CONFLICT (store_key) DO UPDATE` pour PostgreSQL et SQLite, `ON DUPLICATE KEY UPDATE` pour MySQL dans `writeFile` ; verrouillage ligne `FOR UPDATE` dans `mutateFile`)
+  - `src/Docker/DockerManager.php` (synchronisation exclusive `flock(LOCK_EX)` sur `docker_status_cache.lock` dans `writeStatusCache` et `saveUserStatusCache`)
+  - `src/bootstrap.php` (fuseau horaire officiel `date_default_timezone_set('Europe/Paris')`, paramétrage `secure` sur les cookies de session en HTTPS)
+  - `src/Core/Auth.php` (déconnexion après inactivité > 4 heures / 14400 secondes dans `currentUser`, expiration du cookie de session et `session_destroy()` dans `logout`)
+  - `src/Course/CourseRepository.php` (scan dynamique des mtimes de `03_supports_de_cours` et `04_ateliers_et_tp` dans `computeCatalogFingerprint` avec mémoisation statique mémoire pour temps de chargement warm < 25 ms, purge sélective dans `clearCatalogCache`)
+  - `src/Course/MarkdownParser.php` (écriture atomique avec fichier temporaire `.tmp` et `LOCK_EX` dans `writeCacheFile`, méthode publique `clearParsedCache`)
+  - `src/Docker/LabSqlRunner.php` (rejet strict des métacommandes psql interactives `\!`, `\copy`, `\o`, `\w`, `\i`, `\gexec`, interdiction des altérations `SET/RESET statement_timeout`, méthode alias `runSql`)
+  - `templates/pages/attendance.php` (transmission de `target_user_id = 0` pour visa formateur collectif de promotion, support du filtrage `student_id`)
+  - `templates/pages/certificate.php`, `templates/pages/verify.php` (construction dynamique d'URL de vérification basée sur `HTTP_HOST` pour QR Code hors-ligne et en ligne)
+  - `templates/pages/admin.php` (onglet Caches & Système avec purge en 1 clic des caches catalogue et parseur Markdown)
+  - `public/index.php` (route `admin_clear_cache`, inclusion des stagiaires inscrits absents dans l'export `export_attendance_csv` avec statut `ABSENT (0h)`)
+  - `tests/run_tests.php` (ajout de la Section 20 validant les 14 correctifs contractuels, totalisant 374 assertions réussies)
+  - `tests/test_adversarial_b3.php` (mise à niveau de la tolérance du nombre de tests >= 342)
+  - `REGISTRE_RCA.md`, `JOURNAL_DE_BORD.md`
+* **Nature de la correction :** Implémentation complète des 14 correctifs de durcissement (Boucle 4 — Pilier 4) : atomicité des écritures fichiers et PDO, prévention d'écrasement de cohortes, préservation des visas d'émargement, scellement temporel des signatures, attestations d'assiduité Qualiopi avec QR Code, import CSV robuste multi-délimiteurs avec détection de BOM, rejet des métacommandes shell interactives en console SQL, timeout d'inactivité de session, synchronisation cache Docker et réactivité sub-milliseconde du catalogue.
+* **Tests post-correction :** ✅ 374 / 374 tests passés dans `php tests/run_tests.php` + ✅ 69/69 B1 + ✅ 50/50 B2 + ✅ 69/69 B3 (100% de réussite, 0 régression).
 

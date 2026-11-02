@@ -82,6 +82,30 @@ class PdoStorage extends JsonStorage
             try {
                 $json = (string)json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                 $now = date('Y-m-d H:i:s');
+                $driver = (string)$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+
+                // FIX-03: PostgreSQL / SQLite avec ON CONFLICT DO UPDATE atomique
+                if ($driver === 'pgsql' || $driver === 'sqlite') {
+                    $stmt = $this->pdo->prepare('
+                        INSERT INTO lms_kv_store (store_key, payload, updated_at)
+                        VALUES (:k, :p, :u)
+                        ON CONFLICT (store_key) DO UPDATE SET payload = EXCLUDED.payload, updated_at = EXCLUDED.updated_at
+                    ');
+                    $stmt->execute([':k' => $name, ':p' => $json, ':u' => $now]);
+                    return;
+                }
+
+                // MySQL avec ON DUPLICATE KEY UPDATE atomique
+                if ($driver === 'mysql') {
+                    $stmt = $this->pdo->prepare('
+                        INSERT INTO lms_kv_store (store_key, payload, updated_at)
+                        VALUES (:k, :p, :u)
+                        ON DUPLICATE KEY UPDATE payload = VALUES(payload), updated_at = VALUES(updated_at)
+                    ');
+                    $stmt->execute([':k' => $name, ':p' => $json, ':u' => $now]);
+                    return;
+                }
+
                 $upd = $this->pdo->prepare('UPDATE lms_kv_store SET payload = :p, updated_at = :u WHERE store_key = :k');
                 $upd->execute([':p' => $json, ':u' => $now, ':k' => $name]);
                 if ($upd->rowCount() === 0) {
@@ -108,7 +132,20 @@ class PdoStorage extends JsonStorage
                 }
             }
             try {
-                $current = $this->readFile($name, $default);
+                // FIX-03: FOR UPDATE sous PostgreSQL / MySQL pour éviter le Lost Update
+                $driver = (string)$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+                $forUpdate = ($driver === 'pgsql' || $driver === 'mysql') ? ' FOR UPDATE' : '';
+                $stmt = $this->pdo->prepare("SELECT payload FROM lms_kv_store WHERE store_key = :k{$forUpdate} LIMIT 1");
+                $stmt->execute([':k' => $name]);
+                $row = $stmt->fetch(PDO::FETCH_ASSOC);
+                $current = $default;
+                if (is_array($row) && isset($row['payload'])) {
+                    $decoded = json_decode((string)$row['payload'], true);
+                    if (is_array($decoded)) {
+                        $current = $decoded;
+                    }
+                }
+
                 [$updated, $result] = $mutator($current);
                 if ($updated !== null) {
                     $this->writeFile($name, $updated);

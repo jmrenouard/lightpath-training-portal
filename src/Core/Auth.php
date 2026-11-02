@@ -96,15 +96,32 @@ class Auth
         if (PHP_SAPI !== 'cli') {
             session_regenerate_id(true);
             $_SESSION['user_id'] = (int)$user['id'];
+            $_SESSION['last_activity'] = time();
         }
         return $user;
     }
 
     public function logout(): void
     {
-        if (PHP_SAPI !== 'cli') {
-            unset($_SESSION['user_id']);
-            session_destroy();
+        if (PHP_SAPI !== 'cli' || session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION = [];
+            if (ini_get('session.use_cookies')) {
+                $params = session_get_cookie_params();
+                setcookie(
+                    session_name(),
+                    '',
+                    time() - 3600,
+                    $params['path'] ?? '/',
+                    $params['domain'] ?? '',
+                    $params['secure'] ?? false,
+                    $params['httponly'] ?? true
+                );
+            }
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                session_destroy();
+            }
+        } else {
+            $_SESSION = [];
         }
     }
 
@@ -114,11 +131,26 @@ class Auth
         if ($uid <= 0) {
             return null;
         }
+
+        // FIX-11: Expiration automatique de session après 4 heures (14400s) d'inactivité
+        if (isset($_SESSION['last_activity'])) {
+            if ((time() - (int)$_SESSION['last_activity']) > 14400) {
+                $this->logout();
+                return null;
+            }
+        }
+        $_SESSION['last_activity'] = time();
+
         $user = $this->storage->getUserById($uid);
         if ($user === null || empty($user['active'])) {
             return null;
         }
         return $user;
+    }
+
+    public function getCurrentUser(): ?array
+    {
+        return $this->currentUser();
     }
 
     public function registerUser(
