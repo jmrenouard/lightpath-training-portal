@@ -1,7 +1,8 @@
 #!/usr/bin/env sh
-branch="$(git rev-parse --abbrev-ref HEAD)"
+# Protection against direct commit to main branch
+branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
 if [ "$branch" = "main" ]; then
-  echo "[ERREUR] Commit direct sur 'main' interdit. Utilisez une branche dédiée (feat/..., fix/..., docs/...)."
+  echo "❌ [ERROR] Direct commit to 'main' branch is prohibited. Use a dedicated branch (feat/..., fix/..., docs/...)." >&2
   exit 1
 fi
 php tests/run_tests.php
