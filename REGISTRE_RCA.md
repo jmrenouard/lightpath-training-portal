@@ -803,16 +803,16 @@ Valide avec php tests/run_tests.php.
 ## Fiche d'Incident RCA-167 (`RCA-LMS-37`) : Durcissement Sécurité, Concurrence Atomique, Mémoire Cache & Cas Limites Qualiopi du Portail LMS
 
 * **Date de détection :** 2026-11-02
-* **Issues GitHub associées :** `lightpath-training-portal#31`
-* **Composant Affecté :** `src/Core/JsonStorage.php`, `src/Core/PdoStorage.php`, `src/Docker/DockerManager.php`, `src/bootstrap.php`, `src/Core/Auth.php`, `src/Course/CourseRepository.php`, `src/Course/MarkdownParser.php`, `src/Docker/LabSqlRunner.php`, `templates/pages/attendance.php`, `templates/pages/certificate.php`, `templates/pages/verify.php`, `templates/pages/admin.php`, `public/index.php`, `tests/run_tests.php`
+* **Issues GitHub associées :** `lightpath-training-portal#31`, `lightpath-training-portal#33`
+* **Composant Affecté :** `src/Core/JsonStorage.php`, `src/Core/PdoStorage.php`, `src/Docker/DockerManager.php`, `src/bootstrap.php`, `src/Core/Auth.php`, `src/Course/CourseRepository.php`, `src/Course/MarkdownParser.php`, `src/Docker/LabSqlRunner.php`, `templates/pages/attendance.php`, `templates/pages/certificate.php`, `templates/pages/verify.php`, `templates/pages/admin.php`, `public/index.php`, `tests/run_tests.php`, `tests/test_adversarial_b4.php`
 * **1. Mécanisme :**
-  L'audit adverse et d'ingénierie de la Boucle 4 a relevé 14 axes d'amélioration critique et de durcissement sur le portail LMS :
+  L'audit adverse et d'ingénierie de la Boucle 4 a relevé 14 axes d'amélioration critique et de durcissement sur le portail LMS, ainsi que 5 contournements de sécurité critiques dans `LabSqlRunner` identifiés empiriquement par l'Adversarial Challenger B4 :
   1) **Prévention écrasement cohorte (`JsonStorage`) :** `writeFile()` écrivait même si `$json` était faux ou vide, et `mutateFile()` risquait d'écraser un fichier existant si la lecture échouait en retournant la valeur par défaut.
   2) **Préservation du visa formateur (`JsonStorage::signAttendance`) :** Lorsqu'un apprenant ré-émargeait après signature formateur, les champs `trainer_signed_at`, `trainer_name` et `trainer_hash` étaient écrasés.
   3) **Idempotence & Verrouillage SQL (`PdoStorage`) :** `writeFile()` risquait une collision de clé primaire sur insertion concurrente, et `mutateFile()` manquait de verrouillage pessimiste de ligne (`FOR UPDATE`).
   4) **Empreinte dynamique du catalogue & Invalidations (`CourseRepository`) :** `computeCatalogFingerprint()` dépendait uniquement du mtime des répertoires (statique sous certains FS Windows/Dropbox) sans scanner les mtimes réels des fichiers sources Markdown.
   5) **Concurrence cache Docker (`DockerManager`) :** `writeStatusCache()` et `saveUserStatusCache()` écrivaient sans verrou `flock(LOCK_EX)`, risquant la corruption de `docker_status_cache.json`.
-  6) **Injection psql & Bypass Timeout (`LabSqlRunner`) :** Aucune restriction n'empêchait l'exécution de métacommandes interactives (`\!`, `\copy`, `\o`, `\w`, `\i`, `\gexec`) ni la réinitialisation de `statement_timeout` via `SET/RESET`.
+  6) **Injection psql & Bypass Timeout (`LabSqlRunner`) :** Aucune restriction n'empêchait l'exécution de métacommandes interactives (`\!`, `\copy`, `\o`, `\w`, `\i`, `\gexec`) ni la réinitialisation de `statement_timeout` via `SET/RESET`. L'évaluation adverse empirique a en outre mis en évidence 5 contournements critiques : omission de `\connect` / `\c`, omission de `\cd`, contournement par commentaire multiligne `/* comment */ \! whoami` brisant l'ancrage `^\s*\\`, contournement en ligne après point-virgule `SELECT 1; \! whoami`, et neutralisation de `statement_timeout` via `RESET ALL;`.
   7) **Attestations d'Assiduité Qualiopi (`findCertificateByCode`, `certificate.php`, `verify.php`) :** Le portail ne reconnaissait pas les codes d'attestation `LP-PG18-ATT-<uid>-<date>` scellés par QR Code pour les stagiaires complétant leur assiduité.
   8) **Contre-signature collective formateur (`attendance.php`) :** L'action globale formateur transmettait `user_id` spécifique au lieu de `target_user_id = 0`, empêchant la validation groupée de la promotion.
   9) **URL absolue de vérification QR Code (`certificate.php`, `verify.php`) :** Les URLs de vérification utilisaient un domaine statique plutôt que la résolution dynamique d'hôte `$_SERVER['HTTP_HOST']`.
@@ -822,16 +822,16 @@ Valide avec php tests/run_tests.php.
   13) **Timezone Europe/Paris & Registre OPCO (`bootstrap.php`, `public/index.php`) :** Les horodatages d'émargement utilisaient l'heure serveur non garantie en UTC, et les stagiaires absents n'étaient pas listés dans l'export OPCO.
   14) **Horodatage d'émargement dans le hash (`JsonStorage`) :** Le hash SHA-256 d'émargement n'incorporait pas l'horodatage exact de signature.
 * **2. Hypothèse :**
-  Implémenter l'ensemble des 14 correctifs (FIX-01 à FIX-16) :
+  Implémenter l'ensemble des 14 correctifs (FIX-01 à FIX-16) et colmater les 5 contournements de `LabSqlRunner` :
   - `JsonStorage` : garde-fous anti-écrasement, préservation du visa formateur, incorporation de `$signedAt`/`$now` dans le hash SHA-256, support des codes d'attestation `LP-PG18-ATT-*`, nettoyage BOM UTF-8 et détection automatique des séparateurs CSV (`;`, `,`, `\t`).
   - `PdoStorage` : clause `INSERT ... ON CONFLICT (store_key) DO UPDATE` et verrouillage `FOR UPDATE` sous transaction.
   - `CourseRepository` : scan des mtimes des fichiers sources Markdown et mémoisation statique pour lookups sub-millisecondes (`< 25 ms`).
   - `DockerManager` : synchronisation `flock(LOCK_EX)` sur `docker_status_cache.lock`.
-  - `LabSqlRunner` : rejet strict des métacommandes `\` interactives et des altérations de `statement_timeout`.
+  - `LabSqlRunner` : regex durcie `(?:^|[\r\n;]|\*\/)\s*\\\\(?:!|copy|o|w|i|gexec|connect|cd|c\b)` bloquant toutes les métacommandes psql interactives même après commentaires multilignes ou sur la même ligne après point-virgule, et regex `(?:SET|RESET)\s+(?:LOCAL\s+)?(?:statement_timeout|ALL\b)` bloquant `RESET ALL` et toute altération de `statement_timeout`.
   - `Auth` & `bootstrap.php` : `Europe/Paris`, cookies `secure`, timeout d'inactivité de 4 heures (`14400 s`), et purge complète des cookies de session au logout.
   - Vues et contrôleurs : support de `target_user_id = 0` sur `attendance.php`, URLs dynamiques pour QR Codes, onglet Système & Caches dans `admin.php`, route `admin_clear_cache`, et inclusion des stagiaires absents dans l'export OPCO.
 * **3. Contre-mesure :**
-  Application des modifications sur l'ensemble des fichiers cibles, ajout de la Section 20 dans `tests/run_tests.php` (32 assertions de contrat) portant le total à 374 assertions réussies à 100%, et validation par les 3 suites adverses empiriques (B1: 69/69, B2: 50/50, B3: 69/69).
+  Application des modifications sur l'ensemble des fichiers cibles, ajout de la Section 20 dans `tests/run_tests.php` (32 assertions de contrat) portant le total à 374 assertions réussies à 100%, banc d'essai adverse dédié `tests/test_adversarial_b4.php` (78/78 assertions passées avec verdict APPROVE) et validation par les 3 suites adverses empiriques antérieures (B1: 69/69, B2: 50/50, B3: 69/69).
 * **4. Prompt LLM :**
   ```text
   Contexte : dépôt lightpath-training-portal. Lis la fiche RCA-167 (RCA-LMS-37) dans REGISTRE_RCA.md.
@@ -841,7 +841,7 @@ Valide avec php tests/run_tests.php.
   3) PdoStorage implémente ON CONFLICT (store_key) DO UPDATE et FOR UPDATE dans mutateFile.
   4) CourseRepository::computeCatalogFingerprint scanne les mtimes réels des fichiers sources Markdown avec mémoisation statique.
   5) DockerManager protège le cache de statut conteneur avec flock(LOCK_EX).
-  6) LabSqlRunner bloque les backslashes interactifs (\!, \copy, \o, etc.) et les altérations de statement_timeout.
+  6) LabSqlRunner bloque TOUTES les métacommandes backslash interactives (\!, \copy, \o, \w, \i, \gexec, \connect, \cd, \c) y compris après /* ... */ ou point-virgule, et interdit RESET ALL / statement_timeout.
   7) JsonStorage::findCertificateByCode reconnaît les codes d'attestation LP-PG18-ATT-<uid>-<date>.
   8) templates/pages/attendance.php envoie target_user_id=0 pour la contre-signature collective formateur.
   9) certificate.php et verify.php génèrent des URLs dynamiques basées sur HTTP_HOST.
@@ -850,6 +850,7 @@ Valide avec php tests/run_tests.php.
   12) importUsersFromCsv purge le BOM UTF-8 (\xEF\xBB\xBF), auto-détecte les délimiteurs (, ; \t) et valide les mots de passe >= 6 car.
   13) export_attendance_csv inclut tous les stagiaires inscrits (même absents) avec statut ABSENT pour l'OPCO.
   14) SHA-256 de signature et visa formateur incorpore le timestamp horodaté.
-  Valide avec : php tests/run_tests.php (374 assertions) et php tests/test_adversarial_b3.php.
+  Valide avec : php tests/run_tests.php (374 assertions), php tests/test_adversarial_b4.php (78 assertions).
   ```
-* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-11-02
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-11-02 (Remédiation Boucle 4 — Issue #33)
+
