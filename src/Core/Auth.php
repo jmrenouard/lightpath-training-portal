@@ -5,10 +5,14 @@ namespace LightPath\LMS\Core;
 
 class Auth
 {
+    public const VALID_ROLES = ['student', 'trainer', 'admin'];
+
     private StorageInterface $storage;
     private array $loginAttempts = [];
     private const MAX_LOGIN_ATTEMPTS = 5;
+    private const MAX_IP_LOGIN_ATTEMPTS = 25;
     private const LOCKOUT_SECONDS = 300;
+    private const DUMMY_BCRYPT_HASH = '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi';
 
     public function __construct(StorageInterface $storage)
     {
@@ -23,6 +27,11 @@ class Auth
         return strtolower(trim($email)) . '|' . ($ip !== '' ? $ip : '127.0.0.1');
     }
 
+    private function ipThrottleKey(string $ip): string
+    {
+        return 'ip|' . ($ip !== '' ? $ip : '127.0.0.1');
+    }
+
     private function syncThrottleSession(): void
     {
         if (PHP_SAPI !== 'cli' && session_status() === PHP_SESSION_ACTIVE) {
@@ -30,37 +39,48 @@ class Auth
         }
     }
 
-    public function isLoginRateLimited(string $email, string $ip = '127.0.0.1'): bool
+    private function isBucketRateLimited(string $key, int $limit): bool
     {
-        $key = $this->throttleKey($email, $ip);
-        if (!isset($this->loginAttempts[$key])) {
+        $entry = $this->storage->getLoginThrottle($key) ?? ($this->loginAttempts[$key] ?? null);
+        if (!is_array($entry)) {
             return false;
         }
-        $entry = $this->loginAttempts[$key];
         if ((time() - (int)($entry['first_at'] ?? 0)) > self::LOCKOUT_SECONDS) {
+            $this->storage->clearLoginThrottle($key);
             unset($this->loginAttempts[$key]);
             $this->syncThrottleSession();
             return false;
         }
-        return (int)($entry['count'] ?? 0) >= self::MAX_LOGIN_ATTEMPTS;
+        return (int)($entry['count'] ?? 0) >= $limit;
+    }
+
+    public function isLoginRateLimited(string $email, string $ip = '127.0.0.1'): bool
+    {
+        $key = $this->throttleKey($email, $ip);
+        $ipKey = $this->ipThrottleKey($ip);
+        return $this->isBucketRateLimited($key, self::MAX_LOGIN_ATTEMPTS)
+            || $this->isBucketRateLimited($ipKey, self::MAX_IP_LOGIN_ATTEMPTS);
     }
 
     public function recordFailedLogin(string $email, string $ip = '127.0.0.1'): void
     {
         $key = $this->throttleKey($email, $ip);
-        $now = time();
-        if (!isset($this->loginAttempts[$key]) || ($now - (int)($this->loginAttempts[$key]['first_at'] ?? 0)) > self::LOCKOUT_SECONDS) {
-            $this->loginAttempts[$key] = ['count' => 1, 'first_at' => $now];
-        } else {
-            $this->loginAttempts[$key]['count'] = (int)$this->loginAttempts[$key]['count'] + 1;
-        }
+        $ipKey = $this->ipThrottleKey($ip);
+        $this->loginAttempts[$key] = $this->storage->recordLoginFailure($key, self::LOCKOUT_SECONDS);
+        $this->loginAttempts[$ipKey] = $this->storage->recordLoginFailure($ipKey, self::LOCKOUT_SECONDS);
         $this->syncThrottleSession();
     }
 
     public function clearLoginAttempts(string $email, string $ip = '127.0.0.1'): void
     {
         $key = $this->throttleKey($email, $ip);
+        $this->storage->clearLoginThrottle($key);
         unset($this->loginAttempts[$key]);
+        if (trim($email) === '') {
+            $ipKey = $this->ipThrottleKey($ip);
+            $this->storage->clearLoginThrottle($ipKey);
+            unset($this->loginAttempts[$ipKey]);
+        }
         $this->syncThrottleSession();
     }
 
@@ -68,6 +88,8 @@ class Auth
     {
         $user = $this->storage->getUserByEmail($email);
         if ($user === null || empty($user['active'])) {
+            // Perform a dummy bcrypt verify to mitigate account enumeration via response timing.
+            password_verify($password, self::DUMMY_BCRYPT_HASH);
             return null;
         }
         if (!password_verify($password, (string)($user['password_hash'] ?? ''))) {
@@ -132,7 +154,7 @@ class Auth
             return null;
         }
 
-        // FIX-11: Expiration automatique de session après 4 heures (14400s) d'inactivité
+        // Enforce automatic session expiration after 4 hours (14400s) of inactivity.
         if (isset($_SESSION['last_activity'])) {
             if ((time() - (int)$_SESSION['last_activity']) > 14400) {
                 $this->logout();
@@ -153,6 +175,46 @@ class Auth
         return $this->currentUser();
     }
 
+    public function isValidRole(string $role): bool
+    {
+        return in_array($role, self::VALID_ROLES, true);
+    }
+
+    public function canAccessCourse(array $user, string $courseSlug): bool
+    {
+        if ($this->isStaff($user)) {
+            return true;
+        }
+        // Only legacy users without an enrolled_courses key default to postgresql-18; explicit [] grants zero courses.
+        if (!array_key_exists('enrolled_courses', $user) || $user['enrolled_courses'] === null) {
+            $enrolled = ['postgresql-18'];
+        } elseif (!is_array($user['enrolled_courses'])) {
+            $enrolled = [];
+        } else {
+            $enrolled = $user['enrolled_courses'];
+        }
+        return in_array($courseSlug, $enrolled, true);
+    }
+
+    public function changePassword(int $userId, string $currentPassword, string $newPassword): array
+    {
+        $user = $this->storage->getUserById($userId);
+        if ($user === null) {
+            return ['success' => false, 'message' => 'Compte utilisateur introuvable.'];
+        }
+        if ($currentPassword === '' || !password_verify($currentPassword, (string)($user['password_hash'] ?? ''))) {
+            return ['success' => false, 'message' => 'Le mot de passe actuel est incorrect.'];
+        }
+        if (strlen($newPassword) < 6) {
+            return ['success' => false, 'message' => 'Le nouveau mot de passe doit contenir au moins 6 caractères.'];
+        }
+
+        $user['password_hash'] = password_hash($newPassword, PASSWORD_BCRYPT);
+        $this->storage->saveUser($user);
+        $this->storage->logAuditEvent((string)($user['email'] ?? ''), 'PASSWORD_CHANGE', 'Modification du mot de passe utilisateur');
+        return ['success' => true, 'message' => 'Mot de passe mis à jour avec succès.'];
+    }
+
     public function registerUser(
         string $name,
         string $email,
@@ -169,8 +231,7 @@ class Auth
             return null;
         }
 
-        $allowedRoles = ['student', 'trainer', 'admin'];
-        if (!in_array($role, $allowedRoles, true)) {
+        if (!$this->isValidRole($role)) {
             $role = 'student';
         }
 

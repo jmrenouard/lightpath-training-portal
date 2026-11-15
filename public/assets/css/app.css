@@ -1,7 +1,7 @@
 /* ============================================================================
- * LIGHTPATH ACADEMY — DESIGN SYSTEM STUDIO (EMIL KOWALSKI STANDARDS)
+ * LIGHTPATH ACADEMY — STUDIO DESIGN SYSTEM (EMIL KOWALSKI STANDARDS)
  * Palette : Obsidian #0B1120 | Slate #0F172A | Cyan #00B0F0 / #38BDF8 | Emerald #10B981
- * Zéro CDN externe — 100% Autonome — Tabular Numerals — Zéro Débordement
+ * Zero external CDN — 100% Self-Contained — Tabular Numerals — Zero Overflow
  * ============================================================================ */
 
 :root {
@@ -12,7 +12,7 @@
     --bg-glass: rgba(15, 23, 42, 0.88);
     --text-primary: #F8FAFC;
     --text-secondary: #94A3B8;
-    --text-muted: #64748B;
+    --text-muted: #94A3B8;
     --brand-cyan: #00B0F0;
     --brand-cyan-light: #38BDF8;
     --brand-cyan-glow: rgba(0, 176, 240, 0.16);
@@ -38,7 +38,7 @@ body.theme-light {
     --bg-glass: rgba(255, 255, 255, 0.92);
     --text-primary: #0F172A;
     --text-secondary: #475569;
-    --text-muted: #64748B;
+    --text-muted: #475569;
     --border-hairline: #E2E8F0;
     --border-strong: rgba(0, 176, 240, 0.4);
     --shadow-card: 0 2px 8px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
@@ -74,9 +74,31 @@ body {
     overflow-x: clip;
 }
 
-/* Chiffres tabulaires obligatoires sur toutes les métriques et tables */
+/* Enforced tabular numerals across all metrics, telemetry and tables */
 .tabular-nums, .stat-value, .badge-mono, .lms-table td, .lms-table th, .progress-pct, code, pre, .kpi-value {
     font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+    outline: 2px solid var(--brand-cyan-light);
+    outline-offset: 2px;
+}
+
+.skip-link {
+    position: fixed;
+    left: -9999px;
+    top: 8px;
+    z-index: 200;
+    padding: 0.55rem 0.95rem;
+    border-radius: var(--radius-sm);
+    background: var(--brand-cyan);
+    color: #0B1120;
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+
+.skip-link:focus {
+    left: 12px;
 }
 
 h1, h2, h3, h4 {
@@ -97,7 +119,7 @@ a:hover {
     color: var(--brand-cyan);
 }
 
-/* Barre de progression de lecture globale (ScrollSpy Top) */
+/* Global reading progress bar (ScrollSpy Top) */
 .reading-progress-container {
     position: fixed;
     top: 0;
@@ -117,7 +139,7 @@ a:hover {
 }
 
 /* ============================================================================
- * LAYOUT PRINCIPAL (SIDEBAR + TOPBAR + CONTENU)
+ * MAIN SHELL LAYOUT (SIDEBAR + TOPBAR + CONTENT)
  * ============================================================================ */
 .app-shell {
     display: grid;
@@ -272,7 +294,7 @@ a:hover {
 }
 
 /* ============================================================================
- * TOPBAR & RECHERCHE RAPIDE
+ * TOPBAR & QUICK SEARCH
  * ============================================================================ */
 .app-main {
     display: flex;
@@ -285,11 +307,11 @@ a:hover {
     background: var(--bg-glass);
     backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border-hairline);
-    padding: 0.5rem 2rem;
+    padding: 0.5rem 1.35rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1.25rem;
+    gap: 0.65rem 1rem;
     position: sticky;
     top: 0;
     z-index: 30;
@@ -298,9 +320,9 @@ a:hover {
 
 .topbar-search {
     position: relative;
-    flex: 1;
-    min-width: 220px;
-    max-width: 460px;
+    flex: 1 1 180px;
+    min-width: 150px;
+    max-width: 400px;
 }
 
 .topbar-search input {
@@ -332,20 +354,34 @@ a:hover {
 .topbar-actions {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.55rem;
     flex-wrap: wrap;
+    flex-shrink: 1;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .docker-pill {
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
-    padding: 0.34rem 0.75rem;
+    padding: 0.34rem 0.72rem;
     border-radius: 99px;
-    font-size: 0.77rem;
+    font-size: 0.76rem;
     font-weight: 600;
     border: 1px solid var(--border-hairline);
     background: var(--bg-elevated);
+    min-width: 0;
+    max-width: 310px;
+    flex-shrink: 1;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+#topbar-docker-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .status-dot {
@@ -398,7 +434,7 @@ a:hover {
 }
 
 /* ============================================================================
- * CARTES, GRILLES, BADGES & BOUTONS
+ * CARDS, GRIDS, BADGES & BUTTONS
  * ============================================================================ */
 .hero-banner {
     background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
@@ -559,7 +595,7 @@ body.theme-light .hero-banner {
 }
 
 /* ============================================================================
- * ARCHITECTURE DES 4 PARCOURS PÉDAGOGIQUES (DASHBOARD & CATALOGUE)
+ * CURRICULUM TRACKS ARCHITECTURE (DASHBOARD & CATALOG)
  * ============================================================================ */
 .tracks-roadmap-grid {
     display: grid;
@@ -720,7 +756,7 @@ body.theme-light .track-phase-item {
     border-color: rgba(16, 185, 129, 0.35);
 }
 
-/* Sélecteur de parcours dans le Catalogue */
+/* Catalog track filter strip */
 .track-selector-strip {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -863,7 +899,7 @@ body.theme-light .track-phase-item {
 }
 
 /* ============================================================================
- * BARRE DE TÉLÉCHARGEMENT MULTI-FORMATS (PDF, PPTX, MD, HTML, DOCX)
+ * MULTI-FORMAT DOWNLOAD STRIP (PDF, PPTX, MD, HTML, DOCX)
  * ============================================================================ */
 .download-strip {
     display: flex;
@@ -908,7 +944,7 @@ body.theme-light .track-phase-item {
 .dl-pill.dl-docx { border-color: rgba(99, 102, 241, 0.4); }
 
 /* ============================================================================
- * BOUTONS STANDARDS
+ * STANDARD BUTTONS
  * ============================================================================ */
 .btn {
     display: inline-flex;
@@ -985,7 +1021,7 @@ body.theme-light .track-phase-item {
 }
 
 /* ============================================================================
- * BARRE DE BASCULE DES MODES D'ÉTUDE (COURS / DIAPORAMA 16:9 / WEB)
+ * STUDY MODE SWITCHER BAR (READER / 16:9 SLIDES / WEB)
  * ============================================================================ */
 .view-mode-switcher {
     display: flex;
@@ -1040,7 +1076,7 @@ body.theme-light .track-phase-item {
 }
 
 /* ============================================================================
- * MODE DIAPORAMA INTERACTIF 16:9 (SLIDE DECK PLAYER)
+ * INTERACTIVE 16:9 SLIDE DECK MODE
  * ============================================================================ */
 .slide-deck-wrapper {
     background: var(--bg-surface);
@@ -1263,7 +1299,7 @@ body.theme-light .slide-stage-container {
     text-overflow: ellipsis;
 }
 
-/* Cartes Quiz dans le Mode Diaporama */
+/* Quiz cards in Slide Deck mode */
 .slide-quiz-card {
     background: var(--bg-elevated);
     border: 1px solid var(--border-strong);
@@ -1337,7 +1373,7 @@ body.theme-light .slide-stage-container {
 }
 
 /* ============================================================================
- * LECTEUR DE MODULE, SCROLLSPY & STEPPER DE PARCOURS
+ * MODULE READER, SCROLLSPY & CURRICULUM TRACK STEPPER
  * ============================================================================ */
 .reader-grid {
     display: grid;
@@ -1428,7 +1464,7 @@ body.theme-light .slide-stage-container {
     margin-top: 0.35rem;
 }
 
-/* Stepper de position dans le parcours */
+/* Curriculum track position stepper */
 .curriculum-stepper-list {
     position: relative;
     max-height: 28vh;
@@ -1496,7 +1532,7 @@ body.theme-light .slide-stage-container {
 }
 
 /* ============================================================================
- * TYPOGRAPHIE MARKDOWN STUDIO, DIAGRAMMES MERMAID RETINA & CALLOUTS
+ * STUDIO MARKDOWN TYPOGRAPHY, RETINA MERMAID DIAGRAMS & CALLOUTS
  * ============================================================================ */
 .markdown-body {
     min-width: 0;
@@ -1563,7 +1599,7 @@ body.theme-light .slide-stage-container {
     margin: 1.85rem 0;
 }
 
-/* Grille de métadonnées d'en-tête du document */
+/* Document header metadata grid */
 .lms-doc-meta-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -1596,7 +1632,7 @@ body.theme-light .slide-stage-container {
     font-weight: 500;
 }
 
-/* Bandeau d'annonce du Quiz Interactif en Section 6 */
+/* Interactive Quiz announcement banner in Section 6 */
 .lms-quiz-inline-banner {
     display: flex;
     justify-content: space-between;
@@ -1611,7 +1647,7 @@ body.theme-light .slide-stage-container {
     font-size: 0.86rem;
 }
 
-/* Composant <details> stylisé */
+/* Styled collapsible <details> component */
 .lms-details {
     background: var(--bg-elevated);
     border: 1px solid var(--border-hairline);
@@ -1633,7 +1669,7 @@ body.theme-light .slide-stage-container {
     border-top: 1px solid var(--border-hairline);
 }
 
-/* Code inline sans débordement */
+/* Non-overflowing inline code */
 .lms-inline-code {
     font-family: var(--font-mono);
     font-size: 0.83em;
@@ -1646,7 +1682,7 @@ body.theme-light .slide-stage-container {
     word-break: break-word;
 }
 
-/* Blocs de code */
+/* Syntax-highlighted code blocks */
 .lms-code-block {
     margin: 1.1rem 0;
     border-radius: var(--radius-md);
@@ -1729,38 +1765,38 @@ body.theme-light .slide-stage-container {
     font-variant-numeric: tabular-nums;
 }
 
-/* Palette Emil Kowalski Obsidian / Cyan pour coloration syntaxique et jetons */
+/* Emil Kowalski Obsidian / Cyan palette for syntax tokens */
 .lms-code-block .token-keyword,
 .lms-code-block .token-kw,
 .lms-code-block .token-k {
-    color: #38BDF8; /* Cyan LightPath */
+    color: #38BDF8; /* LightPath Cyan */
     font-weight: 600;
 }
 
 .lms-code-block .token-string,
 .lms-code-block .token-str,
 .lms-code-block .token-s {
-    color: #34D399; /* Vert Émeraude */
+    color: #34D399; /* Emerald green */
 }
 
 .lms-code-block .token-comment,
 .lms-code-block .token-com,
 .lms-code-block .token-c {
-    color: #64748B; /* Ardoise atténuée */
+    color: #94A3B8; /* Muted slate */
     font-style: italic;
 }
 
 .lms-code-block .token-number,
 .lms-code-block .token-num,
 .lms-code-block .token-m {
-    color: #FBBF24; /* Ambre doré */
+    color: #FBBF24; /* Warm amber */
     font-variant-numeric: tabular-nums;
 }
 
 .lms-code-block .token-function,
 .lms-code-block .token-func,
 .lms-code-block .token-nf {
-    color: #818CF8; /* Indigo clair */
+    color: #818CF8; /* Light indigo */
 }
 
 .lms-code-block .token-operator,
@@ -1783,7 +1819,7 @@ body.theme-light .slide-stage-container {
     font-variant-numeric: tabular-nums;
 }
 
-/* Diagrammes d'Architecture Mermaid (Retina PNG + Fallback Vectoriel) */
+/* Architecture Mermaid diagrams (Retina PNG + Vector fallback) */
 .lms-mermaid-card {
     margin: 1.35rem 0;
     border-radius: var(--radius-md);
@@ -1843,7 +1879,7 @@ body.theme-light .slide-stage-container {
     overflow-x: auto;
 }
 
-/* Tableaux Markdown sans débordement */
+/* Non-overflowing Markdown tables */
 .lms-table-wrap {
     overflow-x: auto;
     max-width: 100%;
@@ -1881,7 +1917,7 @@ body.theme-light .slide-stage-container {
     color: var(--text-primary);
 }
 
-/* Callouts normalisés avec support des listes internes */
+/* Standardized callouts with nested list support */
 .lms-callout {
     border-radius: var(--radius-md);
     padding: 0.95rem 1.2rem;
@@ -1948,7 +1984,7 @@ body.theme-light .slide-stage-container {
 }
 
 /* ============================================================================
- * LIGHTBOX PLEIN ÉCRAN POUR DIAGRAMMES & INFOGRAPHIES
+ * FULL-SCREEN LIGHTBOX FOR DIAGRAMS & INFOGRAPHICS
  * ============================================================================ */
 .diagram-lightbox {
     position: fixed;
@@ -2017,7 +2053,7 @@ body.theme-light .slide-stage-container {
 }
 
 /* ============================================================================
- * STUDIO DOCKER & CONSOLE SQL INTERACTIVE
+ * DOCKER STUDIO & INTERACTIVE SQL CONSOLE
  * ============================================================================ */
 .docker-cockpit {
     background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95));
@@ -2070,7 +2106,7 @@ body.theme-light .docker-cockpit {
 }
 
 /* ============================================================================
- * QUIZ QCM INTERACTIF
+ * INTERACTIVE QCM QUIZ
  * ============================================================================ */
 .quiz-card {
     background: var(--bg-elevated);
@@ -2106,7 +2142,7 @@ body.theme-light .docker-cockpit {
 }
 
 /* ============================================================================
- * FORMULAIRES & BANNIÈRES FLASH
+ * FORMS & FLASH BANNERS
  * ============================================================================ */
 .form-group {
     margin-bottom: 1rem;
@@ -2147,7 +2183,7 @@ body.theme-light .docker-cockpit {
 .flash-error { background: rgba(244, 63, 94, 0.16); color: #FB7185; border: 1px solid rgba(244, 63, 94, 0.35); }
 
 /* ============================================================================
- * RCA-145 : ARBRE DE NAVIGATION DIRECTE DES 34 MODULES DANS LA BARRE LATÉRALE
+ * SIDEBAR DIRECT MODULE TREE & FILTER
  * ============================================================================ */
 .sidebar-module-filter-wrap {
     padding: 0 0.35rem 0.45rem;
@@ -2297,7 +2333,7 @@ body.theme-light .sidebar-track-group {
 }
 
 /* ============================================================================
- * RCA-145 : SCÈNE DIAPORAMA OFFICIEL STUDIO 16:9 (58 SLIDES PAR MODULE)
+ * STUDIO 16:9 SLIDE DECK STAGE
  * ============================================================================ */
 .lms-slide-frame.is-studio-image-slide {
     padding: 0;
@@ -2366,14 +2402,13 @@ body.theme-light .sidebar-track-group {
 }
 
 /* ============================================================================
- * RCA-146 : BARRES LATÉRALES REPLIABLES (GAUCHE & DROITE), MENU DROITE STICKY
- * SANS BARRE DE DÉFILEMENT, LECTEUR PDF EN ZONE PRINCIPALE & MODES LABS
+ * COLLAPSIBLE LEFT & RIGHT SIDEBARS, STICKY RIGHT PANEL, PDF STAGE & LAB MODES
  * ============================================================================ */
 .topbar-left-group {
     display: flex;
     align-items: center;
     gap: 0.65rem;
-    flex: 1;
+    flex: 1 1 280px;
     min-width: 0;
 }
 
@@ -2417,7 +2452,7 @@ body.theme-light .sidebar-track-group {
     flex-shrink: 0;
 }
 
-/* 1. Réduction de la barre verticale de gauche (.app-sidebar) */
+/* 1. Collapsible left sidebar (.app-sidebar) */
 body.left-sidebar-collapsed .app-shell {
     grid-template-columns: 0px minmax(0, 1fr);
 }
@@ -2431,7 +2466,7 @@ body.left-sidebar-collapsed .app-sidebar {
     pointer-events: none;
 }
 
-/* 2. Réduction de la barre verticale de droite (.reader-sidebar / .slide-outline-sidebar) */
+/* 2. Collapsible right sidebar (.reader-sidebar / .slide-outline-sidebar) */
 body.right-sidebar-collapsed .reader-grid,
 body.right-sidebar-collapsed .slide-deck-layout {
     grid-template-columns: minmax(0, 1fr);
@@ -2442,7 +2477,7 @@ body.right-sidebar-collapsed .slide-outline-sidebar {
     display: none !important;
 }
 
-/* Bouton flottant de réouverture rapide de la barre verticale de droite */
+/* Floating quick-restore button for right sidebar */
 .floating-restore-right-btn {
     position: fixed;
     right: 16px;
@@ -2474,7 +2509,7 @@ body.right-sidebar-collapsed .floating-restore-right-btn {
     display: inline-flex;
 }
 
-/* 3. Barre verticale de droite : suivi du défilement (sticky) & ZÉRO barre de défilement visible */
+/* 3. Right sidebar: sticky scroll tracking with zero visible scrollbar */
 .reader-grid,
 .slide-deck-layout {
     align-items: start;
@@ -2539,7 +2574,7 @@ body.right-sidebar-collapsed .floating-restore-right-btn {
     display: none !important;
 }
 
-/* 4. Boutons Précédent / Suivant superposés sur le canevas 16:9 */
+/* 4. Previous / Next overlay buttons on 16:9 canvas */
 .lms-studio-canvas-wrap {
     position: relative;
 }
@@ -2583,7 +2618,7 @@ body.right-sidebar-collapsed .floating-restore-right-btn {
     right: 14px;
 }
 
-/* 5. Bandeaux de mode Énoncé / Corrigé dans les Ateliers Pratiques */
+/* 5. Statement / Solution mode banners in Practice Labs */
 .lab-mode-banner {
     display: flex;
     justify-content: space-between;
@@ -2608,16 +2643,254 @@ body.right-sidebar-collapsed .floating-restore-right-btn {
     border-left: 4px solid var(--accent-emerald);
 }
 
+/* ============================================================================
+ * 6. LAYOUT UTILITIES, COMPONENT MODIFIERS & ADMIN COCKPIT STYLES
+ * ============================================================================ */
+.d-flex { display: flex; }
+.d-inline { display: inline; }
+.d-inline-block { display: inline-block; }
+.d-inline-flex { display: inline-flex; }
+.d-block { display: block; }
+.flex-col { flex-direction: column; }
+.flex-wrap { flex-wrap: wrap; }
+.flex-1 { flex: 1; }
+.min-w-0 { min-width: 0; }
+.w-100 { width: 100%; }
+.justify-between { justify-content: space-between; }
+.justify-end { justify-content: flex-end; }
+.items-center { align-items: center; }
+.items-end { align-items: flex-end; }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.font-bold { font-weight: 700; }
+.no-underline { text-decoration: none; }
+.is-hidden { display: none; }
+
+.gap-xs { gap: 0.4rem; }
+.gap-sm { gap: 0.65rem; }
+.gap-md { gap: 1rem; }
+.gap-1 { gap: 0.85rem; }
+
+.mt-0 { margin-top: 0; }
+.mt-xxs { margin-top: 0.25rem; }
+.mt-xs { margin-top: 0.5rem; }
+.mt-sm { margin-top: 0.85rem; }
+.mt-1 { margin-top: 1rem; }
+.mt-2 { margin-top: 1.5rem; }
+
+.mb-0 { margin-bottom: 0; }
+.mb-xxs { margin-bottom: 0.25rem; }
+.mb-xs { margin-bottom: 0.45rem; }
+.mb-sm { margin-bottom: 0.75rem; }
+.mb-1 { margin-bottom: 1rem; }
+.mb-lg { margin-bottom: 1.5rem; }
+.mb-2 { margin-bottom: 2rem; }
+.mr-xs { margin-right: 0.45rem; }
+.pt-sm { padding-top: 0.85rem; }
+.p-lg { padding: 2rem; }
+
+.text-xs { font-size: 0.76rem; }
+.text-sm { font-size: 0.85rem; }
+.text-muted { color: var(--text-muted); }
+.text-secondary { color: var(--text-secondary); }
+.text-cyan { color: var(--brand-cyan-light); }
+.text-emerald { color: var(--accent-emerald); }
+.text-amber { color: var(--accent-amber); }
+.link-primary,
+.lms-link { color: var(--text-primary); }
+.lms-link:hover,
+.link-primary:hover { color: var(--brand-cyan-light); }
+
+.badge-xs { font-size: 0.68rem; }
+.badge-emerald-soft {
+    background: rgba(16, 185, 129, 0.16);
+    color: var(--accent-emerald);
+    border-color: rgba(16, 185, 129, 0.35);
+}
+.badge-danger-text { color: #FB7185; }
+.btn-xs { padding: 0.15rem 0.5rem; font-size: 0.72rem; }
+.btn-submit-lg { padding: 0.88rem; font-size: 0.98rem; }
+.btn-amber {
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(245, 158, 11, 0.45);
+    color: var(--accent-amber);
+}
+.btn-amber:hover { background: rgba(245, 158, 11, 0.26); }
+
+.hairline-divider {
+    border: 0;
+    border-top: 1px solid var(--border-hairline);
+    margin: 0.85rem 0;
+}
+.border-top-hairline { border-top: 1px solid var(--border-hairline); }
+
+.hero-banner-compact { padding: 1.5rem 2rem; }
+.hero-content-col { max-width: 780px; min-width: 0; }
+.hero-title-lg { font-size: 1.7rem; line-height: 1.25; }
+.hero-title-md { font-size: 1.55rem; line-height: 1.28; }
+.hero-subtitle-sm { color: var(--text-secondary); margin: 0; font-size: 0.9rem; }
+.hero-progress-box {
+    min-width: 240px;
+    text-align: center;
+    background: rgba(11, 17, 32, 0.65);
+    padding: 1.35rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-hairline);
+}
+body.theme-light .hero-progress-box { background: var(--bg-elevated); }
+.hero-kpi-pct { font-size: 2.4rem; }
+.kpi-denom { font-size: 1rem; color: var(--text-muted); }
+
+.section-heading-lg { font-size: 1.35rem; }
+.section-heading-md { font-size: 1.2rem; }
+.section-heading-sm { font-size: 1.05rem; }
+.card-heading-sm { font-size: 1.04rem; line-height: 1.35; margin: 0 0 0.4rem; }
+.card-desc-sm { font-size: 0.81rem; color: var(--text-secondary); margin: 0 0 0.8rem; }
+
+.badges-auto-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.75rem;
+}
+.gamification-badge-card {
+    padding: 0.75rem 0.9rem;
+    border-radius: var(--radius-sm);
+    background: var(--bg-base);
+    border: 1px solid var(--border-hairline);
+}
+.gamification-badge-card.is-unlocked { border-color: rgba(16, 185, 129, 0.45); opacity: 1; }
+.gamification-badge-card.is-locked { opacity: 0.62; }
+
+.nav-logout-link { color: #FB7185; }
+.nav-login-link { color: var(--accent-cyan, var(--brand-cyan-light)); }
+.classroom-broadcast-banner {
+    background: rgba(56, 189, 248, 0.14);
+    border: 1px solid rgba(56, 189, 248, 0.45);
+    color: var(--text-primary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.broadcast-meta { font-size: 0.75rem; color: var(--text-muted); margin-left: 0.5rem; }
+
+.qna-heading { font-size: 1.15rem; margin: 0.35rem 0 0.75rem; }
+.qna-thread-list { display: flex; flex-direction: column; gap: 0.65rem; margin-bottom: 1rem; }
+.qna-msg-card {
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    background: var(--bg-base);
+    border: 1px solid var(--border-hairline);
+}
+.qna-msg-card.is-resolved { border-color: rgba(16, 185, 129, 0.45); }
+.qna-msg-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
+    font-size: 0.78rem;
+}
+.qna-msg-author { display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.qna-msg-actions { display: inline-flex; align-items: center; gap: 0.45rem; }
+.qna-msg-body { font-size: 0.86rem; color: var(--text-secondary); white-space: pre-line; }
+.qna-message-cell { max-width: 340px; white-space: pre-line; }
+
+.lms-callout-subtitle { margin: 0.65rem 0 0.35rem; font-size: 0.94rem; color: var(--text-primary); }
+.search-query-input { min-width: 240px; }
+.search-inline-input { max-width: 320px; }
+.cert-track-select { min-width: 250px; }
+.select-nps { max-width: 280px; }
+.code-mono-input { font-family: var(--font-mono); }
+.notes-composer-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
+.certificate-sheet {
+    background: var(--bg-surface);
+    border: 2px solid var(--brand-cyan);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-elevated);
+    max-width: 1050px;
+    margin: 0 auto;
+}
+
+/* Admin & Trainer Cockpit Components */
+.admin-kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+    gap: 0.9rem;
+    margin-bottom: 1.5rem;
+}
+.admin-live-card { border-color: rgba(56, 189, 248, 0.35); }
+.admin-two-col {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+.admin-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+.admin-search-input { max-width: 320px; min-width: 200px; flex: 1; }
+.admin-role-select { width: auto; min-width: 155px; }
+.form-control-sm { padding: 0.32rem 0.55rem; font-size: 0.8rem; }
+.admin-inline-popover {
+    margin-top: 0.45rem;
+    padding: 0.6rem;
+    border-radius: var(--radius-sm);
+    background: var(--bg-base);
+    border: 1px solid var(--border-hairline);
+}
+.checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+.feature-flag-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius-sm);
+    background: var(--bg-base);
+    border: 1px solid var(--border-hairline);
+}
+.console-pre {
+    background: #050811;
+    color: #E2E8F0;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    padding: 0.85rem 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    line-height: 1.45;
+    max-height: 320px;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+}
+
 @media (max-width: 1180px) {
     .reader-grid { grid-template-columns: minmax(0, 1fr); }
     .reader-sidebar, .slide-outline-sidebar { position: relative; top: 0; max-height: none; }
     .slide-deck-layout { grid-template-columns: minmax(0, 1fr); }
     .tracks-roadmap-grid { grid-template-columns: minmax(0, 1fr); }
+    .admin-two-col { grid-template-columns: minmax(0, 1fr); }
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1024px) {
     .app-shell { grid-template-columns: minmax(0, 1fr); }
-    .app-sidebar { position: relative; height: auto; }
+    .app-sidebar { position: relative; height: auto; width: 100%; }
+    body.left-sidebar-collapsed .app-shell { grid-template-columns: minmax(0, 1fr); }
+    body.left-sidebar-collapsed .app-sidebar { height: 0; width: 0; padding: 0; margin: 0; border-right: 0; border-bottom: 0; overflow: hidden; }
     .app-content { padding: 1.25rem; }
 }
 
@@ -2643,6 +2916,19 @@ body.right-sidebar-collapsed .floating-restore-right-btn {
         text-align: center;
         max-width: 100%;
     }
+    .search-query-input,
+    .search-inline-input,
+    .admin-search-input,
+    .admin-role-select,
+    .cert-track-select,
+    .hero-progress-box {
+        min-width: 0;
+        max-width: 100%;
+        width: 100%;
+    }
+    .admin-kpi-strip {
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
     .module-bottom-nav-card,
     .hero-banner,
     .docker-cockpit,
@@ -2655,6 +2941,15 @@ body.right-sidebar-collapsed .floating-restore-right-btn {
     .catalog-track-banner-progress {
         min-width: 0;
         width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
     }
 }
 

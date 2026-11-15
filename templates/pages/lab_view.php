@@ -30,7 +30,7 @@ foreach (($userProgress['bookmarks'] ?? []) as $bm) {
 }
 $discussions = $storage->getDiscussions($currentCourseSlug, $labId);
 
-// Calculer les ateliers du même parcours pour le Stepper de Position
+// Compute labs belonging to the same learning track for the right-hand position stepper.
 $trackId = (string)($lab['track_id'] ?? 'cursus-complet');
 $trackLabs = [];
 foreach (($currentCourse['labs'] ?? []) as $lKey => $lItem) {
@@ -74,16 +74,18 @@ $activeLabToc = match ($labMode) {
     'full' => $parsed['toc'],
     default => (!empty($parsed['enonce_toc']) ? $parsed['enonce_toc'] : $parsed['toc']),
 };
+$dockerPassword = isset($docker) ? $docker->getDefaultPassword() : (string)($dockerStatus['default_password'] ?? 'postgres');
+$dockerFeatureEnabled = !isset($featureManager) || $featureManager->isEnabled('docker_labs');
 ?>
 
-<!-- EN-TÊTE DE L'ATELIER PRATIQUE, POSITION DANS LE PARCOURS & BARRE DE TÉLÉCHARGEMENT -->
+<!-- Practical lab header, track position, and downloadable resources bar -->
 <div class="hero-banner" style="padding: 1.4rem 1.85rem;">
     <div style="flex: 1; min-width: 0;">
         <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
             <a href="index.php?page=catalog&tab=labs&track=<?= urlencode($trackId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="badge-code">
                 ← <?= Security::e($lab['track_number'] ?? 'Parcours') ?> (Labs)
             </a>
-            <span class="badge-code" style="background: rgba(16, 185, 129, 0.16); color: #34D399; border-color: rgba(16, 185, 129, 0.35);">
+            <span class="badge-completed">
                 <?= Security::e($lab['badge_code']) ?>
             </span>
             <span class="badge-phase tabular-nums">
@@ -112,7 +114,7 @@ $activeLabToc = match ($labMode) {
             </div>
         <?php else: ?>
             <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                <span class="badge-code" style="color: var(--text-muted); border-color: var(--border-hairline);">🔒 Téléchargement des supports du lab verrouillé par le formateur</span>
+                <span class="badge-phase">🔒 Téléchargement des supports du lab verrouillé par le formateur</span>
             </div>
         <?php endif; ?>
     </div>
@@ -154,7 +156,7 @@ $activeLabToc = match ($labMode) {
     </div>
 </div>
 
-<!-- BARRE DE BASCULE DES MODES D'ATELIER (ÉNONCÉ / CORRIGÉ COMPLET / VUE INTÉGRALE / RENDU WEB / PDF) -->
+<!-- Lab view mode switcher bar (Instructions / Official Solution / Full / Web / PDF) -->
 <div class="view-mode-switcher">
     <div class="view-mode-tabs">
         <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=enonce&course=<?= urlencode($currentCourseSlug) ?>"
@@ -201,7 +203,8 @@ $activeLabToc = match ($labMode) {
     </div>
 </div>
 
-<!-- STUDIO DOCKER INTERACTIF & CONSOLE SQL LIVE -->
+<!-- Interactive Docker container cockpit & live SQL console -->
+<?php if ($dockerFeatureEnabled): ?>
 <section class="docker-cockpit">
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
         <div style="min-width: 0; flex: 1;">
@@ -210,17 +213,23 @@ $activeLabToc = match ($labMode) {
                 Conteneur : <code><?= Security::e($dockerStatus['container_name']) ?></code> •
                 Port : <code class="tabular-nums"><?= (int)$dockerStatus['port'] ?></code> •
                 Statut : <strong id="lab-docker-status-text" style="color: <?= !empty($dockerStatus['running']) ? '#34D399' : '#FBBF24' ?>;">
-                    <?= !empty($dockerStatus['running']) ? 'EN LIGNE (RUNNING)' : 'PRÊT AU DÉMARRAGE' ?>
+                    <?= !empty($dockerStatus['running']) ? 'EN LIGNE (RUNNING)' : (!empty($dockerStatus['primary_cluster_running']) ? 'CLUSTER PARTAGÉ PRÊT' : 'PRÊT AU DÉMARRAGE') ?>
                 </strong>
             </h3>
             <div style="font-size: 0.8rem; color: var(--text-secondary);">
-                Terminal local : <code><?= Security::e($dockerStatus['connection_string']) ?></code> (Mot de passe : <code>postgres_master_pw</code>)
+                Terminal local : <code><?= Security::e($dockerStatus['connection_string']) ?></code> (Mot de passe : <code><?= Security::e($dockerPassword) ?></code>)
             </div>
         </div>
 
         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
             <button type="button" class="btn btn-emerald btn-sm btn-docker-cmd" data-cmd="start">
                 🐳 Démarrer mon Conteneur Lab PostgreSQL 18
+            </button>
+            <button type="button" id="btn-seed-lab" class="btn btn-outline btn-sm" title="Réamorcer les jeux de données Sakila (dvdrental) et pgbench (formation_pg)" aria-label="Réamorcer Sakila et pgbench">
+                🌱 Réamorcer Sakila / pgbench
+            </button>
+            <button type="button" id="btn-docker-logs" class="btn btn-outline btn-sm" title="Afficher les journaux PostgreSQL récents du conteneur" aria-label="Afficher les logs PostgreSQL">
+                📜 Logs PostgreSQL
             </button>
             <button type="button" class="btn btn-outline btn-sm btn-docker-cmd" data-cmd="reset">
                 🔄 Réinitialiser la Base
@@ -233,12 +242,12 @@ $activeLabToc = match ($labMode) {
 
     <div id="docker-action-feedback" class="flash-banner flash-success" style="display: none; margin-bottom: 1rem;"></div>
 
-    <!-- Console SQL Interactive -->
+    <!-- Interactive SQL Workbench -->
     <div class="sql-workbench" style="margin-bottom: 0;">
         <div class="lms-code-toolbar">
             <div style="display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap;">
                 <span class="lms-code-lang">⚡ CONSOLE SQL INTERACTIVE (DOCKER PG 18)</span>
-                <label style="font-size: 0.76rem; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 0.35rem;">
+                <label for="lab-sql-db-select" style="font-size: 0.76rem; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 0.35rem;">
                     <span>Base cible :</span>
                     <select id="lab-sql-db-select" class="form-control" style="padding: 0.15rem 0.5rem; font-size: 0.78rem; height: auto; width: auto;">
                         <option value="formation_pg" <?= $defaultLabDb === 'formation_pg' ? 'selected' : '' ?>>formation_pg (Cluster)</option>
@@ -246,7 +255,7 @@ $activeLabToc = match ($labMode) {
                         <option value="postgres" <?= $defaultLabDb === 'postgres' ? 'selected' : '' ?>>postgres (Système)</option>
                     </select>
                 </label>
-                <label style="font-size: 0.76rem; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 0.35rem;">
+                <label for="lab-sql-history-select" style="font-size: 0.76rem; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 0.35rem;">
                     <span>🕘 Historique :</span>
                     <select id="lab-sql-history-select" class="form-control" style="padding: 0.15rem 0.5rem; font-size: 0.78rem; height: auto; width: auto; max-width: 220px;">
                         <option value="">— Requêtes récentes —</option>
@@ -273,10 +282,17 @@ $activeLabToc = match ($labMode) {
                 <?php endif; ?>
             </div>
         </div>
-        <textarea id="lab-sql-editor" class="sql-editor-textarea" spellcheck="false"><?= Security::e($defaultSql) ?></textarea>
+        <textarea id="lab-sql-editor" class="sql-editor-textarea" spellcheck="false" aria-label="Éditeur de requêtes SQL PostgreSQL 18"><?= Security::e($defaultSql) ?></textarea>
         <div id="lab-sql-output" class="sql-output-console">Prêt. Cliquez sur n'importe quel bouton « ▶ Exécuter dans le Lab SQL » dans l'énoncé ou le corrigé ci-dessous, ou cliquez sur « 🧪 Tester & Valider le Corrigé Officiel » pour rejouer le corrigé complet sur Docker.</div>
     </div>
 </section>
+<?php else: ?>
+<section class="docker-cockpit" aria-label="Environnement Docker Labs désactivé">
+    <div class="flash-banner" role="status">
+        ℹ️ L'environnement interactif Docker Labs et la console SQL en ligne sont actuellement désactivés par l'administrateur. Vous pouvez consulter l'énoncé et exécuter vos commandes sur votre instance PostgreSQL locale.
+    </div>
+</section>
+<?php endif; ?>
 
 <?php if ($labMode === 'html_preview' && isset($lab['downloads']['html'])): ?>
     <div style="background: #FFFFFF; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border-strong); height: 82vh;">
@@ -293,7 +309,7 @@ $activeLabToc = match ($labMode) {
                 title="<?= Security::e($lab['title']) ?> (PDF)"></iframe>
     </div>
 <?php else: ?>
-<!-- ÉNONCÉ / CORRIGÉ DES 7 PILIERS QUALIOPI & SOMMAIRE SCROLLSPY STICKY -->
+<!-- Qualiopi 7-pillar lab reader and sticky ScrollSpy table of contents -->
 <div class="reader-grid">
     <div class="reader-main-col">
         <?php if ($lockedSolutionsNotice): ?>
@@ -325,7 +341,7 @@ $activeLabToc = match ($labMode) {
                 <?php endif; ?>
             </div>
 
-            <!-- INDICE PÉDAGOGIQUE PROGRESSIF SANS DÉVOILER LE CORRIGÉ COMPLET (Feature C3) -->
+            <!-- Progressive pedagogical hint drawer without revealing the full solution -->
             <details class="lms-card" style="margin-bottom: 1.15rem; padding: 0.9rem 1.2rem; border-color: rgba(56, 189, 248, 0.35); cursor: pointer;">
                 <summary style="font-weight: 700; color: var(--brand-cyan-light); font-size: 0.88rem;">
                     💡 Besoin d'un coup de pouce ? Afficher l'Indice & Piste de Diagnostic DBA (sans dévoiler la solution)
@@ -346,7 +362,7 @@ $activeLabToc = match ($labMode) {
             <?= $activeLabHtml ?>
         </article>
 
-        <!-- CARTE DE NAVIGATION BAS DE PAGE D'ATELIER -->
+        <!-- Bottom lab navigation card -->
         <div class="module-bottom-nav-card">
             <div style="display: flex; gap: 0.55rem; flex-wrap: wrap;">
                 <?php if ($prevLabId): ?>
@@ -373,12 +389,12 @@ $activeLabToc = match ($labMode) {
             </div>
         </div>
 
-        <!-- FORUM D'ENTRAIDE TECHNIQUE & Q&A SUR CET ATELIER -->
+        <!-- Technical Q&A discussion section for this lab -->
         <?= renderDiscussionSection($currentCourseSlug, 'lab', $labId, $discussions, $csrfToken, $auth->isStaff($currentUser)) ?>
     </div>
 
     <aside class="reader-sidebar" id="app-right-sidebar">
-        <!-- 1. SOMMAIRE DES ÉTAPES DE L'ATELIER (SCROLLSPY EN DIRECT) -->
+        <!-- 1. Lab step outline with live ScrollSpy tracking -->
         <div class="toc-box">
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; margin-bottom: 0.45rem;">
                 <span style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light);">
@@ -409,7 +425,7 @@ $activeLabToc = match ($labMode) {
             </nav>
         </div>
 
-        <!-- 2. STEPPER DE POSITION DANS LES ATELIERS DU PARCOURS (REPLIABLE COMME MODULE_VIEW) -->
+        <!-- 2. Collapsible track lab stepper -->
         <details class="toc-box" style="cursor: pointer;">
             <summary style="display: flex; justify-content: space-between; align-items: center; list-style: none;">
                 <span style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light);">
@@ -444,11 +460,11 @@ $activeLabToc = match ($labMode) {
             </div>
         </details>
 
-        <!-- 3. BLOC-NOTES D'ATELIER -->
+        <!-- 3. Lab personal notes & REX scratchpad -->
         <div class="toc-box">
-            <div style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light); margin-bottom: 0.5rem;">
+            <label for="user-personal-note" style="display: block; font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light); margin-bottom: 0.5rem;">
                 📝 Notes d'Atelier / REX
-            </div>
+            </label>
             <textarea id="user-personal-note" class="form-control" rows="5" placeholder="Consignez vos observations EXPLAIN, métriques TPS ou commandes..."><?= Security::e($savedNote) ?></textarea>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.55rem;">
                 <span id="note-save-status" style="font-size: 0.74rem; color: var(--accent-emerald);"></span>

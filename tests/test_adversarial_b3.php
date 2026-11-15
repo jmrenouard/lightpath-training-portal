@@ -3,10 +3,10 @@ declare(strict_types=1);
 
 /**
  * ============================================================================
- * EMPIRICAL ADVERSARIAL TEST SUITE — BOUCLE 3 (CHALLENGER_B3_1)
+ * EMPIRICAL ADVERSARIAL TEST SUITE — CYCLE 3 (CHALLENGER_B3_1)
  * ============================================================================
- * Tests empiriques rigoureux et oracles adverses pour certifier la Boucle 3
- * du dépôt lightpath-training-portal suite aux travaux de worker_b3_2 :
+ * Empirical adversarial oracle tests certifying Cycle 3
+ * of lightpath-training-portal:
  *
  * 1. Stress-test callout rendering in MarkdownParser:
  *    - All 5 alert types: [!TIP], [!NOTE], [!IMPORTANT], [!WARNING], [!CAUTION]
@@ -21,9 +21,9 @@ declare(strict_types=1);
  *    - Complex SQL scripts with base64 payload in data-sql-b64
  *    - Bash, Python, Go, PHP, Mermaid
  * 4. Verification of test suites:
- *    - run_tests.php (342/342)
- *    - test_adversarial_b1.php (69/69)
- *    - test_adversarial_b2.php (50/50)
+ *    - run_tests.php
+ *    - test_adversarial_b1.php
+ *    - test_adversarial_b2.php
  * ============================================================================
  */
 
@@ -94,7 +94,7 @@ echo " Target: lightpath-training-portal (PHP 8.3.36)\n";
 echo str_repeat('=', 72) . "\n";
 
 // ============================================================================
-// SUITE 1 : Test des 5 Alert Types GitHub & Titres Personnalisés
+// SUITE 1: 5 GitHub Alert Types & Custom Titles
 // ============================================================================
 echo "\n--- Suite 1 : Test des 5 Alert Types GitHub & Titres Personnalisés ---\n";
 
@@ -133,7 +133,7 @@ foreach ($alertTypesConfig as $tag => $cfg) {
         "HTML généré : " . substr($html, 0, 150)
     );
 
-    // Titre par défaut peut contenir & ou &amp; selon formatInline
+    // Default title may contain & or &amp; depending on formatInline
     $expectedEscapedTitle = Security::e($cfg['defaultTitle']);
     $hasTitle = str_contains($html, '<div class="lms-callout-title">' . $cfg['defaultTitle'] . '</div>')
         || str_contains($html, '<div class="lms-callout-title">' . $expectedEscapedTitle . '</div>');
@@ -143,7 +143,7 @@ foreach ($alertTypesConfig as $tag => $cfg) {
         "HTML généré : " . substr($html, 0, 150)
     );
 
-    // Corps de test échappé avec formatInline (apostrophe échappée en &#039;)
+    // Body escaped via formatInline (single quote encoded as &#039;)
     $hasBody = str_contains($html, "Corps de test pour l&#039;alerte {$tag}.")
         || str_contains($html, "Corps de test pour l'alerte {$tag}.");
     $suite->assert(
@@ -153,7 +153,7 @@ foreach ($alertTypesConfig as $tag => $cfg) {
     );
 }
 
-// Titre personnalisé avec [!NOTE] Mon Titre Personnalisé
+// Custom title handling with [!NOTE] custom title
 $customTitleMd = "> [!NOTE] Architecture & Stockage FNV-1a\n> Description des tablespaces SSD.";
 $customParsed = MarkdownParser::parse($customTitleMd);
 $customHtml = $customParsed['html'] ?? '';
@@ -164,7 +164,7 @@ $suite->assert(
     "HTML généré : " . substr($customHtml, 0, 180)
 );
 
-// Résistance XSS dans le titre personnalisé
+// XSS resistance inside custom alert title
 $xssTitleMd = "> [!WARNING] <script>alert('xss')</script>\" onload=\"evil()\"\n> Contenu sécurisé.";
 $xssParsed = MarkdownParser::parse($xssTitleMd);
 $xssHtml = $xssParsed['html'] ?? '';
@@ -174,7 +174,7 @@ $suite->assert(
     "HTML généré : " . substr($xssHtml, 0, 200)
 );
 
-// Résistance XSS dans le corps de l'alerte
+// XSS resistance inside alert body
 $xssBodyMd = "> [!NOTE]\n> <img src=x onerror=alert(1)> and <b onmouseover=evil()>hover</b>";
 $xssBodyParsed = MarkdownParser::parse($xssBodyMd);
 $xssBodyHtml = $xssBodyParsed['html'] ?? '';
@@ -185,11 +185,11 @@ $suite->assert(
 );
 
 // ============================================================================
-// SUITE 2 : Stress-Test Alertes Malformées & Cas Limites
+// SUITE 2: Stress-Test Malformed Alerts & Edge Cases
 // ============================================================================
 echo "\n--- Suite 2 : Stress-Test Alertes Malformées & Cas Limites ---\n";
 
-// Alertes en minuscules [!note], [!tip], [!warning], [!caution], [!important]
+// Lowercase alert tokens [!note], [!tip], [!warning], [!caution], [!important]
 $lowercaseAlerts = [
     'note' => 'lms-callout-note',
     'tip' => 'lms-callout-tip',
@@ -209,7 +209,7 @@ foreach ($lowercaseAlerts as $lowTag => $expectedClass) {
     );
 }
 
-// Alerte en casse mixte [!NoTe], [!WaRnInG], [!TiP]
+// Mixed-case alert tokens [!NoTe], [!WaRnInG], [!TiP]
 $mixedMd = "> [!NoTe]\n> Casse mixte.";
 $mixedParsed = MarkdownParser::parse($mixedMd);
 $mixedHtml = $mixedParsed['html'] ?? '';
@@ -228,7 +228,7 @@ $suite->assert(
     "HTML généré : " . substr($mixedWarnHtml, 0, 150)
 );
 
-// Alerte inconnue / malformée [!FOO], [!DANGER]
+// Unknown / malformed alert tokens [!FOO], [!DANGER]
 $unknownMd = "> [!FOO]\n> Contenu d'alerte non reconnue.";
 $unknownParsed = MarkdownParser::parse($unknownMd);
 $unknownHtml = $unknownParsed['html'] ?? '';
@@ -243,7 +243,7 @@ $suite->assert(
     "HTML généré : " . substr($unknownHtml, 0, 150)
 );
 
-// Alerte avec corps vide (> [!NOTE])
+// Empty-body alert (> [!NOTE])
 $emptyMd = "> [!NOTE]";
 $emptyParsed = MarkdownParser::parse($emptyMd);
 $emptyHtml = $emptyParsed['html'] ?? '';
@@ -258,7 +258,7 @@ $suite->assert(
     "HTML généré : {$emptyHtml}"
 );
 
-// Alerte avec seulement des espaces (> [!NOTE]\n>    \n>    )
+// Whitespace-only alert body (> [!NOTE]\n>    \n>    )
 $emptySpacesMd = "> [!NOTE]\n>    \n>    ";
 $emptySpacesParsed = MarkdownParser::parse($emptySpacesMd);
 $emptySpacesHtml = $emptySpacesParsed['html'] ?? '';
@@ -268,7 +268,7 @@ $suite->assert(
     "HTML généré : {$emptySpacesHtml}"
 );
 
-// Alerte avec sauts de lignes internes ('>')
+// Alert with internal blank continuation lines ('>')
 $blankLinesMd = "> [!NOTE]\n>\n> Ligne 1 après blanc.\n>\n> Ligne 2 après blanc.";
 $blankParsed = MarkdownParser::parse($blankLinesMd);
 $blankHtml = $blankParsed['html'] ?? '';
@@ -278,7 +278,7 @@ $suite->assert(
     "HTML généré : " . substr($blankHtml, 0, 250)
 );
 
-// Alerte avec liste à puces et liste numérotée imbriquées
+// Alert with nested bulleted and ordered lists
 $listMd = "> [!TIP]\n> * Puce A\n> * Puce B\n> 1. Numéro 1\n> 2. Numéro 2";
 $listParsed = MarkdownParser::parse($listMd);
 $listHtml = $listParsed['html'] ?? '';
@@ -293,7 +293,7 @@ $suite->assert(
     "HTML généré : " . substr($listHtml, 0, 250)
 );
 
-// Alerte avec sous-titre markdown (### ...)
+// Alert with nested markdown heading (### ...)
 $subtitleMd = "> [!IMPORTANT]\n> ### Directive de sécurité\n> Pas de mot de passe en clair.";
 $subParsed = MarkdownParser::parse($subtitleMd);
 $subHtml = $subParsed['html'] ?? '';
@@ -303,7 +303,7 @@ $suite->assert(
     "HTML généré : " . substr($subHtml, 0, 250)
 );
 
-// Blockquote imbriqué multi-niveaux (> > [!NOTE])
+// Multi-level nested blockquote (> > [!NOTE])
 $nestedMd = "> > [!NOTE]\n> > Alerte imbriquée";
 $nestedParsed = MarkdownParser::parse($nestedMd);
 $nestedHtml = $nestedParsed['html'] ?? '';
@@ -314,7 +314,7 @@ $suite->assert(
 );
 
 // ============================================================================
-// SUITE 3 : Vérification Stricte des Déclarations CSS dans app.css
+// SUITE 3: Strict Verification of CSS Declarations in app.css
 // ============================================================================
 echo "\n--- Suite 3 : Vérification Stricte des Déclarations CSS dans app.css ---\n";
 
@@ -323,7 +323,7 @@ $suite->assert(
     "Fichier public/assets/css/app.css présent et non vide"
 );
 
-// .lms-callout-note et couleur #00B0F0
+// .lms-callout-note and #00B0F0 brand color
 $suite->assert(
     preg_match('/\.lms-callout-note\s*\{[^}]*border-left-color:\s*#00B0F0/i', $appCss) === 1,
     ".lms-callout-note est défini avec border-left-color: #00B0F0 (Cyan LightPath officiel)"
@@ -333,7 +333,7 @@ $suite->assert(
     ".lms-callout-note est défini avec fond translucide cyan rgba(0, 176, 240, 0.08)"
 );
 
-// Vérification de toutes les autres alertes dans le CSS
+// Verify all alert variants in CSS
 $expectedCalloutsCss = [
     'tip' => '#10B981',
     'important' => '#38BDF8',
@@ -348,7 +348,7 @@ foreach ($expectedCalloutsCss as $type => $hexColor) {
     );
 }
 
-// .lms-code-badge et tabular-nums
+// .lms-code-badge and tabular-nums
 $hasBadge = str_contains($appCss, '.lms-code-badge');
 $suite->assert(
     $hasBadge,
@@ -361,7 +361,7 @@ $suite->assert(
     ".lms-code-badge applique font-variant-numeric: tabular-nums (Norme Emil Kowalski)"
 );
 
-// Tabular nums sur les blocs de code pre et code
+// Verify tabular-nums on pre and code blocks
 $hasPreTabular = preg_match('/\.lms-code-block\s+pre\s*\{[^}]*font-variant-numeric:\s*tabular-nums/s', $appCss) === 1;
 $suite->assert(
     $hasPreTabular,
@@ -374,7 +374,7 @@ $suite->assert(
     ".lms-code-block code applique font-variant-numeric: tabular-nums"
 );
 
-// Coloration syntaxique & jetons Emil Kowalski Obsidian/Cyan
+// Syntax highlighting & Obsidian/Cyan design tokens
 $expectedTokens = [
     'token-keyword' => '#38BDF8',
     'token-string' => '#34D399',
@@ -391,11 +391,11 @@ foreach ($expectedTokens as $tokClass => $tokColor) {
 }
 
 // ============================================================================
-// SUITE 4 : Blocs de Code, Badges de Langage & Cas Limites
+// SUITE 4: Code Blocks, Language Badges & Edge Cases
 // ============================================================================
 echo "\n--- Suite 4 : Blocs de Code, Badges de Langage & Cas Limites ---\n";
 
-// Bloc de code sans spécification de langage (``` seul)
+// Fenced code block without language tag (``` only)
 $noLangMd = "```\necho 'hello world';\n```";
 $noLangParsed = MarkdownParser::parse($noLangMd);
 $noLangHtml = $noLangParsed['html'] ?? '';
@@ -410,7 +410,7 @@ $suite->assert(
     "HTML généré : " . substr($noLangHtml, 0, 180)
 );
 
-// Bloc de code avec langage en majuscules (```SQL ...)
+// Code block with uppercase language tag (```SQL ...)
 $upperLangMd = "```SQL\nSELECT 42;\n```";
 $upperLangParsed = MarkdownParser::parse($upperLangMd);
 $upperLangHtml = $upperLangParsed['html'] ?? '';
@@ -420,7 +420,7 @@ $suite->assert(
     "HTML généré : " . substr($upperLangHtml, 0, 180)
 );
 
-// Bloc SQL avec bouton d'exécution interactive Docker et payload base64
+// SQL code block with Docker run button and base64 payload
 $sqlSample = "SELECT datname, pg_size_pretty(pg_database_size(datname)) FROM pg_database WHERE datname NOT LIKE 'template%';";
 $sqlMd = "```sql\n{$sqlSample}\n```";
 $sqlParsed = MarkdownParser::parse($sqlMd);
@@ -436,7 +436,7 @@ $suite->assert(
     "HTML généré : " . substr($sqlHtml, 0, 250)
 );
 
-// Décoder et vérifier le payload base64 du bouton SQL
+// Decode and verify SQL button base64 payload
 if (preg_match('/data-sql-b64="([^"]+)"/', $sqlHtml, $b64m)) {
     $decodedSql = base64_decode($b64m[1]);
     $suite->assert(
@@ -447,7 +447,7 @@ if (preg_match('/data-sql-b64="([^"]+)"/', $sqlHtml, $b64m)) {
     $suite->assert(false, "Attribut data-sql-b64 présent et lisible");
 }
 
-// Bloc Bash sans bouton SQL mais avec badge BASH
+// Bash block without SQL button, showing BASH badge
 $bashMd = "```bash\npgbench -i -s 10 -p 5432 formation_pg\n```";
 $bashParsed = MarkdownParser::parse($bashMd);
 $bashHtml = $bashParsed['html'] ?? '';
@@ -462,7 +462,7 @@ $suite->assert(
     "HTML généré : " . substr($bashHtml, 0, 180)
 );
 
-// Bloc Python avec badge PYTHON
+// Python block with PYTHON badge
 $pyMd = "```python\nimport psycopg\nconn = psycopg.connect('dbname=formation_pg')\n```";
 $pyParsed = MarkdownParser::parse($pyMd);
 $pyHtml = $pyParsed['html'] ?? '';
@@ -472,7 +472,7 @@ $suite->assert(
     "HTML généré : " . substr($pyHtml, 0, 180)
 );
 
-// Bloc Go avec badge GO
+// Go block with GO badge
 $goMd = "```go\npackage main\nimport \"fmt\"\nfunc main() { fmt.Println(\"Slonik\") }\n```";
 $goParsed = MarkdownParser::parse($goMd);
 $goHtml = $goParsed['html'] ?? '';
@@ -482,7 +482,7 @@ $suite->assert(
     "HTML généré : " . substr($goHtml, 0, 180)
 );
 
-// Bloc PHP avec badge PHP
+// PHP block with PHP badge
 $phpMd = "```php\n<?php\necho 'PostgreSQL 18';\n```";
 $phpParsed = MarkdownParser::parse($phpMd);
 $phpHtml = $phpParsed['html'] ?? '';
@@ -492,13 +492,13 @@ $suite->assert(
     "HTML généré : " . substr($phpHtml, 0, 180)
 );
 
-// Bouton copier présent sur tous les blocs de code standard
+// Copy button rendered on all standard code blocks
 $suite->assert(
     str_contains($sqlHtml, 'btn-copy-code') && str_contains($bashHtml, 'btn-copy-code') && str_contains($pyHtml, 'btn-copy-code'),
     "Bouton '📋 Copier' (.btn-copy-code) présent sur les blocs SQL, Bash et Python"
 );
 
-// Bloc de code avec caractères hostiles / spéciaux (<, >, &, ", ', scripts)
+// Code block with hostile / special characters (<, >, &, ", ', scripts)
 $hostileCode = "<script>alert('xss');</script>\n<?php echo \$a && \$b || \$c > \$d; ?>\nDROP TABLE \"secret\"; -- comment & test";
 $hostileMd = "```sql\n{$hostileCode}\n```";
 $hostileParsed = MarkdownParser::parse($hostileMd);
@@ -514,7 +514,7 @@ $suite->assert(
     "HTML généré : " . substr($hostileHtml, 0, 250)
 );
 
-// Bloc Mermaid
+// Mermaid diagram block
 $mermaidCode = "graph TD\n  A[Client] --> B[PostgreSQL]";
 $mermaidMd = "```mermaid\n{$mermaidCode}\n```";
 $mermaidParsed = MarkdownParser::parse($mermaidMd);
@@ -526,11 +526,11 @@ $suite->assert(
 );
 
 // ============================================================================
-// SUITE 5 : Vérification des Suites de Tests Globales
+// SUITE 5: Cross-Suite Regression Verification
 // ============================================================================
 echo "\n--- Suite 5 : Vérification des Suites de Tests Globales ---\n";
 
-// 1. Exécution de run_tests.php
+// 1. Execute tests/run_tests.php
 $cmdRunTests = 'php "' . __DIR__ . '/run_tests.php" 2>&1';
 exec($cmdRunTests, $runTestsOut, $runTestsExit);
 $runTestsOutStr = implode("\n", $runTestsOut);
@@ -541,7 +541,7 @@ $suite->assert(
     "Exit: {$runTestsExit}, Sortie: " . substr($runTestsOutStr, -200)
 );
 
-// 2. Exécution de test_adversarial_b1.php
+// 2. Execute tests/test_adversarial_b1.php
 $cmdAdvB1 = 'php "' . __DIR__ . '/test_adversarial_b1.php" 2>&1';
 exec($cmdAdvB1, $b1Out, $b1Exit);
 $b1OutStr = implode("\n", $b1Out);
@@ -552,7 +552,7 @@ $suite->assert(
     "Exit: {$b1Exit}, Sortie: " . substr($b1OutStr, -200)
 );
 
-// 3. Exécution de test_adversarial_b2.php
+// 3. Execute tests/test_adversarial_b2.php
 $cmdAdvB2 = 'php "' . __DIR__ . '/test_adversarial_b2.php" 2>&1';
 exec($cmdAdvB2, $b2Out, $b2Exit);
 $b2OutStr = implode("\n", $b2Out);

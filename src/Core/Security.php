@@ -5,7 +5,15 @@ namespace LightPath\LMS\Core;
 
 class Security
 {
+    private const UNLOAD_SHIM_JS = '(function(){try{var o=EventTarget.prototype.addEventListener;EventTarget.prototype.addEventListener=function(t,f,opt){if(t==="unload"){t="pagehide";}return o.call(this,t,f,opt);};}catch(_){}})();';
     private static string $cliToken = '';
+
+    public static function isHttpsRequest(): bool
+    {
+        return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (!empty($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443)
+            || (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
+    }
 
     public static function sendSecurityHeaders(): void
     {
@@ -16,15 +24,21 @@ class Security
         header('X-Frame-Options: SAMEORIGIN');
         header('Referrer-Policy: strict-origin-when-cross-origin');
         header('Permissions-Policy: unload=*, fullscreen=(self)');
+        header('Cross-Origin-Opener-Policy: same-origin');
+        $shimHash = base64_encode(hash('sha256', self::UNLOAD_SHIM_JS, true));
+        header("Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-{$shimHash}'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'");
+        if (self::isHttpsRequest()) {
+            header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+        }
     }
 
     /**
-     * Intercepte l'enregistrement d'écouteurs 'unload' par les extensions navigateur tierces
-     * (ex: chext_loader.js) et les redirige vers 'pagehide' pour éviter toute violation console.
+     * Redirects browser-extension 'unload' event listeners (e.g. chext_loader.js)
+     * to 'pagehide' to prevent console Permissions-Policy violations.
      */
     public static function renderUnloadShimScript(): string
     {
-        return '<script>(function(){try{var o=EventTarget.prototype.addEventListener;EventTarget.prototype.addEventListener=function(t,f,opt){if(t==="unload"){t="pagehide";}return o.call(this,t,f,opt);};}catch(_){}})();</script>';
+        return '<script>' . self::UNLOAD_SHIM_JS . '</script>';
     }
 
     public static function getCsrfToken(): string
@@ -63,8 +77,8 @@ class Security
     }
 
     /**
-     * Vérifie strictement qu'un chemin résolu ($targetPath) se situe à l'intérieur
-     * d'un répertoire racine autorisé ($baseDir), en prévenant toute évasion par préfixe partiel.
+     * Verifies that resolved $targetPath stays strictly within authorized $baseDir,
+     * preventing partial-prefix path traversal bypasses.
      */
     public static function isPathInside(string $targetPath, string $baseDir): bool
     {
@@ -97,7 +111,7 @@ class Security
     }
 
     /**
-     * Formate de manière sécurisée (anti-XSS) un texte court contenant des blocs inline `code`, **gras** ou *italique*.
+     * Safely formats short inline text (`code`, **bold**, *italic*) while escaping raw HTML against XSS.
      */
     public static function formatInlineText(?string $value): string
     {
@@ -125,7 +139,7 @@ class Security
     }
 
     /**
-     * Neutralise toute injection de formule tableur (CSV Formula Injection) lors de l'export Excel/LibreOffice.
+     * Neutralizes spreadsheet formula injection (CSV Formula Injection) on Excel/LibreOffice exports.
      */
     public static function sanitizeCsvCell(mixed $value): string
     {
@@ -145,7 +159,7 @@ class Security
     }
 
     /**
-     * Vérifie que l'identifiant de demi-journée appartient aux créneaux officiels Qualiopi (J1_AM..J11_PM).
+     * Validates that a half-day slot key belongs to official Qualiopi slots (J1_AM..J11_PM).
      */
     public static function isValidHalfDayKey(string $halfDayKey): bool
     {
@@ -153,8 +167,8 @@ class Security
     }
 
     /**
-     * Génère un QR Code / Matrice 2D SVG déterministe 100% hors-ligne (Zéro CDN)
-     * à partir de l'identifiant de certificat et de l'URL de vérification Qualiopi.
+     * Generates a 100% offline deterministic 2D matrix SVG QR code (zero CDN)
+     * from the certificate identifier and Qualiopi verification URL.
      */
     public static function renderVerificationQrSvg(string $verifyUrl, string $certificateId = '', int $size = 116): string
     {

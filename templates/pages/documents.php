@@ -112,7 +112,7 @@ if ($selectedDocId !== '') {
     </div>
 </div>
 
-<!-- 1. PROGRAMME, SYLLABUS, LIVRETS & RÉFÉRENTIEL QUALIOPI -->
+<!-- 1. Program, syllabus, booklets & Qualiopi reference -->
 <?php if ($docTab === 'all' || $docTab === 'referentiel'): ?>
     <h2 style="font-size: 1.3rem; margin-bottom: 0.85rem;">📋 Programme, Syllabus, Guide Formateur, Examen & Référentiel Qualiopi</h2>
     <div class="lms-table-wrap" style="margin-bottom: 2.25rem;">
@@ -142,9 +142,9 @@ if ($selectedDocId !== '') {
     </div>
 <?php endif; ?>
 
-<!-- 2. SUPPORTS DE COURS (34 MODULES : PDF, SLIDES PDF, PPTX, MD, HTML, DOCX) -->
+<!-- 2. Course modules (PDF, Slides PDF, PPTX, MD, HTML, DOCX) -->
 <?php if ($docTab === 'all' || $docTab === 'modules'): ?>
-    <h2 style="font-size: 1.3rem; margin-bottom: 0.85rem;">📚 Supports de Cours & Présentations Studio (34 Modules)</h2>
+    <h2 style="font-size: 1.3rem; margin-bottom: 0.85rem;">📚 Supports de Cours & Présentations Studio (<?= count($currentCourse['modules'] ?? []) ?> Modules)</h2>
     <div class="lms-table-wrap" style="margin-bottom: 2.25rem;">
         <table class="lms-table">
             <thead>
@@ -172,9 +172,9 @@ if ($selectedDocId !== '') {
     </div>
 <?php endif; ?>
 
-<!-- 3. ATELIERS PRATIQUES & LABS DOCKER (34 LABS) -->
+<!-- 3. Practice labs & Docker workshops -->
 <?php if ($docTab === 'all' || $docTab === 'labs'): ?>
-    <h2 style="font-size: 1.3rem; margin-bottom: 0.85rem;">🧪 Énoncés & Corrigés des 34 Ateliers Pratiques (Labs)</h2>
+    <h2 style="font-size: 1.3rem; margin-bottom: 0.85rem;">🧪 Énoncés & Corrigés des <?= count($currentCourse['labs'] ?? []) ?> Ateliers Pratiques (Labs)</h2>
     <div class="lms-table-wrap" style="margin-bottom: 2.25rem;">
         <table class="lms-table">
             <thead>
@@ -202,7 +202,7 @@ if ($selectedDocId !== '') {
     </div>
 <?php endif; ?>
 
-<!-- 4. CHEATSHEETS & FICHES MÉMO (69 FICHES) -->
+<!-- 4. Operational cheatsheets and quick-reference cards -->
 <?php if ($docTab === 'all' || $docTab === 'cheatsheets'): ?>
     <h2 style="font-size: 1.3rem; margin-bottom: 0.85rem;">📑 Fiches Mémo & Cheatsheets Opérationnelles (<?= count($currentCourse['cheatsheets'] ?? []) ?> Fiches)</h2>
     <div class="lms-table-wrap" style="margin-bottom: 2.25rem;">
@@ -232,7 +232,7 @@ if ($selectedDocId !== '') {
     </div>
 <?php endif; ?>
 
-<!-- 5. BOÎTE À OUTILS DBA PGSCRIPTS (PYTHON & SQL) -->
+<!-- 5. Production DBA toolbox pgscripts (Python & SQL) -->
 <?php if ($docTab === 'all' || $docTab === 'tools'): ?>
     <h2 style="font-size: 1.3rem; margin-bottom: 0.85rem;">🛠️ Boîte à Outils Production DBA (<code>pgscripts</code> Python & 23 Scripts SQL)</h2>
     <div class="lms-table-wrap" style="margin-bottom: 2.25rem;">
@@ -274,7 +274,7 @@ if ($selectedDocId !== '') {
     </div>
 <?php endif; ?>
 
-<!-- 6. EXEMPLES DE CODE COMPAGNON PGEXAMPLES (PYTHON, GO, PHP) -->
+<!-- 6. Companion code examples pgexamples (Python, Go, PHP) -->
 <?php if ($docTab === 'all' || $docTab === 'examples'): ?>
     <h2 style="font-size: 1.3rem; margin-bottom: 0.85rem;">💻 Exemples de Code Compagnon (<code>pgexamples</code> — Python <code>psycopg3</code>, Go <code>pgx/v5</code>, PHP <code>PDO</code>)</h2>
     <div class="lms-table-wrap">

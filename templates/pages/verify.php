@@ -28,14 +28,14 @@ $verifyUrl = $baseUrl . '/index.php?page=verify&code=' . urlencode($code);
     </div>
 </div>
 
-<form method="GET" action="index.php" class="lms-card" style="margin-bottom: 1.75rem;">
+<form method="GET" action="index.php" class="lms-card mb-lg">
     <input type="hidden" name="page" value="verify"/>
     <input type="hidden" name="course" value="<?= Security::e($currentCourseSlug) ?>"/>
-    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+    <div class="d-flex gap-sm items-center flex-wrap">
         <input type="text"
                name="code"
-               class="form-control tabular-nums"
-               style="flex: 1; min-width: 260px; font-family: var(--font-mono);"
+               class="form-control tabular-nums flex-1 search-query-input code-mono-input"
+               aria-label="Identifiant unique du certificat"
                placeholder="Ex: LP-PG18-CERT-3-A1B2C3D4"
                value="<?= Security::e($code) ?>"
                required/>

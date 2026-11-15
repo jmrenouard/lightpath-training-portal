@@ -3,7 +3,8 @@ declare(strict_types=1);
 use LightPath\LMS\Core\Security;
 use LightPath\LMS\Course\CourseRepository;
 
-$moduleId = (string)($_GET['id'] ?? 'module_01_introduction_postgresql_18');
+$firstModViewId = (string)(array_key_first($currentCourse['modules'] ?? []) ?: 'module_01_introduction_postgresql_18');
+$moduleId = (string)($_GET['id'] ?? $firstModViewId);
 $mod = $courseRepo->getModule($currentCourseSlug, $moduleId);
 if ($mod === null) {
     $firstKey = array_key_first($currentCourse['modules'] ?? []);
@@ -31,7 +32,7 @@ foreach (($userProgress['bookmarks'] ?? []) as $bm) {
 }
 $discussions = $storage->getDiscussions($currentCourseSlug, $moduleId);
 
-// Calculer les modules du même parcours pour le Stepper de Position
+// Collect modules belonging to the same track for the position stepper
 $trackId = (string)($mod['track_id'] ?? 'cursus-complet');
 $trackModules = [];
 foreach (($currentCourse['modules'] ?? []) as $mKey => $mItem) {
@@ -47,7 +48,7 @@ foreach ($trackModules as $tmKey => $tmItem) {
 }
 $trackProgressPct = count($trackModules) > 0 ? (int)round(($trackDoneCount / count($trackModules)) * 100) : 0;
 
-// Calculer Module Précédent / Suivant avec leurs badges (ex: M01 / M02)
+// Compute previous and next modules with their badge labels
 $allCourseMods = $currentCourse['modules'] ?? [];
 $modKeys = array_keys($allCourseMods);
 $curIndex = array_search($moduleId, $modKeys, true);
@@ -67,10 +68,10 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
 }
 ?>
 
-<!-- EN-TÊTE CLAIR DU MODULE, POSITION DANS LE PARCOURS & ACTIONS RAPIDES -->
+<!-- Clear module header, track position & quick actions -->
 <div class="hero-banner" style="padding: 1.25rem 1.65rem;">
     <div style="flex: 1; min-width: 0;">
-        <!-- Fil d'Ariane & Position dans le Parcours -->
+        <!-- Breadcrumb & track position -->
         <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
             <a href="index.php?page=catalog&track=<?= urlencode($trackId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="badge-code" title="Voir tous les modules de ce parcours">
                 ← <?= Security::e($mod['track_number'] ?? 'Parcours') ?> (<?= Security::e($mod['track_short_title'] ?? '') ?>)
@@ -87,7 +88,7 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
             <strong>Compétence Opérationnelle :</strong> <?= Security::e($mod['bloom']) ?>
         </p>
 
-        <!-- Liens de téléchargement directs tous formats -->
+        <!-- Direct multi-format downloads -->
         <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
             <span style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted);">📥 Supports :</span>
             <?= renderDownloadStrip($currentCourseSlug, 'module', $moduleId, $mod['downloads'] ?? [], true) ?>
@@ -125,7 +126,7 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
     </div>
 </div>
 
-<!-- BARRE DE BASCULE DES 3 MODES D'ÉTUDE + NAVIGATION MODULE PRÉCÉDENT / SUIVANT -->
+<!-- Study mode switcher & Prev/Next module navigation -->
 <div class="view-mode-switcher">
     <div class="view-mode-tabs">
         <a href="index.php?page=module&id=<?= urlencode($moduleId) ?>&mode=reader&course=<?= urlencode($currentCourseSlug) ?>"
@@ -179,10 +180,10 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
 
 <?php if ($viewMode === 'slides'): ?>
     <!-- ======================================================================
-         MODE DIAPORAMA OFFICIEL STUDIO 16:9 (58 SLIDES POUR M01, 1 686 TOTAL)
+         OFFICIAL 16:9 STUDIO SLIDE DECK MODE
          ====================================================================== -->
     <div id="lms-slide-deck-wrapper" class="slide-deck-wrapper">
-        <!-- Barre d'outils supérieure du lecteur de diapositives -->
+        <!-- Slide deck top toolbar -->
         <div class="slide-deck-toolbar">
             <div style="display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap;">
                 <button type="button" id="btn-slide-engine-html" class="btn btn-sm btn-primary" aria-pressed="true">
@@ -218,15 +219,15 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
             </div>
         </div>
 
-        <!-- Barre de progression du diaporama -->
+        <!-- Slide deck progress bar -->
         <div class="slide-progress-track">
             <div id="slide-progress-fill" class="slide-progress-fill" style="width: <?= $totalSlides > 0 ? round(100 / $totalSlides, 1) : 100 ?>%;"></div>
         </div>
 
-        <!-- Scène principale 16:9 (Colonne 1) + Sommaire latéral des diapositives (Colonne 2) -->
+        <!-- 16:9 main stage (Column 1) + Slide outline sidebar (Column 2) -->
         <div class="slide-deck-layout">
             <div class="slide-stage-main-col">
-                <!-- Scène 16:9 Studio Interactive -->
+                <!-- Interactive 16:9 studio stage -->
                 <div id="slide-stage-html" class="slide-stage-container">
                     <?php foreach ($slides as $idx => $s):
                         $hasStudioImg = !empty($s['image_url']);
@@ -292,7 +293,7 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                     <?php endforeach; ?>
                 </div>
 
-                <!-- Scène 16:9 PDF PowerPoint Officiel (_slides.pdf) affichée dans la zone principale (Colonne 1) -->
+                <!-- Official 16:9 PowerPoint PDF stage rendered in Column 1 -->
                 <?php if (isset($mod['downloads']['slides_pdf'])): ?>
                     <div id="slide-stage-pdf" class="slide-stage-pdf" hidden>
                         <iframe id="slide-pdf-iframe"
@@ -305,7 +306,7 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                 <?php endif; ?>
             </div>
 
-            <!-- Colonne latérale droite (Colonne 2) : Liste des Diapositives (Sticky & Sans barre de défilement) -->
+            <!-- Right sidebar (Column 2): Slide outline (sticky & scrollbar-free) -->
             <aside class="slide-outline-sidebar" id="app-right-sidebar-slides">
                 <div class="toc-box slide-outline-box">
                     <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; margin-bottom: 0.65rem;">
@@ -382,8 +383,7 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                             <?php foreach ([1, 1.25, 1.5, 2] as $spd): ?>
                                 <button type="button"
                                         class="btn btn-outline btn-sm btn-video-speed tabular-nums"
-                                        data-speed="<?= $spd ?>"
-                                        onclick="const v=document.getElementById('lms-module-video'); if(v){v.playbackRate=<?= $spd ?>;}">
+                                        data-speed="<?= $spd ?>">
                                     <?= $spd ?>x
                                 </button>
                             <?php endforeach; ?>
@@ -460,7 +460,7 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
 
 <?php else: ?>
     <!-- ======================================================================
-         GRILLE LECTEUR INTERACTIF + SOMMAIRE SCROLLSPY STICKY
+         INTERACTIVE READER GRID + STICKY SCROLLSPY TABLE OF CONTENTS
          ====================================================================== -->
     <div class="reader-grid">
         <div class="reader-main-col">
@@ -468,7 +468,7 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                 <?= $parsed['html'] ?>
             </article>
 
-            <!-- COMPOSANT QUIZ QCM INTERACTIF AUTO-CORRIGÉ -->
+            <!-- Self-graded interactive QCM quiz -->
             <?php if (!empty($parsed['quiz'])): ?>
                 <section id="quiz-section" class="quiz-card">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
@@ -511,7 +511,7 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                 </section>
             <?php endif; ?>
 
-            <!-- CARTE DE NAVIGATION BAS DE PAGE (PRÉCÉDENT / ATELIER PRATIQUE / SUIVANT) -->
+            <!-- Bottom module navigation card (Previous / Practical Lab / Next) -->
             <div class="module-bottom-nav-card">
                 <div>
                     <?php if ($prevModId): ?>
@@ -534,13 +534,13 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                 </div>
             </div>
 
-            <!-- FORUM D'ENTRAIDE TECHNIQUE & Q&A SUR CE MODULE -->
+            <!-- Technical Q&A forum for this module -->
             <?= renderDiscussionSection($currentCourseSlug, 'module', $moduleId, $discussions, $csrfToken, $auth->isStaff($currentUser)) ?>
         </div>
 
-        <!-- COLONNE LATÉRALE ÉPURÉE : SOMMAIRE SCROLLSPY + NOTES + PARCOURS REPLIABLE -->
+        <!-- Clean right sidebar: ScrollSpy TOC + personal notes + collapsible track stepper -->
         <aside class="reader-sidebar" id="app-right-sidebar">
-            <!-- 1. SOMMAIRE DU DOCUMENT AVEC INDICATEUR DE POSITION EN DIRECT (SCROLLSPY) -->
+            <!-- 1. Document outline with live ScrollSpy position -->
             <div class="toc-box">
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; margin-bottom: 0.45rem;">
                     <span style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light);">
@@ -578,12 +578,12 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                 </nav>
             </div>
 
-            <!-- 2. BLOC-NOTES PERSONNEL DE L'ÉTUDIANT -->
+            <!-- 2. Learner personal notes block -->
             <div class="toc-box">
                 <div style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light); margin-bottom: 0.5rem;">
                     📝 Mes Notes Personnelles
                 </div>
-                <textarea id="user-personal-note" class="form-control" rows="4" placeholder="Notez vos points clés, paramètres postgresql.conf ou questions..."><?= Security::e($savedNote) ?></textarea>
+                <textarea id="user-personal-note" class="form-control" rows="4" aria-label="Mes notes personnelles sur ce module" placeholder="Notez vos points clés, paramètres postgresql.conf ou questions..."><?= Security::e($savedNote) ?></textarea>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.55rem;">
                     <span id="note-save-status" style="font-size: 0.74rem; color: var(--accent-emerald);"></span>
                     <button type="button" id="btn-save-note" class="btn btn-primary btn-sm" data-id="<?= Security::e($moduleId) ?>" data-course="<?= Security::e($currentCourseSlug) ?>">
@@ -592,7 +592,7 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                 </div>
             </div>
 
-            <!-- 3. PROGRESSION DANS LE PARCOURS (REPLIABLE POUR GARDER L'INTERFACE AÉRÉE) -->
+            <!-- 3. Collapsible curriculum track progress stepper -->
             <details class="toc-box" style="cursor: pointer;">
                 <summary style="display: flex; justify-content: space-between; align-items: center; list-style: none;">
                     <span style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light);">

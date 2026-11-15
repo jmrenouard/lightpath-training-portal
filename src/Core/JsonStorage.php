@@ -4,9 +4,8 @@ declare(strict_types=1);
 namespace LightPath\LMS\Core;
 
 /**
- * Moteur de persistance Flat-File JSON Atomique (Zéro-Config)
- * Fonctionne sur 100% des hébergements PHP sans base de données externe requise.
- * Utilise flock(LOCK_EX) et écriture atomique par fichier temporaire.
+ * Atomic JSON flat-file storage engine (zero-config).
+ * Runs on any PHP host without external DB, using flock(LOCK_EX) and atomic temp-file replacement.
  */
 class JsonStorage implements StorageInterface
 {
@@ -49,18 +48,36 @@ class JsonStorage implements StorageInterface
         $tmpPath = $path . '.tmp.' . getmypid() . '.' . mt_rand(1000, 9999);
         $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if ($json === false || $json === '') {
-            throw new \RuntimeException("Échec de l'encodage JSON pour le fichier '$name'");
+            throw new \RuntimeException("JSON encoding failed for file '$name'");
         }
-        file_put_contents($tmpPath, $json, LOCK_EX);
-        if (!@rename($tmpPath, $path)) {
-            copy($tmpPath, $path);
+        if (file_put_contents($tmpPath, $json, LOCK_EX) === false) {
+            throw new \RuntimeException("Unable to write temporary file for '$name'");
+        }
+
+        // Retry rename briefly to tolerate transient Windows lock contention (Defender/indexers).
+        $renamed = false;
+        $delaysUs = [5000, 15000, 35000];
+        for ($attempt = 0; $attempt <= count($delaysUs); $attempt++) {
+            if (@rename($tmpPath, $path)) {
+                $renamed = true;
+                break;
+            }
+            if ($attempt < count($delaysUs)) {
+                usleep($delaysUs[$attempt]);
+            }
+        }
+        if (!$renamed) {
+            if (!@copy($tmpPath, $path)) {
+                @unlink($tmpPath);
+                throw new \RuntimeException("Unable to persist JSON file '$name'");
+            }
             @unlink($tmpPath);
         }
     }
 
     /**
-     * Exécute un cycle lecture-modification-écriture atomique sous verrou exclusif (.lock)
-     * pour éliminer toute race condition check-then-write en salle de formation multi-utilisateurs.
+     * Executes an atomic read-modify-write cycle under an exclusive .lock file
+     * to prevent check-then-write race conditions across concurrent classroom sessions.
      */
     protected function mutateFile(string $name, array $default, callable $mutator): mixed
     {
@@ -142,7 +159,7 @@ class JsonStorage implements StorageInterface
 
         $this->writeFile('users', $defaults);
 
-        // Pré-initialiser une progression de démonstration réaliste pour le stagiaire #3
+        // Seed realistic demo progress for student #3
         $this->markItemCompleted(3, 'postgresql-18', 'module', 'module_01_introduction_postgresql_18', true);
         $this->markItemCompleted(3, 'postgresql-18', 'module', 'module_02_getting_started_postgresql', true);
         $this->markItemCompleted(3, 'postgresql-18', 'lab', 'lab_01_introduction_setup_postgresql_18', true);
@@ -207,7 +224,7 @@ class JsonStorage implements StorageInterface
     public function deleteUser(int $id): bool
     {
         if ($id === 1) {
-            return false; // Protection du compte Super-Admin principal
+            return false; // Protect primary super-admin account
         }
         return (bool)$this->mutateFile('users', [], static function (array $users) use ($id): array {
             $filtered = array_values(array_filter($users, static fn(array $u): bool => (int)$u['id'] !== $id));
@@ -321,28 +338,75 @@ class JsonStorage implements StorageInterface
 
     public function logAuditEvent(string $actor, string $action, string $details): void
     {
-        $this->mutateFile('audit_logs', [], static function (array $logs) use ($actor, $action, $details): array {
+        $overflow = (array)$this->mutateFile('audit_logs', [], static function (array $logs) use ($actor, $action, $details): array {
             array_unshift($logs, [
                 'timestamp' => date('Y-m-d H:i:s'),
                 'actor' => $actor,
                 'action' => $action,
                 'details' => $details,
             ]);
-            if (count($logs) > 250) {
-                $logs = array_slice($logs, 0, 250);
+            $archived = [];
+            if (count($logs) > 1000) {
+                $archived = array_slice($logs, 1000);
+                $logs = array_slice($logs, 0, 1000);
             }
-            return [$logs, null];
+            return [$logs, $archived];
         });
+
+        // Archive evicted audit entries into monthly files instead of dropping them.
+        if (!empty($overflow)) {
+            $byMonth = [];
+            foreach ($overflow as $entry) {
+                $ts = (string)($entry['timestamp'] ?? '');
+                $ym = preg_match('/^(\d{4})-(\d{2})/', $ts, $m) ? ($m[1] . $m[2]) : date('Ym');
+                $byMonth[$ym][] = $entry;
+            }
+            foreach ($byMonth as $ym => $entries) {
+                $this->mutateFile('audit_logs_' . $ym, [], static function (array $existing) use ($entries): array {
+                    foreach ($entries as $entry) {
+                        $existing[] = $entry;
+                    }
+                    return [$existing, null];
+                });
+            }
+        }
     }
 
-    public function getAuditLogs(int $limit = 50): array
+    protected function listAuditArchiveKeys(): array
     {
+        $files = glob($this->dataDir . '/audit_logs_[0-9][0-9][0-9][0-9][0-9][0-9].json') ?: [];
+        $keys = [];
+        foreach ($files as $file) {
+            $keys[] = basename($file, '.json');
+        }
+        rsort($keys, SORT_STRING);
+        return $keys;
+    }
+
+    public function getAuditLogs(int $limit = 50, bool $includeArchives = false): array
+    {
+        $max = max(0, $limit);
         $logs = $this->readFile('audit_logs', []);
-        return array_slice($logs, 0, $limit);
+        if ($includeArchives && count($logs) < $max) {
+            foreach ($this->listAuditArchiveKeys() as $archiveKey) {
+                $entries = $this->readFile($archiveKey, []);
+                if (empty($entries)) {
+                    continue;
+                }
+                // Evicted records are appended chronologically; reverse before stable timestamp sort so newest-first order holds even within the same second.
+                $entries = array_reverse($entries);
+                usort($entries, static fn(array $a, array $b): int => strcmp((string)($b['timestamp'] ?? ''), (string)($a['timestamp'] ?? '')));
+                array_push($logs, ...$entries);
+                if (count($logs) >= $max) {
+                    break;
+                }
+            }
+        }
+        return array_slice($logs, 0, $max);
     }
 
     // =========================================================================
-    // Fonctionnalités LMS Enterprise & Qualiopi (RCA-153, RCA-154, RCA-155, RCA-160)
+    // Enterprise LMS & Qualiopi Storage Methods
     // =========================================================================
 
     public function saveDiagnosticResult(int $userId, string $courseSlug, array $result): void
@@ -380,7 +444,7 @@ class JsonStorage implements StorageInterface
                 $attempt['certificate_id'] = sprintf(
                     'LP-PG18-CERT-%d-%s',
                     $userId,
-                    strtoupper(substr(md5($userId . ':' . $courseSlug . ':' . microtime(true)), 0, 8))
+                    strtoupper(bin2hex(random_bytes(4)))
                 );
             }
             $history = $all[$key] ?? [];
@@ -466,7 +530,7 @@ class JsonStorage implements StorageInterface
                 'hash' => substr(hash('sha256', $userId . '|' . $courseSlug . '|' . $halfDayKey . '|' . $sig . '|' . $signedAt), 0, 16),
             ];
 
-            // FIX-02: préserver le visa formateur si déjà contre-signé
+            // Preserve trainer counter-signature when learner re-signs the slot
             if (!empty($existing['trainer_signed_at'])) {
                 $entry['trainer_signed_at'] = $existing['trainer_signed_at'];
             }
@@ -676,7 +740,7 @@ class JsonStorage implements StorageInterface
     }
 
     // =========================================================================
-    // Fonctionnalités LMS Enterprise & Qualiopi (RCA-163 / RCA-LMS-33)
+    // Enterprise Classroom, Q&A Moderation & Verification Methods
     // =========================================================================
 
     public function signTrainerAttendance(int $userId, string $courseSlug, string $halfDayKey, string $trainerName = 'Jean-Marie Renouard'): array
@@ -804,7 +868,7 @@ class JsonStorage implements StorageInterface
             return null;
         }
 
-        // FIX-07: Reconnaissance des attestations de formation & assiduité Qualiopi (LP-PG18-ATT-<uid>-<date>)
+        // Recognize Qualiopi training & attendance certificates (LP-PG18-ATT-<uid>-<date>)
         if (preg_match('/^LP-(?:[A-Z0-9]+-)?ATT-(\d+)-(\d{6,8})$/i', $norm, $m)) {
             $uid = (int)$m[1];
             $user = $this->getUserById($uid);
@@ -968,7 +1032,7 @@ class JsonStorage implements StorageInterface
 
     public function importUsersFromCsv(string $csvContent, string $defaultPassword = 'LightPath2026!', string $courseSlug = 'postgresql-18'): array
     {
-        // FIX-12: Purger le BOM UTF-8 (\xEF\xBB\xBF) en début de fichier exporté par Excel
+        // Strip leading UTF-8 BOM emitted by Excel exports
         $cleanContent = preg_replace('/^\xEF\xBB\xBF/', '', trim($csvContent));
         $lines = preg_split('/\r\n|\r|\n/', (string)$cleanContent) ?: [];
         $targetCourse = trim($courseSlug) !== '' ? trim($courseSlug) : 'postgresql-18';
@@ -996,7 +1060,7 @@ class JsonStorage implements StorageInterface
                     continue;
                 }
 
-                // FIX-12: Détection automatique du délimiteur (;, ,, \t)
+                // Auto-detect CSV/TSV field delimiter (;, ,, \t)
                 $semis = substr_count($line, ';');
                 $tabs = substr_count($line, "\t");
                 $commas = substr_count($line, ',');
@@ -1017,14 +1081,14 @@ class JsonStorage implements StorageInterface
                 $company = trim((string)($cols[2] ?? ''));
                 $role = strtolower(trim((string)($cols[3] ?? 'student')));
 
-                // FIX-12: Imposer une longueur minimale de 6 caractères pour le mot de passe
+                // Enforce minimum 6-character password length or fall back to cohort default
                 $rawPass = trim((string)($cols[4] ?? ''));
                 $password = (strlen($rawPass) >= 6) ? $rawPass : $defaultPassword;
                 if (strlen($password) < 6) {
                     $password = 'LightPath2026!';
                 }
 
-                // Ignorer la ligne d'en-tête CSV éventuelle
+                // Skip optional CSV header row
                 if ($idx === 0 && (in_array(strtolower($name), ['name', 'nom', 'fullname', 'nom complet'], true) || in_array($email, ['email', 'courriel', 'mail'], true))) {
                     continue;
                 }
@@ -1037,7 +1101,7 @@ class JsonStorage implements StorageInterface
                     $skipped++;
                     continue;
                 }
-                if (!in_array($role, ['student', 'trainer', 'admin'], true)) {
+                if (!in_array($role, Auth::VALID_ROLES, true)) {
                     $role = 'student';
                 }
 
@@ -1069,6 +1133,112 @@ class JsonStorage implements StorageInterface
                 'skipped' => $skipped,
                 'users' => $importedUsers,
             ]];
+        });
+    }
+
+    public function getLoginThrottle(string $key): ?array
+    {
+        $all = $this->readFile('login_throttle', []);
+        return (isset($all[$key]) && is_array($all[$key])) ? $all[$key] : null;
+    }
+
+    public function recordLoginFailure(string $key, int $windowSeconds = 300): array
+    {
+        $window = max(1, $windowSeconds);
+        return (array)$this->mutateFile('login_throttle', [], static function (array $all) use ($key, $window): array {
+            $now = time();
+            $pruneAge = max($window, 3600);
+            foreach ($all as $k => $v) {
+                if (!is_array($v) || ($now - (int)($v['first_at'] ?? 0)) > $pruneAge) {
+                    unset($all[$k]);
+                }
+            }
+            $existing = $all[$key] ?? null;
+            if (!is_array($existing) || ($now - (int)($existing['first_at'] ?? 0)) > $window) {
+                $entry = ['count' => 1, 'first_at' => $now, 'updated_at' => $now];
+            } else {
+                $entry = [
+                    'count' => (int)($existing['count'] ?? 0) + 1,
+                    'first_at' => (int)$existing['first_at'],
+                    'updated_at' => $now,
+                ];
+            }
+            $all[$key] = $entry;
+            return [$all, $entry];
+        });
+    }
+
+    public function clearLoginThrottle(string $key): void
+    {
+        $this->mutateFile('login_throttle', [], static function (array $all) use ($key): array {
+            if (!isset($all[$key])) {
+                return [null, null];
+            }
+            unset($all[$key]);
+            return [$all, null];
+        });
+    }
+
+    public function getFeatureFlags(): array
+    {
+        return $this->readFile('features', []);
+    }
+
+    public function saveFeatureFlags(array $flags): array
+    {
+        return (array)$this->mutateFile('features', [], static function (array $current) use ($flags): array {
+            $clean = [];
+            foreach ($flags as $k => $v) {
+                $clean[(string)$k] = (bool)$v;
+            }
+            $merged = array_merge($current, $clean);
+            return [$merged, $merged];
+        });
+    }
+
+    public function resetUserProgress(int $userId, string $courseSlug): bool
+    {
+        $slug = trim($courseSlug);
+        if ($userId <= 0 || $slug === '') {
+            return false;
+        }
+        $key = $userId . ':' . $slug;
+        return (bool)$this->mutateFile('progress', [], static function (array $all) use ($key): array {
+            if (!isset($all[$key])) {
+                return [null, true];
+            }
+            unset($all[$key]);
+            return [$all, true];
+        });
+    }
+
+    public function toggleCustomCourse(string $slug, bool $active): bool
+    {
+        $cleanSlug = trim($slug);
+        if ($cleanSlug === '') {
+            return false;
+        }
+        return (bool)$this->mutateFile('custom_courses', [], static function (array $courses) use ($cleanSlug, $active): array {
+            if (!isset($courses[$cleanSlug]) || !is_array($courses[$cleanSlug])) {
+                return [null, false];
+            }
+            $courses[$cleanSlug]['active'] = $active;
+            return [$courses, true];
+        });
+    }
+
+    public function deleteCustomCourse(string $slug): bool
+    {
+        $cleanSlug = trim($slug);
+        if ($cleanSlug === '') {
+            return false;
+        }
+        return (bool)$this->mutateFile('custom_courses', [], static function (array $courses) use ($cleanSlug): array {
+            if (!isset($courses[$cleanSlug])) {
+                return [null, false];
+            }
+            unset($courses[$cleanSlug]);
+            return [$courses, true];
         });
     }
 }

@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 /**
- * CLI de Synchronisation / Packaging d'une Formation pour Hébergement Web
- * Usage : php bin/sync-course.php <course-slug> <source-directory>
+ * CLI utility for synchronizing and packaging a course directory for web deployment.
+ *
+ * Usage:
+ *   php bin/sync-course.php <course-slug> <source-directory>
  */
 
 require_once __DIR__ . '/../src/bootstrap.php';
@@ -17,7 +19,7 @@ if ($slug === '') {
 $sourceDir = $argv[2] ?? realpath(__DIR__ . '/../../training_postgresql');
 
 if (!$sourceDir || !is_dir((string)$sourceDir)) {
-    fwrite(STDERR, "[ERREUR] Répertoire source introuvable.\n");
+    fwrite(STDERR, "[ERROR] Source directory not found.\n");
     exit(1);
 }
 
@@ -33,4 +35,4 @@ $manifest = [
 ];
 
 file_put_contents($targetDir . '/manifest.json', json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
-echo "[OK] Manifeste de la formation '{$slug}' synchronisé dans {$targetDir}/manifest.json\n";
+echo "[OK] Course manifest '{$slug}' synchronized to {$targetDir}/manifest.json\n";

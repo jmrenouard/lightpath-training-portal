@@ -132,8 +132,8 @@ class DownloadController
 
         if ($disp === 'inline') {
             header('Cache-Control: public, max-age=86400');
-            // Si on affiche un livrable HTML en mode inline (Rendu Web Studio), réécrire les chemins relatifs ../assets/ vers assets/
-            // et les liens relatifs documentaires vers index.php?action=course_asset, puis injecter le shim unload -> pagehide
+            // Rewrite relative ../assets/ paths and relative documentation links for inline HTML rendering,
+            // then inject the unload -> pagehide compatibility shim.
             if (str_starts_with((string)$fileInfo['mime'], 'text/html')) {
                 $html = (string)file_get_contents($fileInfo['path']);
                 $html = (string)preg_replace('/(?:\.\.\/)+assets\//', 'assets/', $html);
@@ -176,37 +176,41 @@ class DownloadController
         if (($fileInfo['mime'] ?? '') === 'video/mp4') {
             header('Accept-Ranges: bytes');
             $size = (int)$fileInfo['size'];
-            $rangeHeader = $_SERVER['HTTP_RANGE'] ?? '';
-            if ($rangeHeader !== '' && preg_match('/bytes=(\d+)-(\d*)/i', (string)$rangeHeader, $m)) {
-                $start = (int)$m[1];
-                $end = ($m[2] !== '') ? min($size - 1, (int)$m[2]) : ($size - 1);
-                if ($start <= $end && $start < $size) {
-                    $length = $end - $start + 1;
-                    header('HTTP/1.1 206 Partial Content');
-                    header("Content-Range: bytes {$start}-{$end}/{$size}");
-                    header('Content-Length: ' . $length);
-                    $fp = fopen($fileInfo['path'], 'rb');
-                    if ($fp !== false) {
-                        fseek($fp, $start);
-                        $remaining = $length;
-                        $chunkSize = 64 * 1024; // 64 KB
-                        while ($remaining > 0 && !feof($fp)) {
-                            $readSize = min($remaining, $chunkSize);
-                            $buffer = fread($fp, $readSize);
-                            if ($buffer === false || $buffer === '') {
-                                break;
-                            }
-                            echo $buffer;
-                            if (ob_get_level() > 0) {
-                                ob_flush();
-                            }
-                            flush();
-                            $remaining -= strlen($buffer);
+            $rangeHeader = (string)($_SERVER['HTTP_RANGE'] ?? '');
+            $range = self::resolveHttpRange($rangeHeader, $size);
+            if ($range['status'] === 416) {
+                header('HTTP/1.1 416 Range Not Satisfiable');
+                header("Content-Range: bytes */{$size}");
+                exit;
+            }
+            if ($range['status'] === 206) {
+                $start = $range['start'];
+                $end = $range['end'];
+                $length = $range['length'];
+                header('HTTP/1.1 206 Partial Content');
+                header("Content-Range: bytes {$start}-{$end}/{$size}");
+                header('Content-Length: ' . $length);
+                $fp = fopen($fileInfo['path'], 'rb');
+                if ($fp !== false) {
+                    fseek($fp, $start);
+                    $remaining = $length;
+                    $chunkSize = 64 * 1024; // 64 KB
+                    while ($remaining > 0 && !feof($fp)) {
+                        $readSize = min($remaining, $chunkSize);
+                        $buffer = fread($fp, $readSize);
+                        if ($buffer === false || $buffer === '') {
+                            break;
                         }
-                        fclose($fp);
+                        echo $buffer;
+                        if (ob_get_level() > 0) {
+                            ob_flush();
+                        }
+                        flush();
+                        $remaining -= strlen($buffer);
                     }
-                    exit;
+                    fclose($fp);
                 }
+                exit;
             }
         }
 
@@ -216,44 +220,61 @@ class DownloadController
     }
 
     /**
-     * Génère un package d'archive SCORM 1.2 complet (.zip) autonome contenant :
-     * - imsmanifest.xml (conforme ADL SCORM 1.2)
-     * - index_scorm.html (lanceur SCO interactif)
-     * - scorm_api.js (adaptateur API SCORM 1.2 LMSInitialize / LMSSetValue / LMSFinish)
-     * - README_SCORM.md (documentation d'intégration LMS tiers : Moodle, Cornerstone, 360Learning)
+     * Resolves an HTTP Range header into a concrete byte slice or 416 Range Not Satisfiable decision.
+     *
+     * @return array{status: int, start: int, end: int, length: int}
+     */
+    public static function resolveHttpRange(string $rangeHeader, int $size): array
+    {
+        $trimmed = trim($rangeHeader);
+        if ($trimmed === '') {
+            return ['status' => 200, 'start' => 0, 'end' => max(0, $size - 1), 'length' => max(0, $size)];
+        }
+        if ($size <= 0 || preg_match('/^bytes=(\d*)-(\d*)$/i', $trimmed, $m) !== 1) {
+            return ['status' => 416, 'start' => 0, 'end' => 0, 'length' => 0];
+        }
+        if ($m[1] === '' && $m[2] === '') {
+            return ['status' => 416, 'start' => 0, 'end' => 0, 'length' => 0];
+        }
+
+        if ($m[1] === '') {
+            $suffix = (int)$m[2];
+            if ($suffix <= 0) {
+                return ['status' => 416, 'start' => 0, 'end' => 0, 'length' => 0];
+            }
+            $start = max(0, $size - $suffix);
+            $end = $size - 1;
+        } else {
+            $start = (int)$m[1];
+            $end = ($m[2] !== '') ? min($size - 1, (int)$m[2]) : ($size - 1);
+        }
+
+        if ($start < 0 || $start >= $size || $start > $end) {
+            return ['status' => 416, 'start' => $start, 'end' => $end, 'length' => 0];
+        }
+
+        return ['status' => 206, 'start' => $start, 'end' => $end, 'length' => ($end - $start) + 1];
+    }
+
+    /**
+     * Builds a self-contained SCORM 1.2 archive package (.zip) containing:
+     * - imsmanifest.xml (ADL SCORM 1.2 compliant, delegated to LmsCatalog)
+     * - index_scorm.html (interactive SCO launcher)
+     * - scorm_api.js (SCORM 1.2 API adapter: LMSInitialize / LMSSetValue / LMSFinish)
+     * - README_SCORM.md (third-party LMS integration notes: Moodle, Cornerstone, 360Learning)
      */
     public function buildScorm12ZipPackage(string $courseSlug, array $course): ?string
     {
-        $itemsXml = '';
-        $resXml = '';
+        $modules = $course['modules'] ?? [];
         $modListHtml = '';
-        foreach (($course['modules'] ?? []) as $mId => $mod) {
-            $safeId = Security::e($mId);
+        foreach ($modules as $mId => $mod) {
             $safeTitle = Security::e(($mod['badge_code'] ?? '') . ' — ' . ($mod['title'] ?? $mId));
-            $itemsXml .= "      <item identifier=\"ITEM_{$safeId}\" identifierref=\"RES_{$safeId}\"><title>{$safeTitle}</title></item>\n";
-            $resXml .= "    <resource identifier=\"RES_{$safeId}\" type=\"webcontent\" adlcp:scormtype=\"sco\" href=\"index_scorm.html?module={$safeId}\">\n      <file href=\"index_scorm.html\"/>\n      <file href=\"scorm_api.js\"/>\n    </resource>\n";
             $modListHtml .= "<li><strong>{$safeTitle}</strong> — " . Security::e((string)($mod['bloom'] ?? '')) . "</li>\n";
         }
 
-        $courseTitle = Security::e((string)($course['title'] ?? 'PostgreSQL 18'));
-        $manifest = <<<XML
-<?xml version="1.0" encoding="UTF-8"?>
-<manifest identifier="LP_PG18_SCORM12" version="1.2"
-          xmlns="http://www.imsproject.org/xsd/imscp_rootv1p1p2"
-          xmlns:adlcp="http://www.adlnet.org/xsd/adlcp_rootv1p2">
-  <metadata>
-    <schema>ADL SCORM</schema>
-    <schemaversion>1.2</schemaversion>
-  </metadata>
-  <organizations default="LIGHTPATH_ORG">
-    <organization identifier="LIGHTPATH_ORG">
-      <title>{$courseTitle}</title>
-{$itemsXml}    </organization>
-  </organizations>
-  <resources>
-{$resXml}  </resources>
-</manifest>
-XML;
+        $courseTitle = Security::e((string)($course['title'] ?? 'LightPath Course'));
+        $moduleCount = count($modules);
+        $manifest = LmsCatalog::generateScormManifest($course, true);
 
         $scormJs = <<<'JS'
 (function () {
@@ -286,7 +307,15 @@ XML;
             if (st) st.textContent = 'Statut SCORM 1.2 synchronisé : COMPLETED (100%)';
         }
     };
-    window.addEventListener('DOMContentLoaded', function () { window.LightPathScorm.init(); });
+    window.addEventListener('DOMContentLoaded', function () {
+        window.LightPathScorm.init();
+        var completeBtn = document.getElementById('btn-scorm-complete');
+        if (completeBtn) {
+            completeBtn.addEventListener('click', function () {
+                window.LightPathScorm.complete(100);
+            });
+        }
+    });
 })();
 JS;
 
@@ -310,8 +339,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#0B1120;color:#F8
   <h1>{$courseTitle}</h1>
   <p>Formateur Référent : <strong>Jean-Marie Renouard</strong> (LightPath SARL — contact@lightpath.fr)</p>
   <p id="scorm-status">Statut SCORM 1.2 : Initialisé (en cours)</p>
-  <button type="button" class="btn" onclick="window.LightPathScorm.complete(100)">✔ Valider la Complétion SCORM 1.2</button>
-  <h2>Modules du Cursus (34 SCOs)</h2>
+  <button type="button" id="btn-scorm-complete" class="btn">✔ Valider la Complétion SCORM 1.2</button>
+  <h2>Modules du Cursus ({$moduleCount} SCOs)</h2>
   <ul>{$modListHtml}</ul>
 </div>
 </body>
@@ -343,7 +372,7 @@ HTML;
             }
         }
 
-        // Fallback ZIP pur PHP (format PKZIP Store standard sans compression) si l'extension php_zip est absente
+        // Pure-PHP ZIP fallback (standard PKZIP Store format without compression) when php-zip is unavailable
         $localParts = [];
         $centralParts = [];
         $offset = 0;

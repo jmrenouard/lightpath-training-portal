@@ -21,8 +21,8 @@ class MarkdownParser
     }
 
     /**
-     * Analyse et convertit une chaîne Markdown en rendu HTML structuré.
-     * Alias ergonomique de renderMarkdown, invocable statiquement ou d'instance.
+     * Parses a Markdown string and returns structured HTML and TOC data.
+     * Ergonomic alias for renderMarkdown, usable statically or on an instance.
      */
     public static function parse(string $markdown, string $courseSlug = 'postgresql-18', bool $isLab = false): array
     {
@@ -93,7 +93,7 @@ class MarkdownParser
         $renderedFull = $this->renderMarkdown($split['full_md'], $courseSlug, true);
         $renderedEnonce = $this->renderMarkdown($split['enonce_md'], $courseSlug, true);
         $renderedCorrige = $this->renderMarkdown($split['corrige_md'], $courseSlug, true);
-        // En vue Corrigé dédié, ouvrir tous les blocs <details> par défaut pour lecture directe
+        // In dedicated solution view, expand all <details> blocks by default for direct reading
         $corrigeHtmlOpen = str_replace('<details class="lms-details">', '<details class="lms-details" open>', $renderedCorrige['html']);
 
         $result = [
@@ -110,7 +110,7 @@ class MarkdownParser
     }
 
     /**
-     * Écrit le résultat de parsing dans le cache fichier avec renommage atomique et verrouillage LOCK_EX.
+     * Writes parsed rendering output atomically using LOCK_EX and rename.
      */
     private function writeCacheFile(string $cacheFile, array $result): void
     {
@@ -130,7 +130,7 @@ class MarkdownParser
     }
 
     /**
-     * Purge l'ensemble des fichiers de cache de rendu Markdown.
+     * Purges all parsed Markdown cache files.
      */
     public function clearParsedCache(): int
     {
@@ -149,13 +149,13 @@ class MarkdownParser
     }
 
     /**
-     * Sépare un fichier Markdown d'atelier pratique en deux volets pédagogiques :
-     * - `enonce_md` : Métadonnées, Prérequis, Mise en Situation, Travail Pas-à-Pas, Résultats Attendus et Challenges (avec solutions repliées en spoiler `<details>`).
-     * - `corrige_md` : Solutions des Challenges Fast-Track + Corrigé Détaillé + Oracle de Validation Automatisé Qualiopi + Grille d'Évaluation (DoD) + Débriefing & REX Expert.
+     * Splits a hands-on lab Markdown document into two pedagogical views:
+     * - `enonce_md`: Metadata, prerequisites, scenario, step-by-step instructions, expected outputs, and challenges.
+     * - `corrige_md`: Fast-track challenge solutions, detailed walkthrough, Qualiopi validation oracle, DoD rubric, and expert debriefing.
      */
     public function splitLabEnonceAndCorrige(string $raw): array
     {
-        // Encapsuler tous les marqueurs de solutions de challenges suivis d'un bloc de code dans un <details> spoiler
+        // Wrap challenge solution markers followed by a code block in collapsible <details> spoilers
         $challengeSolutions = [];
         $processedRaw = preg_replace_callback(
             '/(?:^\s*[\*\-]\s*\*\*(?:Requête\s+Solution|Commandes?\s+Solutions?|Solutions?\s+Analytiques?|Configurations?\s+Solutions?|Requêtes?\s+Démonstrations?|Corrigés?\s+Techniques?|Corrigés?\s+SQL)\s*:\*\*\s*\R+)(```[a-zA-Z0-9_-]*\R.*?\R```)/imsu',
@@ -171,15 +171,15 @@ class MarkdownParser
         $enoncePart = $processedRaw;
         $corrigePart = '';
 
-        // Détecter la section H2 de bascule vers le Corrigé / Validation / Débriefing REX
+        // Detect H2 heading switching to Solution / Validation / Expert Debriefing
         if (preg_match('/^##\s+(?:\d+\.\s*)?(?:Corrigé|Commande de Validation|Script de Validation|Validation Automatisée|Solution)/imu', $processedRaw, $m, PREG_OFFSET_CAPTURE)) {
             $splitOffset = (int)$m[0][1];
             $enoncePart = rtrim(substr($processedRaw, 0, $splitOffset));
-            // Retirer un séparateur horizontal final "---" éventuel en fin d'énoncé
+            // Strip trailing horizontal rule "---" at the end of the prompt
             $enoncePart = preg_replace('/\R+---\s*$/u', '', $enoncePart) ?? $enoncePart;
             $corrigePart = ltrim(substr($processedRaw, $splitOffset));
 
-            // Si un bloc "Pour Aller Plus Loin" se trouve après le H2 de validation dans un document brut, le préserver aussi dans l'énoncé
+            // Keep "Pour Aller Plus Loin" inside the prompt if it appears after the validation H2
             if (!str_contains($enoncePart, 'Pour Aller Plus Loin') && preg_match('/(^#{2,3}\s+🌟\s*Pour Aller Plus Loin.*?)(?=^##\s+|\z)/imsu', $corrigePart, $pm)) {
                 $enoncePart .= "\n\n---\n\n" . trim($pm[1]);
             }
@@ -194,7 +194,7 @@ class MarkdownParser
         }
 
         if (empty($corrigeBlocks)) {
-            // Fallback : extraire les blocs SQL comme corrigé de référence
+            // Fallback: use processed blocks as reference solutions
             $corrigeBlocks[] = "## ✅ Corrigé Technique & Requêtes de Référence\n\n" . $processedRaw;
         }
 
@@ -264,9 +264,9 @@ class MarkdownParser
     }
 
     /**
-     * Génère les diapositives 16:9 interactives d'un module.
-     * Priorise le manifeste officiel Studio 16:9 pré-calculé (public/assets/slides_cache/<module_id>/manifest.json,
-     * ex: 58 diapositives pour le Module 01, 1 686 diapositives sur les 34 modules), avec fallback sur le découpage Markdown.
+     * Generates interactive 16:9 module slides.
+     * Prioritizes pre-built Studio 16:9 manifests (public/assets/slides_cache/<module_id>/manifest.json),
+     * falling back to structured Markdown segmentation.
      */
     public function extractSlides(string $markdown, string $courseSlug = 'postgresql-18', array $quiz = [], ?string $moduleId = null): array
     {
@@ -311,7 +311,7 @@ class MarkdownParser
             }
         }
 
-        // Fallback : découpage Markdown si le manifeste Studio 16:9 n'est pas présent
+        // Fallback: split Markdown headings when no prebuilt Studio 16:9 manifest exists
         $cleanMd = preg_replace_callback(
             '/<details>\s*<summary>(.*?)<\/summary>(.*?)<\/details>/isu',
             static function (array $m): string {
@@ -338,7 +338,7 @@ class MarkdownParser
             if ($rawChunk === '' && $currentTitle === '') {
                 return;
             }
-            // Ignorer la section Quiz vide si ses <details> ont été extraits en slides QCM dédiées
+            // Skip empty Quiz section when its <details> blocks become dedicated MCQ slides
             if ($rawChunk === '' && (str_contains(strtolower($currentTitle), 'quiz') || str_contains(strtolower($currentTitle), 'évaluation formative'))) {
                 return;
             }
@@ -376,7 +376,7 @@ class MarkdownParser
                 continue;
             }
 
-            // Titre principal H1
+            // Main H1 title
             if (preg_match('/^#\s+(.+)$/', $trimmed, $m)) {
                 $flushSlide();
                 $currentTitle = trim(str_replace(['**', '`'], '', $m[1]));
@@ -413,7 +413,7 @@ class MarkdownParser
                 continue;
             }
 
-            // Sous-section H3 -> Nouvelle diapositive dédiée
+            // Subsection H3 -> dedicated slide
             if (preg_match('/^###\s+(.+)$/', $trimmed, $m)) {
                 $flushSlide();
                 $currentTitle = trim(str_replace(['**', '`'], '', $m[1]));
@@ -422,7 +422,7 @@ class MarkdownParser
                 continue;
             }
 
-            // Si une diapositive devient très longue (> 22 lignes hors code) et qu'on rencontre un callout ou une image ou un titre H4, découper proprement
+            // Split long slides (>= 20 non-code lines) cleanly on H4 subheadings or standalone images
             if (count($buffer) >= 20 && (preg_match('/^####\s+/', $trimmed) || preg_match('/^!\[/', $trimmed))) {
                 $prevTitle = $currentTitle;
                 $flushSlide();
@@ -435,7 +435,7 @@ class MarkdownParser
 
         $flushSlide();
 
-        // Ajouter une diapositive interactive par question de Quiz à la fin du diaporama
+        // Append one interactive slide per MCQ question at the end of the slide deck
         foreach ($quiz as $q) {
             $qHtml = '<div class="slide-quiz-card" data-correct="' . Security::e($q['correct']) . '">';
             $qHtml .= '<p class="slide-quiz-question"><strong>' . Security::e($q['question']) . '</strong></p>';
@@ -452,7 +452,7 @@ class MarkdownParser
                 . '<div class="slide-quiz-answer-badge">✅ Réponse correcte : Option ' . Security::e($q['correct']) . '</div>'
                 . '<p>' . $this->formatInline($q['explanation'], $courseSlug) . '</p>'
                 . '</div>';
-            $qHtml .= '<button type="button" class="btn btn-sm btn-outline-cyan btn-reveal-slide-quiz" style="margin-top:0.85rem;">👁️ Révéler le corrigé & l\'explication</button>';
+            $qHtml .= '<button type="button" class="btn btn-sm btn-outline-cyan btn-reveal-slide-quiz mt-1">👁️ Révéler le corrigé & l\'explication</button>';
             $qHtml .= '</div>';
 
             $slides[] = [
@@ -470,7 +470,7 @@ class MarkdownParser
 
     public function renderMarkdown(string $markdown, string $courseSlug = 'postgresql-18', bool $isLab = false): array
     {
-        // 1. Dans un module de cours, retirer les blocs <details> de Quiz QCM (déjà rendus par le widget QCM interactif)
+        // 1. Inside course modules, strip Quiz MCQ <details> blocks (handled by interactive MCQ widget)
         if (!$isLab) {
             $markdown = preg_replace_callback(
                 '/<details>\s*<summary>(.*?)<\/summary>(.*?)<\/details>/isu',
@@ -484,7 +484,7 @@ class MarkdownParser
             ) ?? $markdown;
         }
 
-        // 2. Transformer les autres blocs <details><summary>...</summary>...</details> (ex: corrigés de labs) en composants HTML propres dont l'intérieur est parsé
+        // 2. Transform remaining <details><summary>...</summary>...</details> blocks (e.g. lab solutions) with parsed inner content
         $detailsPlaceholders = [];
         $markdown = preg_replace_callback(
             '/<details>\s*<summary>(.*?)<\/summary>(.*?)<\/details>/isu',
@@ -591,7 +591,7 @@ class MarkdownParser
         foreach ($lines as $line) {
             $trimmed = trim($line);
 
-            // Gestion des blocs de code ```
+            // Fenced code blocks ```
             if (str_starts_with($trimmed, '```')) {
                 $flushList();
                 $flushBlockquote();
@@ -636,12 +636,12 @@ class MarkdownParser
                 continue;
             }
 
-            // Commentaires HTML ignorés
+            // Ignore HTML comments
             if (str_starts_with($trimmed, '<!--') && str_ends_with($trimmed, '-->')) {
                 continue;
             }
 
-            // Placeholder <details> pré-rendu
+            // Pre-rendered <details> placeholder
             if (isset($detailsPlaceholders[$trimmed])) {
                 $flushList();
                 $flushBlockquote();
@@ -650,7 +650,7 @@ class MarkdownParser
                 continue;
             }
 
-            // Tableaux Markdown
+            // Markdown tables
             if (str_starts_with($trimmed, '|') && str_ends_with($trimmed, '|')) {
                 $flushList();
                 $flushBlockquote();
@@ -671,20 +671,20 @@ class MarkdownParser
                 $flushBlockquote();
             }
 
-            // Ligne vide
+            // Blank line
             if ($trimmed === '') {
                 $flushList();
                 continue;
             }
 
-            // Séparateur horizontal
+            // Horizontal rule
             if ($trimmed === '---' || $trimmed === '***') {
                 $flushList();
                 $html[] = '<hr class="lms-divider"/>';
                 continue;
             }
 
-            // Titres H1..H6
+            // Headings H1..H6
             if (preg_match('/^(#{1,6})\s+(.+)$/', $trimmed, $hm)) {
                 $flushList();
                 $level = strlen($hm[1]);
@@ -700,7 +700,7 @@ class MarkdownParser
                 }
                 $html[] = "<h{$level} id=\"{$slugId}\" class=\"lms-heading lms-h{$level}\" data-section-id=\"{$slugId}\">" . $this->formatInline($titleText, $courseSlug) . "</h{$level}>";
 
-                // Si c'est la section 6 Quiz d'un module, ajouter un bandeau pointant vers le Quiz QCM interactif juste en bas
+                // On module Section 6 Quiz heading, render an anchor banner pointing to the interactive MCQ widget below
                 if (!$isLab && $level === 2 && (str_contains(strtolower($cleanTitle), 'quiz') || str_contains(strtolower($cleanTitle), 'évaluation formative'))) {
                     $html[] = '<div class="lms-quiz-inline-banner">'
                         . '<div class="lms-quiz-inline-info">'
@@ -713,7 +713,7 @@ class MarkdownParser
                 continue;
             }
 
-            // Image autonome ![alt](src)
+            // Standalone image ![alt](src)
             if (preg_match('/^!\[([^\]]*)\]\(([^)]+)\)$/', $trimmed, $im)) {
                 $flushList();
                 $alt = Security::e($im[1]);
@@ -725,7 +725,7 @@ class MarkdownParser
                 continue;
             }
 
-            // Liste à puces (*, -) ou liste numérotée (1., 2.) avec gestion de l'indentation
+            // Bulleted (*, -) or ordered (1., 2.) lists supporting indentation
             if (preg_match('/^(\s*)([\*\-]|\d+\.)\s+(.+)$/', $line, $lm)) {
                 $indent = strlen(str_replace("\t", '    ', $lm[1]));
                 $marker = $lm[2];
@@ -733,19 +733,19 @@ class MarkdownParser
                 $desiredTag = is_numeric(rtrim($marker, '.')) ? 'ol' : 'ul';
                 $listClass = $desiredTag === 'ol' ? 'lms-olist' : ($indent >= 2 ? 'lms-sublist' : 'lms-list');
 
-                // Dépiler les sous-listes plus indentées
+                // Pop deeper nested lists
                 while (!empty($listStack) && end($listStack)['indent'] > $indent) {
                     $popped = array_pop($listStack);
                     $html[] = '</' . $popped['tag'] . '>';
                 }
 
-                // Si au même niveau d'indentation le type de liste change (ul <-> ol), fermer et rouvrir
+                // Switch list tag (ul <-> ol) cleanly at the same indentation depth
                 if (!empty($listStack) && end($listStack)['indent'] === $indent && end($listStack)['tag'] !== $desiredTag) {
                     $popped = array_pop($listStack);
                     $html[] = '</' . $popped['tag'] . '>';
                 }
 
-                // Ouvrir une nouvelle liste si nécessaire
+                // Open new list container if needed
                 if (empty($listStack) || end($listStack)['indent'] < $indent) {
                     $html[] = '<' . $desiredTag . ' class="' . $listClass . '">';
                     $listStack[] = ['tag' => $desiredTag, 'indent' => $indent];
@@ -778,8 +778,8 @@ class MarkdownParser
     }
 
     /**
-     * Rend un bloc Mermaid en utilisant l'image Retina 2x pré-calculée (assets/mermaid_cache/mermaid_<hash>.png)
-     * ou le moteur local mermaid.min.js en fallback vectoriel (100% autonome, zéro CDN).
+     * Renders a Mermaid diagram using a precomputed Retina 2x PNG (assets/mermaid_cache/mermaid_<hash>.png)
+     * or falls back to local vector rendering via mermaid.min.js (zero external CDN).
      */
     private function renderMermaidBlock(string $rawCode, string $courseSlug): string
     {
@@ -824,10 +824,10 @@ class MarkdownParser
     }
 
     /**
-     * Rend un bloc de citation / Callout (> ...) avec prise en charge native :
-     * - des grilles de métadonnées d'en-tête (> **Module :** ... / > **Durée :** ...)
-     * - des alertes GitHub [!IMPORTANT], [!WARNING], [!CAUTION], [!TIP], [!NOTE]
-     * - des listes à puces (*, -) et numérotées (1.) imbriquées à l'intérieur du cartouche
+     * Renders a blockquote/callout block supporting:
+     * - document metadata grids (> **Module :** ... / > **Duration :** ...)
+     * - GitHub-style alerts [!IMPORTANT], [!WARNING], [!CAUTION], [!TIP], [!NOTE]
+     * - nested bulleted and ordered lists inside the callout card
      */
     private function renderBlockquote(array $lines, string $courseSlug): string
     {
@@ -839,7 +839,7 @@ class MarkdownParser
         $first = $nonEmpty[0];
         $isAlert = preg_match('/^\[!(IMPORTANT|WARNING|CAUTION|TIP|NOTE)\]\s*(.*)$/i', $first, $am) === 1;
 
-        // Détecter un bloc de métadonnées d'en-tête de document (ex: > **Module :** ... / > **Formateur :** ...)
+        // Detect header metadata blockquote blocks (e.g. > **Module :** ... / > **Trainer :** ...)
         if (!$isAlert && count($nonEmpty) >= 2) {
             $metaPairs = [];
             $allMeta = true;
@@ -882,7 +882,7 @@ class MarkdownParser
                 'note' => 'Information Technique',
             ];
             $alertTitle = $customTitle !== '' ? $this->formatInline($customTitle, $courseSlug) : ($defaultTitles[$alertType] ?? 'Note Technique');
-            // Retirer la première ligne non-vide correspondant à [!ALERT]
+            // Strip the first non-empty [!ALERT] marker line
             foreach ($bodyLines as $k => $v) {
                 if (trim($v) !== '') {
                     unset($bodyLines[$k]);
@@ -902,7 +902,7 @@ class MarkdownParser
             $bodyLines = array_values($bodyLines);
         }
 
-        // Parser les lignes internes (paragraphes + sous-titres + listes * / - / 1.)
+        // Parse inner callout lines (paragraphs, subheadings, bulleted/numbered lists)
         $innerParts = [];
         $inCalloutList = false;
         $calloutListTag = 'ul';
@@ -923,7 +923,7 @@ class MarkdownParser
 
             if (preg_match('/^#{1,6}\s+(.+)$/', $bTrim, $hm)) {
                 $closeCalloutList();
-                $innerParts[] = '<h4 class="lms-callout-subtitle" style="margin:0.45rem 0 0.25rem;font-size:0.95rem;">' . $this->formatInline(trim($hm[1]), $courseSlug) . '</h4>';
+                $innerParts[] = '<h4 class="lms-callout-subtitle">' . $this->formatInline(trim($hm[1]), $courseSlug) . '</h4>';
             } elseif (preg_match('/^([\*\-]|\d+\.)\s+(.+)$/', $bTrim, $lm)) {
                 $tag = is_numeric(rtrim($lm[1], '.')) ? 'ol' : 'ul';
                 if (!$inCalloutList || $calloutListTag !== $tag) {
@@ -1001,7 +1001,7 @@ class MarkdownParser
     }
 
     /**
-     * Résout un chemin relatif vers un fichier ou répertoire compagnon dans training_postgresql.
+     * Resolves a relative repository path to a companion file or directory.
      */
     private function resolveRelativeRepoPath(string $rawHref): ?string
     {
@@ -1040,40 +1040,35 @@ class MarkdownParser
             $text = $pm[2];
         }
 
-        // 1. Protéger les blocs inline `code`
+        // 1. Delegate pipe unescaping, backtick masking, HTML escaping, and bold/italic formatting
+        $escaped = Security::formatInlineText($text);
+
+        // 2. Protect rendered inline code tags before restoring tags and resolving Markdown links
         $codePlaceholders = [];
-        $text = preg_replace_callback('/`([^`]+)`/', static function (array $m) use (&$codePlaceholders): string {
+        $escaped = preg_replace_callback('/<code class="lms-inline-code">.*?<\/code>/s', static function (array $m) use (&$codePlaceholders): string {
             $key = '%%CODE_' . count($codePlaceholders) . '%%';
-            $codePlaceholders[$key] = '<code class="lms-inline-code">' . Security::e(str_replace('\|', '|', $m[1])) . '</code>';
+            $codePlaceholders[$key] = $m[0];
             return $key;
-        }, $text) ?? $text;
+        }, $escaped) ?? $escaped;
 
-        $text = str_replace('\|', '|', $text);
-        $escaped = Security::e($text);
-
-        // 2. Restaurer quelques balises inline sûres (<br/>, <b>, <i>, <sup>, <sub>)
+        // 3. Restore a limited set of safe inline formatting HTML tags
         $escaped = str_ireplace(
             ['&lt;br/&gt;', '&lt;br&gt;', '&lt;br /&gt;', '&lt;b&gt;', '&lt;/b&gt;', '&lt;i&gt;', '&lt;/i&gt;', '&lt;sup&gt;', '&lt;/sup&gt;', '&lt;sub&gt;', '&lt;/sub&gt;'],
             ['<br/>', '<br/>', '<br/>', '<strong>', '</strong>', '<em>', '</em>', '<sup>', '</sup>', '<sub>', '</sub>'],
             $escaped
         );
 
-        // 3. Gras + Italique (***texte***), Gras (**texte** y compris avec *italique* imbriqué), et Italique strict (*texte*)
-        $escaped = preg_replace('/\*\*\*((?:(?!\*\*\*).)+)\*\*\*/u', '<strong><em>$1</em></strong>', $escaped) ?? $escaped;
-        $escaped = preg_replace('/\*\*((?:(?!\*\*).)+)\*\*/u', '<strong>$1</strong>', $escaped) ?? $escaped;
-        $escaped = preg_replace('/(?<![\w*])\*([^\s*](?:[^*]*[^\s*])?)\*(?![\w*])/u', '<em>$1</em>', $escaped) ?? $escaped;
-
-        // 4. Liens Markdown [label](url)
+        // 4. Convert Markdown links [label](url) to internal LMS routes or safe external URLs
         $escaped = preg_replace_callback('/\[([^\]]+)\]\(([^)]+)\)/', function (array $m) use ($courseSlug): string {
             $label = $m[1];
-            $href = trim(html_entity_decode($m[2], ENT_QUOTES, 'UTF-8'));
+            $href = trim(strip_tags(html_entity_decode($m[2], ENT_QUOTES, 'UTF-8')));
 
-            // Bloquer tout schéma URI exécutable (javascript:, vbscript:, data:)
+            // Block executable URI schemes (javascript:, vbscript:, data:)
             if (preg_match('/^\s*(?:javascript|vbscript|data):/i', $href)) {
                 return '<span>' . $label . '</span>';
             }
 
-            // Router directement vers les vues internes du LMS pour les modules, labs, cheatsheets et référentiel
+            // Route internal curriculum links directly to LMS views (modules, labs, cheatsheets, reference docs)
             if (preg_match('/(module_(?:sql_\d{2}|\d{2})_[a-z0-9_]+)\.(?:md|html|pdf)(#.*)?$/i', $href, $mm)) {
                 $url = 'index.php?page=module&course=' . urlencode($courseSlug) . '&id=' . urlencode($mm[1]);
                 return '<a href="' . Security::e($url) . '" class="lms-link">' . $label . '</a>';
@@ -1100,7 +1095,7 @@ class MarkdownParser
             return '<a href="' . Security::e($href) . '" class="lms-link" target="_blank" rel="noopener">' . $label . '</a>';
         }, $escaped) ?? $escaped;
 
-        // 5. Réinjecter les blocs `code` protégés
+        // 5. Re-inject protected inline code tags
         foreach ($codePlaceholders as $key => $replacement) {
             $escaped = str_replace($key, $replacement, $escaped);
         }

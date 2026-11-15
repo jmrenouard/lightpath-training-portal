@@ -101,7 +101,7 @@ $loggedHours = $signedHalfDaysCount * 3.5;
                 </button>
             </form>
         <?php endif; ?>
-        <button type="button" onclick="window.print()" class="btn btn-outline-cyan btn-sm">
+        <button type="button" data-action="print" class="btn btn-outline-cyan btn-sm">
             🖨️ Imprimer la Feuille d'Émargement OPCO (PDF)
         </button>
     </div>

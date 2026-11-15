@@ -11,24 +11,28 @@ use LightPath\LMS\Core\Security;
         <form method="POST" action="index.php?page=profile&action=update_profile">
             <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
             <div class="form-group">
-                <label>Adresse Email (Identifiant unique)</label>
-                <input type="email" class="form-control" autocomplete="username" value="<?= Security::e($currentUser['email']) ?>" disabled/>
+                <label for="profile-email">Adresse Email (Identifiant unique)</label>
+                <input type="email" id="profile-email" class="form-control" autocomplete="username" value="<?= Security::e($currentUser['email']) ?>" disabled/>
             </div>
             <div class="form-group">
-                <label>Rôle sur la plateforme</label>
-                <input type="text" class="form-control" value="<?= strtoupper(Security::e($currentUser['role'])) ?>" disabled/>
+                <label for="profile-role">Rôle sur la plateforme</label>
+                <input type="text" id="profile-role" class="form-control" value="<?= strtoupper(Security::e($currentUser['role'])) ?>" disabled/>
             </div>
             <div class="form-group">
-                <label>Nom & Prénom (affiché sur l'Attestation Qualiopi)</label>
-                <input type="text" name="name" class="form-control" autocomplete="name" value="<?= Security::e($currentUser['name']) ?>" required/>
+                <label for="profile-name">Nom &amp; Prénom (affiché sur l'Attestation Qualiopi)</label>
+                <input type="text" id="profile-name" name="name" class="form-control" autocomplete="name" value="<?= Security::e($currentUser['name']) ?>" required/>
             </div>
             <div class="form-group">
-                <label>Entreprise / Organisation</label>
-                <input type="text" name="company" class="form-control" autocomplete="organization" value="<?= Security::e($currentUser['company'] ?? '') ?>"/>
+                <label for="profile-company">Entreprise / Organisation</label>
+                <input type="text" id="profile-company" name="company" class="form-control" autocomplete="organization" value="<?= Security::e($currentUser['company'] ?? '') ?>"/>
             </div>
             <div class="form-group">
-                <label>Nouveau Mot de Passe (laisser vide pour ne pas modifier)</label>
-                <input type="password" name="new_password" class="form-control" autocomplete="new-password" minlength="6" placeholder="Minimum 6 caractères"/>
+                <label for="profile-current-password">Mot de Passe Actuel (requis pour changer de mot de passe)</label>
+                <input type="password" id="profile-current-password" name="current_password" class="form-control" autocomplete="current-password" placeholder="Requis uniquement en cas de modification"/>
+            </div>
+            <div class="form-group">
+                <label for="profile-new-password">Nouveau Mot de Passe (laisser vide pour ne pas modifier)</label>
+                <input type="password" id="profile-new-password" name="new_password" class="form-control" autocomplete="new-password" minlength="6" placeholder="Minimum 6 caractères"/>
             </div>
             <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
                 💾 Enregistrer mes Modifications

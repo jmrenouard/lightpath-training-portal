@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Export official Studio 16:9 slide decks (PDF + PPTX metadata/notes) for all 34 modules
+Export official Studio 16:9 slide decks (PDF + PPTX metadata/notes) for all modules
 into public/assets/slides_cache/<module_id>/slide_001.png..slide_NNN.png + manifest.json.
 
 Guarantees 100% 1:1 alignment between each rendered slide_NNN.png and its manifest entry
@@ -20,10 +20,12 @@ OUT_ROOT = ROOT / "public" / "assets" / "slides_cache"
 
 
 def normalize_key(text: str) -> str:
+    """Normalize slide titles to alphanumeric lowercase keys for PPTX notes matching."""
     return re.sub(r"[^a-z0-9]+", "", text.lower())
 
 
 def is_ignored_line(text: str, x0: float, y0: float) -> bool:
+    """Filter out slide chrome headers, footers, and brand watermarks during extraction."""
     t = text.strip()
     if not t:
         return True
@@ -41,6 +43,7 @@ def is_ignored_line(text: str, x0: float, y0: float) -> bool:
 
 
 def extract_pdf_page_metadata(page: "pymupdf.Page", page_idx: int, total_pages: int) -> dict:
+    """Extract section, title, slide classification, and body preview from a PDF slide page."""
     d = page.get_text("dict")
     raw_lines = []
     for block in d.get("blocks", []):
@@ -121,6 +124,7 @@ def extract_pdf_page_metadata(page: "pymupdf.Page", page_idx: int, total_pages: 
 
 
 def extract_pptx_notes_map(pptx_path: Path) -> dict[str, str]:
+    """Build a lookup map of normalized slide title keys to speaker notes from a PPTX deck."""
     notes_by_key: dict[str, str] = {}
     if not pptx_path.exists():
         return notes_by_key
@@ -156,6 +160,7 @@ def extract_pptx_notes_map(pptx_path: Path) -> dict[str, str]:
 
 
 def export_all_decks() -> None:
+    """Render PNG slides and write manifest.json for every *_slides.pdf deck found."""
     OUT_ROOT.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     total_slides = 0

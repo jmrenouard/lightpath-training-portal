@@ -4,12 +4,12 @@ declare(strict_types=1);
 namespace LightPath\LMS\Course;
 
 /**
- * Catalogue pédagogique Enterprise LMS pour PostgreSQL 18 :
- * - Positionnement Initial Qualiopi (Indicateur 8 — 15 QCM sur 5 domaines DBA)
- * - Examen Final de Certification Sommatif (Indicateur 11 — 40 QCM pondérés, seuil 75%)
- * - Cartes Mémo SRS (53 Flashcards Spaced Repetition PostgreSQL 18 & SQL:2023)
- * - Glossaire Technique Interactif (56 entrées PostgreSQL 18)
- * - Générateur de Manifeste SCORM 1.2 (imsmanifest.xml)
+ * Enterprise LMS pedagogical catalog for PostgreSQL 18:
+ * - Qualiopi Initial Positioning (Indicator 8 — 15 MCQs across 5 DBA domains)
+ * - Summative Final Certification Exam (Indicator 11 — 40 weighted MCQs, 75% pass threshold)
+ * - Spaced Repetition (SRS) Flashcards (PostgreSQL 18 & SQL:2023)
+ * - Interactive Technical Glossary (PostgreSQL 18)
+ * - SCORM 1.2 Manifest Generator (imsmanifest.xml)
  */
 class LmsCatalog
 {
@@ -22,8 +22,8 @@ class LmsCatalog
     ];
 
     /**
-     * Retourne les 15 questions d'évaluation diagnostique pré-formation (Qualiopi Indicateur 8).
-     * Distribution équilibrée : 4 A, 4 B, 4 C, 3 D.
+     * Returns the 15 Qualiopi pre-training diagnostic assessment questions (Indicator 8).
+     * Balanced distribution: 4 A, 4 B, 4 C, 3 D.
      */
     public static function getDiagnosticQuestions(): array
     {
@@ -242,7 +242,7 @@ class LmsCatalog
     }
 
     /**
-     * Évalue les réponses au test de positionnement initial Qualiopi et recommande un parcours adapté.
+     * Evaluates Qualiopi initial diagnostic assessment answers and recommends an appropriate track.
      */
     public static function evaluateDiagnostic(array $answers): array
     {
@@ -313,13 +313,13 @@ class LmsCatalog
     }
 
     /**
-     * Retourne les 40 questions pondérées de l'Examen Final de Certification PostgreSQL 18 (Qualiopi Indicateur 11).
-     * Distribution équilibrée exacte : 10 A, 10 B, 10 C, 10 D (2 par lettre dans chacun des 5 domaines).
+     * Returns the 40 weighted questions for the PostgreSQL 18 Final Certification Exam (Qualiopi Indicator 11).
+     * Exact balanced distribution: 10 A, 10 B, 10 C, 10 D (2 per letter across each of the 5 domains).
      */
     public static function getFinalExamQuestions(): array
     {
         $base = [
-            // Domaine 1 : Architecture Interne, Mémoire & MVCC (8 questions — B, D, A, C, B, D, C, A)
+            // Domain 1: Internal Architecture, Memory & MVCC (8 questions — B, D, A, C, B, D, C, A)
             ['architecture', 'Quelle est la taille standard par défaut d\'une page (bloc) de données dans PostgreSQL 18 ?', ['A' => '4 Ko', 'B' => '8 Ko', 'C' => '16 Ko', 'D' => '64 Ko'], 'B', 'Par défaut, BLCKSZ vaut 8 192 octets (8 Ko) dans PostgreSQL.'],
             ['architecture', 'Dans l\'en-tête d\'une page PostgreSQL (PageHeaderData), que contiennent les pointeurs Line Pointers (ItemIdData) ?', ['A' => 'L\'adresse IP du client connecté.', 'B' => 'Le mot de passe chiffré de l\'utilisateur.', 'C' => 'Le plan EXPLAIN mis en cache.', 'D' => 'L\'offset physique et la longueur de chaque tuple dans la page (permettant à HOT de ne pas modifier les index).'], 'D', 'Les index pointent vers le TID (numéro de bloc + numéro d\'item), et l\'ItemId pointe vers l\'offset réel du tuple dans la page.'],
             ['architecture', 'Quelle condition est indispensable pour qu\'un UPDATE bénéficie de l\'optimisation HOT (Heap-Only Tuple) ?', ['A' => 'Aucune colonne indexée n\'est modifiée et il reste de l\'espace libre dans la même page de 8 Ko.', 'B' => 'La table doit être partitionnée par hachage.', 'C' => 'autovacuum doit être désactivé.', 'D' => 'La transaction doit être en niveau SERIALIZABLE.'], 'A', 'HOT évite toute maintenance d\'index si aucune colonne indexée ne change et que le nouveau tuple tient dans la même page (aidé par un fillfactor < 100).'],
@@ -329,7 +329,7 @@ class LmsCatalog
             ['architecture', 'Quel paramètre mémoire PostgreSQL est alloué PAR opération de tri ou de table de hachage (et peut donc être multiplié plusieurs fois par requête et par session) ?', ['A' => 'wal_buffers', 'B' => 'shared_buffers', 'C' => 'work_mem', 'D' => 'effective_cache_size'], 'C', 'Contrairement à shared_buffers (global), work_mem est alloué par nœud Sort ou Hash Join actif dans chaque backend.'],
             ['architecture', 'Que mesure le paramètre effective_cache_size dans postgresql.conf ?', ['A' => 'Une indication purement statistique donnée au CBO sur la mémoire totale disponible (shared_buffers + cache OS) sans allouer un seul octet de RAM.', 'B' => 'La RAM réservée au processus walwriter.', 'C' => 'La taille maximale d\'un fichier journal WAL.', 'D' => 'La mémoire allouée aux procédures stockées Python.'], 'A', 'effective_cache_size n\'alloue aucune mémoire : il guide l\'optimiseur (CBO) sur la probabilité de trouver les pages d\'index en mémoire.'],
 
-            // Domaine 2 : Requêtage SQL Avancé, JSONB & PL/pgSQL (8 questions — C, B, D, A, B, C, D, A)
+            // Domain 2: Advanced SQL, JSONB & PL/pgSQL (8 questions — C, B, D, A, B, C, D, A)
             ['sql_dev', 'Quelle clause SQL permet de retourner immédiatement les colonnes d\'une ligne qui vient d\'être insérée, modifiée ou supprimée sans exécuter de SELECT supplémentaire ?', ['A' => 'OUTPUTTING', 'B' => 'YIELDING', 'C' => 'RETURNING (avec support de OLD/NEW en PostgreSQL 18)', 'D' => 'FETCHING'], 'C', 'RETURNING renvoie les valeurs affectées par INSERT/UPDATE/DELETE, et PostgreSQL 18 permet même d\'accéder explicitement aux valeurs OLD et NEW.'],
             ['sql_dev', 'Quel opérateur JSONB vérifie si le document JSONB de gauche contient la sous-structure JSONB de droite (et exploite un index GIN) ?', ['A' => '->>', 'B' => '@>', 'C' => '#>', 'D' => '||'], 'B', 'L\'opérateur de contenance @> (ex: metadata @> \'{"tier": "VIP"}\') est directement accéléré par les index GIN jsonb_ops et jsonb_path_ops.'],
             ['sql_dev', 'Quelle est la différence entre une fonction (CREATE FUNCTION) et une procédure stockée (CREATE PROCEDURE) en PL/pgSQL ?', ['A' => 'Une fonction ne peut être écrite qu\'en langage C.', 'B' => 'Une fonction ne peut pas exécuter de SELECT.', 'C' => 'Une procédure ne peut pas accepter de paramètres.', 'D' => 'Une procédure (invoquée par CALL) peut gérer les transactions (COMMIT / ROLLBACK internes), contrairement à une fonction.'], 'D', 'Seules les procédures appelées via CALL peuvent valider (COMMIT) ou annuler (ROLLBACK) des transactions au fil de leur exécution.'],
@@ -339,7 +339,7 @@ class LmsCatalog
             ['sql_dev', 'Dans une clause de fenêtrage, que signifie la frame par défaut `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW` lorsqu\'un `ORDER BY` est présent ?', ['A' => 'La fenêtre supprime les lignes nulles.', 'B' => 'La fenêtre ne lit que la dernière ligne de la table.', 'C' => 'La fenêtre ignore la clause PARTITION BY.', 'D' => 'La fenêtre agrège toutes les lignes depuis le début de la partition jusqu\'à la valeur courante incluse (avec ses ex-aequo).'], 'D', 'Avec ORDER BY dans OVER(...), la frame par défaut est un cumul glissant depuis le début de la partition jusqu\'à la valeur de tri courante.'],
             ['sql_dev', 'Quelle commande SQL standardisée permet de réaliser en une seule instruction atomique des INSERT, UPDATE et DELETE conditionnels entre une table source et une table cible ?', ['A' => 'MERGE INTO ... USING ... WHEN MATCHED / WHEN NOT MATCHED', 'B' => 'UPSERT TABLE', 'C' => 'SYNC TABLE', 'D' => 'REPLACE INTO'], 'A', 'MERGE INTO (enrichi dans PG 17/18 avec WHEN NOT MATCHED BY SOURCE et RETURNING) orchestre les synchronisations ETL atomiques.'],
 
-            // Domaine 3 : Administration, Sécurité SCRAM & RLS (8 questions — B, D, A, C, D, B, C, A)
+            // Domain 3: Administration, SCRAM Security & RLS (8 questions — B, D, A, C, D, B, C, A)
             ['security_admin', 'Dans quel ordre PostgreSQL évalue-t-il les règles du fichier pg_hba.conf lors d\'une tentative de connexion ?', ['A' => 'Par ordre alphabétique des noms de bases.', 'B' => 'Séquentiellement de haut en bas : la première règle qui correspond (type, base, user, IP) est appliquée et l\'évaluation s\'arrête.', 'C' => 'De la règle la plus permissive à la plus restrictive.', 'D' => 'Aléatoirement.'], 'B', 'pg_hba.conf fonctionne en First-Match : dès qu\'un enregistrement correspond au tuple (connexion, base, rôle, IP), sa méthode d\'authentification fait foi.'],
             ['security_admin', 'Quelle commande SQL recharge la configuration de postgresql.conf et pg_hba.conf à chaud sans interrompre les connexions actives ?', ['A' => 'VACUUM FULL;', 'B' => 'SELECT pg_terminate_backend(pid);', 'C' => 'TRUNCATE pg_settings;', 'D' => 'SELECT pg_reload_conf();'], 'D', 'pg_reload_conf() envoie un signal SIGHUP au postmaster pour appliquer immédiatement tous les paramètres de contexte sighup et recharger pg_hba.conf.'],
             ['security_admin', 'Dans la vue pg_settings, que signifie la valeur `context = postmaster` pour un paramètre comme `shared_buffers` ou `max_connections` ?', ['A' => 'Toute modification de ce paramètre nécessite un redémarrage complet de l\'instance PostgreSQL pour entrer en vigueur.', 'B' => 'Le paramètre peut être modifié par n\'importe quel utilisateur avec SET.', 'C' => 'Le paramètre est obsolète.', 'D' => 'Le paramètre ne s\'applique qu\'aux réplicas.'], 'A', 'Les paramètres de contexte postmaster dimensionnent la mémoire partagée ou les structures fixes allouées au démarrage du serveur.'],
@@ -349,7 +349,7 @@ class LmsCatalog
             ['security_admin', 'Lorsqu\'une fonction PL/pgSQL est déclarée avec `SECURITY DEFINER`, quelle précaution de sécurité critique est obligatoire pour éviter l\'escalade de privilèges ?', ['A' => 'Désactiver autovacuum.', 'B' => 'Augmenter work_mem à 1 Go.', 'C' => 'Fixer explicitement le search_path sur la fonction : `SET search_path = pg_catalog, public` (ou schéma dédié).', 'D' => 'Utiliser uniquement des tables temporaires.'], 'C', 'Fixer search_path avec pg_catalog en tête empêche un attaquant de détourner un opérateur ou une table via un objet malveillant placé dans son schéma courant.'],
             ['security_admin', 'Quel rôle prédéfini PostgreSQL permet à un agent de supervision (ex: Prometheus postgres_exporter) de lire toutes les vues statistiques sans être superuser ?', ['A' => 'pg_monitor', 'B' => 'pg_write_server_files', 'C' => 'pg_execute_server_program', 'D' => 'pg_create_subscription'], 'A', 'Le rôle prédéfini pg_monitor regroupe pg_read_all_settings, pg_read_all_stats et pg_stat_scan_tables selon le principe du moindre privilège.'],
 
-            // Domaine 4 : Sauvegardes PITR, pgBackRest & Haute Disponibilité (8 questions — C, A, D, B, C, A, B, D)
+            // Domain 4: PITR Backups, pgBackRest & High Availability (8 questions — C, A, D, B, C, A, B, D)
             ['ha_backup', 'Quels sont les deux éléments indispensables pour réaliser une restauration ponctuelle PITR (Point-In-Time Recovery) à une seconde précise ?', ['A' => 'Uniquement le fichier postgresql.conf.', 'B' => 'Uniquement un fichier SQL issu de pg_dump.', 'C' => 'Une sauvegarde physique de base (base backup) antérieure à la cible + la séquence continue des journaux WAL depuis cette sauvegarde jusqu\'à l\'instant cible.', 'D' => 'La vue pg_stat_activity.'], 'C', 'Le PITR restaure d\'abord le base backup physique puis rejoue (REDO) les segments WAL archivés jusqu\'au recovery_target_time ou LSN souhaité.'],
             ['ha_backup', 'Dans PostgreSQL 12 à 18, quel fichier vide créé dans PGDATA indique au serveur de démarrer en mode restauration (Recovery / PITR) ?', ['A' => 'recovery.signal', 'B' => 'standby.signal', 'C' => 'recovery.conf', 'D' => 'backup_label.old'], 'A', 'recovery.signal déclenche une restauration ponctuelle (suivie d\'une promotion), tandis que standby.signal maintient l\'instance en réplica continu.'],
             ['ha_backup', 'Quel mécanisme PostgreSQL garantit que le serveur primaire ne recycle jamais un segment WAL dont un réplica a encore besoin, mais présente un risque de saturation disque si le réplica tombe définitivement ?', ['A' => 'Les index partiels.', 'B' => 'Les tablespaces.', 'C' => 'Les séquences SQL.', 'D' => 'Les slots de réplication (Replication Slots — surveillés via pg_replication_slots et bornés par max_slot_wal_keep_size).'], 'D', 'Un slot de réplication inactif retient indéfiniment les fichiers dans pg_wal sauf si max_slot_wal_keep_size est configuré comme disjoncteur.'],
@@ -359,7 +359,7 @@ class LmsCatalog
             ['ha_backup', 'Pourquoi certaines fonctionnalités comme `PREPARE / EXECUTE` (avant protocole spécifique) ou `SET search_path` de session posent-elles problème avec `PgBouncer` en mode `transaction` ?', ['A' => 'Parce que PgBouncer interdit les requêtes SELECT.', 'B' => 'Parce que la connexion backend PostgreSQL change d\'une transaction à l\'autre : l\'état de session ne persiste pas (bien que PgBouncer récent supporte max_prepared_statements).', 'C' => 'Parce que PgBouncer modifie le schéma des tables.', 'D' => 'Parce que PgBouncer ne fonctionne qu\'en UDP.'], 'B', 'En transaction pooling, les variables de session et états liés au backend ne sont pas attachés exclusivement à un client unique entre deux transactions.'],
             ['ha_backup', 'Quel avantage clé offre `pgBackRest` par rapport à un simple script `pg_basebackup` pour une base de production de plusieurs téraoctets ?', ['A' => 'Il supprime le besoin de sauvegarder les WAL.', 'B' => 'Il remplace l\'optimiseur de requêtes SQL.', 'C' => 'Il permet d\'exécuter PostgreSQL sans disque dur.', 'D' => 'Sauvegardes différentielles/incrémentales parallélisées, restauration delta par empreinte SHA, vérification d\'intégrité et archivage asynchrone des WAL.'], 'D', 'pgBackRest industrialise les sauvegardes physiques (Full/Diff/Incr), le chiffrement AES-256, la compression Zstandard et la restauration Delta ultra-rapide.'],
 
-            // Domaine 5 : Optimisation CBO, Indexation & Kernel Linux (8 questions — B, C, D, A, C, D, B, A)
+            // Domain 5: CBO Optimization, Indexing & Linux Kernel (8 questions — B, C, D, A, C, D, B, A)
             ['perf_linux', 'Lorsque le Cost-Based Optimizer (CBO) sous-estime fortement le nombre de lignes retournées par `WHERE ville = \'Paris\' AND code_postal LIKE \'75%\'` à cause de la corrélation entre ces deux colonnes, quelle commande résout ce problème ?', ['A' => 'REINDEX SYSTEM;', 'B' => 'CREATE STATISTICS ... (dependencies, ndistinct, mcv) ON ville, code_postal FROM table; puis ANALYZE;', 'C' => 'SET enable_seqscan = on;', 'D' => 'CLUSTER table;'], 'B', 'Les statistiques étendues multivariées (CREATE STATISTICS) capturent les dépendances fonctionnelles et les fréquences conjointes (MCV) entre colonnes corrélées.'],
             ['perf_linux', 'Sur un stockage SSD ou NVMe moderne, quelle valeur recommander pour `random_page_cost` (dont la valeur historique par défaut est 4.0) ?', ['A' => '0.0', 'B' => '40.0', 'C' => '1.1 (proche de seq_page_cost = 1.0)', 'D' => '100.0'], 'C', 'Sur SSD/NVMe, le coût d\'un accès aléatoire est quasi identique à un accès séquentiel : abaisser random_page_cost à 1.1 encourage légitimement les Index Scans.'],
             ['perf_linux', 'Dans la sortie d\'un `EXPLAIN (ANALYZE, BUFFERS)`, quel indicateur révèle qu\'un tri (`Sort`) a débordé sur le disque temporaire faute d\'un `work_mem` suffisant ?', ['A' => 'Index Cond: (id = 1)', 'B' => 'Sort Method: quicksort  Memory: 25kB', 'C' => 'Buffers: shared hit=12', 'D' => 'Sort Method: external merge  Disk: ...kB (accompagné de temp read/written dans Buffers)'], 'D', 'La mention "external merge Disk: ...kB" prouve que work_mem a été dépassé et que PostgreSQL a dû écrire des fichiers temporaires sur disque.'],
@@ -390,7 +390,7 @@ class LmsCatalog
     }
 
     /**
-     * Évalue une tentative à l'Examen Final de Certification Sommatif (Qualiopi Indicateur 11).
+     * Evaluates an attempt for the Summative Final Certification Exam (Qualiopi Indicator 11).
      */
     public static function evaluateFinalExam(array $answers, int $durationSeconds = 0): array
     {
@@ -452,7 +452,7 @@ class LmsCatalog
     }
 
     /**
-     * Retourne les 53 cartes mémo SRS (Spaced Repetition System) PostgreSQL 18 & SQL:2023.
+     * Returns Spaced Repetition System (SRS) flashcards for PostgreSQL 18 & SQL:2023.
      */
     public static function getFlashcards(): array
     {
@@ -514,7 +514,7 @@ class LmsCatalog
     }
 
     /**
-     * Retourne les 52 entrées du Glossaire Technique PostgreSQL 18.
+     * Returns the PostgreSQL 18 Technical Glossary entries.
      */
     public static function getGlossary(): array
     {
@@ -579,39 +579,50 @@ class LmsCatalog
     }
 
     /**
-     * Génère un manifeste XML SCORM 1.2 valide (imsmanifest.xml) exposant l'intégralité du cursus PostgreSQL 18.
+     * Generates a valid SCORM 1.2 XML manifest (imsmanifest.xml) exposing all curriculum SCOs.
+     * Supports both live LMS URLs and standalone offline ZIP launcher resources.
      */
-    public static function generateScormManifest(array $course): string
+    public static function generateScormManifest(array $course, bool $standalonePackage = false): string
     {
         $title = htmlspecialchars((string)($course['title'] ?? 'PostgreSQL 18 — Cursus Complet LightPath'), ENT_XML1 | ENT_QUOTES, 'UTF-8');
         $itemsXml = [];
         $resourcesXml = [];
 
-        // 1. Évaluation Diagnostique Initiale
-        $itemsXml[] = '      <item identifier="ITEM_DIAGNOSTIC" identifierref="RES_DIAGNOSTIC"><title>00 — Positionnement Initial Qualiopi (Diagnostic DBA)</title></item>';
-        $resourcesXml[] = '    <resource identifier="RES_DIAGNOSTIC" type="webcontent" adlcp:scormtype="sco" href="index.php?page=diagnostic"><file href="index.php"/></resource>';
+        if (!$standalonePackage) {
+            // 1. Initial diagnostic assessment
+            $itemsXml[] = '      <item identifier="ITEM_DIAGNOSTIC" identifierref="RES_DIAGNOSTIC"><title>00 — Positionnement Initial Qualiopi (Diagnostic DBA)</title></item>';
+            $resourcesXml[] = '    <resource identifier="RES_DIAGNOSTIC" type="webcontent" adlcp:scormtype="sco" href="index.php?page=diagnostic"><file href="index.php"/></resource>';
+        }
 
-        // 2. Modules de cours
+        // 2. Course modules
         foreach ($course['modules'] ?? [] as $modId => $mod) {
             $safeId = preg_replace('/[^a-zA-Z0-9_\-]/', '_', (string)$modId);
             $modTitle = htmlspecialchars(($mod['badge_code'] ?? 'MOD') . ' — ' . ($mod['title'] ?? $modId), ENT_XML1 | ENT_QUOTES, 'UTF-8');
-            $href = 'index.php?page=module&amp;id=' . urlencode((string)$modId);
+            if ($standalonePackage) {
+                $href = 'index_scorm.html?module=' . urlencode((string)$modId);
+                $filesXml = '<file href="index_scorm.html"/><file href="scorm_api.js"/>';
+            } else {
+                $href = 'index.php?page=module&amp;id=' . urlencode((string)$modId);
+                $filesXml = '<file href="index.php"/>';
+            }
             $itemsXml[] = '      <item identifier="ITEM_MOD_' . $safeId . '" identifierref="RES_MOD_' . $safeId . '"><title>' . $modTitle . '</title></item>';
-            $resourcesXml[] = '    <resource identifier="RES_MOD_' . $safeId . '" type="webcontent" adlcp:scormtype="sco" href="' . $href . '"><file href="index.php"/></resource>';
+            $resourcesXml[] = '    <resource identifier="RES_MOD_' . $safeId . '" type="webcontent" adlcp:scormtype="sco" href="' . $href . '">' . $filesXml . '</resource>';
         }
 
-        // 3. Ateliers pratiques
-        foreach ($course['labs'] ?? [] as $labId => $lab) {
-            $safeId = preg_replace('/[^a-zA-Z0-9_\-]/', '_', (string)$labId);
-            $labTitle = htmlspecialchars(($lab['badge_code'] ?? 'LAB') . ' — ' . ($lab['title'] ?? $labId), ENT_XML1 | ENT_QUOTES, 'UTF-8');
-            $href = 'index.php?page=lab&amp;id=' . urlencode((string)$labId);
-            $itemsXml[] = '      <item identifier="ITEM_LAB_' . $safeId . '" identifierref="RES_LAB_' . $safeId . '"><title>' . $labTitle . '</title></item>';
-            $resourcesXml[] = '    <resource identifier="RES_LAB_' . $safeId . '" type="webcontent" adlcp:scormtype="sco" href="' . $href . '"><file href="index.php"/></resource>';
-        }
+        if (!$standalonePackage) {
+            // 3. Hands-on labs
+            foreach ($course['labs'] ?? [] as $labId => $lab) {
+                $safeId = preg_replace('/[^a-zA-Z0-9_\-]/', '_', (string)$labId);
+                $labTitle = htmlspecialchars(($lab['badge_code'] ?? 'LAB') . ' — ' . ($lab['title'] ?? $labId), ENT_XML1 | ENT_QUOTES, 'UTF-8');
+                $href = 'index.php?page=lab&amp;id=' . urlencode((string)$labId);
+                $itemsXml[] = '      <item identifier="ITEM_LAB_' . $safeId . '" identifierref="RES_LAB_' . $safeId . '"><title>' . $labTitle . '</title></item>';
+                $resourcesXml[] = '    <resource identifier="RES_LAB_' . $safeId . '" type="webcontent" adlcp:scormtype="sco" href="' . $href . '"><file href="index.php"/></resource>';
+            }
 
-        // 4. Examen Final Sommatif
-        $itemsXml[] = '      <item identifier="ITEM_FINAL_EXAM" identifierref="RES_FINAL_EXAM"><title>99 — Examen Final de Certification PostgreSQL 18 (Qualiopi Indicateur 11)</title></item>';
-        $resourcesXml[] = '    <resource identifier="RES_FINAL_EXAM" type="webcontent" adlcp:scormtype="sco" href="index.php?page=exam"><file href="index.php"/></resource>';
+            // 4. Final summative certification exam
+            $itemsXml[] = '      <item identifier="ITEM_FINAL_EXAM" identifierref="RES_FINAL_EXAM"><title>99 — Examen Final de Certification PostgreSQL 18 (Qualiopi Indicateur 11)</title></item>';
+            $resourcesXml[] = '    <resource identifier="RES_FINAL_EXAM" type="webcontent" adlcp:scormtype="sco" href="index.php?page=exam"><file href="index.php"/></resource>';
+        }
 
         $itemsStr = implode("\n", $itemsXml);
         $resourcesStr = implode("\n", $resourcesXml);
