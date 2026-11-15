@@ -53,7 +53,7 @@ $distinctModules = array_values($distinctModules);
     <div class="lms-card" style="margin-bottom: 1.5rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
             <h2 style="font-size: 1.25rem; margin: 0;">📖 Glossaire Technique PostgreSQL 18 (<?= count($glossary) ?> définitions)</h2>
-            <input type="search" id="glossary-filter-input" class="form-control" style="max-width: 320px;" placeholder="Filtrer un terme (ex: MVCC, HOT, AIO, WAL)..." value="<?= Security::e($filterQuery) ?>"/>
+            <input type="search" id="glossary-filter-input" class="form-control search-inline-input" aria-label="Filtrer les termes du glossaire" placeholder="Filtrer un terme (ex: MVCC, HOT, AIO, WAL)..." value="<?= Security::e($filterQuery) ?>"/>
         </div>
 
         <div class="card-grid" id="glossary-cards-grid">
@@ -74,37 +74,19 @@ $distinctModules = array_values($distinctModules);
             <?php endforeach; ?>
         </div>
     </div>
-    <script>
-    (function () {
-        var input = document.getElementById('glossary-filter-input');
-        var cards = document.querySelectorAll('.glossary-item-card');
-        function applyFilter() {
-            if (!input) return;
-            var q = input.value.trim().toLowerCase();
-            cards.forEach(function (c) {
-                var hay = (c.getAttribute('data-searchable') || '').toLowerCase();
-                c.style.display = (q === '' || hay.indexOf(q) !== -1) ? '' : 'none';
-            });
-        }
-        if (input) {
-            input.addEventListener('input', applyFilter);
-            if (input.value) applyFilter();
-        }
-    })();
-    </script>
 <?php else: ?>
-    <!-- BARRE DE FILTRES & MODE FOCUS SRS -->
+    <!-- Filter toolbar & SRS Focus Mode -->
     <div class="lms-card" style="margin-bottom: 1.25rem; padding: 1rem 1.25rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
             <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; flex: 1;">
-                <select id="fc-filter-module" class="form-control" style="max-width: 190px;">
+                <select id="fc-filter-module" class="form-control" style="max-width: 190px;" aria-label="Filtrer par module">
                     <option value="">Tous les modules</option>
                     <?php foreach ($distinctModules as $modCode): ?>
                         <option value="<?= Security::e($modCode) ?>">Module <?= Security::e($modCode) ?></option>
                     <?php endforeach; ?>
                 </select>
 
-                <select id="fc-filter-level" class="form-control" style="max-width: 220px;">
+                <select id="fc-filter-level" class="form-control" style="max-width: 220px;" aria-label="Filtrer par niveau SRS">
                     <option value="">Tous les niveaux</option>
                     <option value="1">🔴 À revoir (1)</option>
                     <option value="2">🟡 En acquisition (2)</option>
@@ -112,7 +94,7 @@ $distinctModules = array_values($distinctModules);
                     <option value="0">⚪ Non évalué (0)</option>
                 </select>
 
-                <input type="search" id="fc-filter-search" class="form-control" style="max-width: 260px;" placeholder="Rechercher dans les flashcards..." value="<?= Security::e($filterQuery) ?>"/>
+                <input type="search" id="fc-filter-search" class="form-control" style="max-width: 260px;" aria-label="Rechercher dans les flashcards" placeholder="Rechercher dans les flashcards..." value="<?= Security::e($filterQuery) ?>"/>
             </div>
 
             <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
@@ -190,154 +172,4 @@ $distinctModules = array_values($distinctModules);
             </article>
         <?php endforeach; ?>
     </div>
-
-    <script>
-    (function () {
-        var modSelect = document.getElementById('fc-filter-module');
-        var lvlSelect = document.getElementById('fc-filter-level');
-        var searchInput = document.getElementById('fc-filter-search');
-        var focusBtn = document.getElementById('btn-fc-focus-toggle');
-        var focusControls = document.getElementById('fc-focus-controls');
-        var focusPos = document.getElementById('fc-focus-position');
-        var counterEl = document.getElementById('fc-visible-counter');
-        var prevBtn = document.getElementById('btn-fc-prev');
-        var nextBtn = document.getElementById('btn-fc-next');
-        var flipBtn = document.getElementById('btn-fc-flip');
-        var allCards = Array.prototype.slice.call(document.querySelectorAll('.flashcard-box'));
-
-        var isFocusMode = false;
-        var focusIndex = 0;
-        var filteredCards = allCards.slice();
-
-        function applyFlashcardFilters() {
-            var mVal = modSelect ? modSelect.value : '';
-            var lVal = lvlSelect ? lvlSelect.value : '';
-            var qVal = searchInput ? searchInput.value.trim().toLowerCase() : '';
-
-            filteredCards = allCards.filter(function (card) {
-                var cMod = card.getAttribute('data-module') || '';
-                var cLvl = card.getAttribute('data-level') || '0';
-                var cHay = (card.getAttribute('data-searchable') || '').toLowerCase();
-                if (mVal !== '' && cMod !== mVal) return false;
-                if (lVal !== '' && cLvl !== lVal) return false;
-                if (qVal !== '' && cHay.indexOf(qVal) === -1) return false;
-                return true;
-            });
-
-            if (focusIndex >= filteredCards.length) {
-                focusIndex = 0;
-            }
-            renderCards();
-        }
-
-        function renderCards() {
-            if (counterEl) {
-                counterEl.textContent = filteredCards.length + ' carte(s) affichée(s)';
-            }
-            allCards.forEach(function (c) { c.style.display = 'none'; });
-
-            var emptyEl = document.getElementById('fc-empty-state');
-            if (emptyEl) {
-                emptyEl.style.display = filteredCards.length === 0 ? 'block' : 'none';
-            }
-
-            if (!isFocusMode) {
-                filteredCards.forEach(function (c) { c.style.display = ''; });
-                if (focusControls) focusControls.style.display = 'none';
-            } else {
-                if (focusControls) focusControls.style.display = 'flex';
-                if (filteredCards.length > 0) {
-                    var activeCard = filteredCards[focusIndex] || filteredCards[0];
-                    activeCard.style.display = '';
-                    if (focusPos) {
-                        focusPos.textContent = 'Carte ' + (focusIndex + 1) + ' / ' + filteredCards.length;
-                    }
-                } else if (focusPos) {
-                    focusPos.textContent = '0 / 0 carte';
-                }
-            }
-        }
-
-        var resetBtn = document.getElementById('btn-fc-reset');
-        if (resetBtn) {
-            resetBtn.addEventListener('click', function () {
-                if (!confirm('Voulez-vous vraiment réinitialiser toutes vos auto-évaluations SRS pour ce cours ?')) {
-                    return;
-                }
-                var courseSlug = <?= json_encode($currentCourseSlug) ?>;
-                var csrf = window.__CSRF_TOKEN__ || (document.querySelector('meta[name="csrf-token"]') ? document.querySelector('meta[name="csrf-token"]').getAttribute('content') : '');
-                resetBtn.disabled = true;
-                fetch('index.php?action=api_reset_flashcards&course=' + encodeURIComponent(courseSlug), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
-                    body: JSON.stringify({ csrf_token: csrf })
-                }).then(function (r) { return r.json(); }).then(function (data) {
-                    resetBtn.disabled = false;
-                    if (data.success) {
-                        window.location.reload();
-                    } else {
-                        alert(data.message || 'Erreur lors de la réinitialisation.');
-                    }
-                }).catch(function () {
-                    resetBtn.disabled = false;
-                    window.location.reload();
-                });
-            });
-        }
-
-        if (modSelect) modSelect.addEventListener('change', applyFlashcardFilters);
-        if (lvlSelect) lvlSelect.addEventListener('change', applyFlashcardFilters);
-        if (searchInput) searchInput.addEventListener('input', applyFlashcardFilters);
-
-        if (focusBtn) {
-            focusBtn.addEventListener('click', function () {
-                isFocusMode = !isFocusMode;
-                focusIndex = 0;
-                focusBtn.classList.toggle('btn-primary', isFocusMode);
-                focusBtn.classList.toggle('btn-outline-cyan', !isFocusMode);
-                focusBtn.textContent = isFocusMode ? '📋 Retourner à la Grille Complète' : '🎯 Mode Focus (Carte par Carte)';
-                renderCards();
-            });
-        }
-
-        if (prevBtn) {
-            prevBtn.addEventListener('click', function () {
-                if (filteredCards.length === 0) return;
-                focusIndex = (focusIndex - 1 + filteredCards.length) % filteredCards.length;
-                renderCards();
-            });
-        }
-
-        if (nextBtn) {
-            nextBtn.addEventListener('click', function () {
-                if (filteredCards.length === 0) return;
-                focusIndex = (focusIndex + 1) % filteredCards.length;
-                renderCards();
-            });
-        }
-
-        if (flipBtn) {
-            flipBtn.addEventListener('click', function () {
-                if (filteredCards.length === 0) return;
-                var activeCard = filteredCards[focusIndex];
-                if (!activeCard) return;
-                var det = activeCard.querySelector('details');
-                if (det) det.open = !det.open;
-            });
-        }
-
-        document.querySelectorAll('.btn-fc-rate').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                var card = btn.closest('.flashcard-box');
-                if (card && btn.getAttribute('data-level')) {
-                    card.setAttribute('data-level', btn.getAttribute('data-level'));
-                }
-            });
-        });
-
-        if (searchInput && searchInput.value) {
-            applyFlashcardFilters();
-        }
-    })();
-    </script>
 <?php endif; ?>

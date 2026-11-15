@@ -38,22 +38,26 @@ class CourseRepository
         return $this->getCourse($slug);
     }
 
-    public function clearCatalogCache(?string $slug = null): void
+    public function clearCatalogCache(?string $slug = null): int
     {
         self::$fingerprintCache = [];
+        $cleared = 0;
         if ($slug !== null) {
             unset($this->cache[$slug]);
             $cacheFile = $this->cacheDir . '/catalog_cache_' . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $slug) . '.json';
-            if (is_file($cacheFile)) {
-                @unlink($cacheFile);
+            if (is_file($cacheFile) && @unlink($cacheFile)) {
+                $cleared++;
             }
         } else {
             $this->cache = [];
             $files = glob($this->cacheDir . '/catalog_cache_*.json') ?: [];
             foreach ($files as $f) {
-                @unlink($f);
+                if (is_file($f) && @unlink($f)) {
+                    $cleared++;
+                }
             }
         }
+        return $cleared;
     }
 
     public function getCourse(string $slug): ?array
@@ -91,7 +95,7 @@ class CourseRepository
         $tools = $this->discoverTools($pgScriptsRoot);
         $examples = $this->discoverExamples($root);
 
-        // Lier chaque module à son Lab et sa Cheatsheet correspondants + propager le parcours au Lab
+        // Link each module to its matching lab and cheatsheet and propagate track metadata to the lab
         foreach ($modules as $modId => &$mod) {
             $code = $mod['code'];
             foreach ($labs as $labId => &$lab) {
@@ -124,7 +128,7 @@ class CourseRepository
         }
         unset($mod);
 
-        // Lier chaque Lab à sa Cheatsheet de Lab correspondante (RCA-154)
+        // Link each lab to its matching lab cheatsheet (RCA-154)
         foreach ($labs as $labId => &$lab) {
             $code = $lab['code'];
             foreach ($cheatsheets as $csId => $cs) {
@@ -188,7 +192,7 @@ class CourseRepository
             $parts[] = is_dir($d) ? (string)@filemtime($d) : '0';
         }
 
-        // FIX-04: Scanner les mtimes réels des fichiers sources Markdown (module_*.md, lab_*.md) pour invalidation automatique ultra-rapide
+        // FIX-04: Scan real modification times of Markdown source files (module_*.md, lab_*.md) for fast automatic cache invalidation
         $contentDirs = [
             $root . '/03_supports_de_cours',
             $root . '/04_ateliers_et_tp',
@@ -252,7 +256,7 @@ class CourseRepository
     }
 
     /**
-     * Recherche globale plein-texte rapide sur les modules, ateliers pratiques, mémos techniques, référentiels et glossaire PostgreSQL 18.
+     * Fast global full-text search across modules, hands-on labs, cheatsheets, reference docs, and glossary.
      */
     public function searchContent(string $courseSlug, string $query): array
     {
@@ -414,16 +418,16 @@ class CourseRepository
     }
 
     /**
-     * Extrait un fragment de texte autour de $bytePos sans jamais couper une séquence multi-octets UTF-8,
-     * même lorsque l'extension PHP mbstring n'est pas activée.
+     * Extracts a UTF-8 safe text snippet around $bytePos without splitting multi-byte characters,
+     * even when the mbstring PHP extension is unavailable.
      */
     private function extractUtf8SafeSnippet(string $raw, int $bytePos, int $beforeBytes = 60, int $lengthBytes = 180): string
     {
         $start = max(0, $bytePos - $beforeBytes);
         $slice = substr($raw, $start, $lengthBytes);
-        // Purger les octets de continuation UTF-8 orphelins en tête (0x80..0xBF)
+        // Strip leading orphaned UTF-8 continuation bytes (0x80..0xBF)
         $slice = (string)preg_replace('/^[\x80-\xBF]+/', '', $slice);
-        // Purger tout caractère UTF-8 multi-octets tronqué en fin de chaîne (max 4 octets)
+        // Strip any trailing truncated multi-byte UTF-8 sequence (max 4 bytes)
         $guard = 0;
         while ($slice !== '' && !preg_match('//u', $slice) && $guard < 4) {
             $slice = substr($slice, 0, -1);
@@ -459,7 +463,7 @@ class CourseRepository
             $trackTotal = 1;
 
             foreach ($tracks as $tKey => $tCfg) {
-                $filterList = $tCfg['module_Filter'] ?? [];
+                $filterList = $tCfg['module_filter'] ?? $tCfg['module_Filter'] ?? [];
                 $posIdx = array_search($code, $filterList, true);
                 if ($posIdx !== false) {
                     $trackId = (string)$tKey;

@@ -11,45 +11,50 @@ $selectedTrack = (string)($_GET['track'] ?? 'all');
 $tracks = $currentCourse['tracks'] ?? [];
 $allModules = $currentCourse['modules'] ?? [];
 $allLabs = $currentCourse['labs'] ?? [];
+$totalTracksCount = count($tracks);
+$totalModulesCount = count($allModules);
+$totalLabsCount = count($allLabs);
 
-// Indexer les modules par code ('01', '02', ..., 'sql_01') pour un affichage structuré par Parcours & Journée
+// Index modules by code ('01', '02', ..., 'sql_01') for structured track & phase rendering
 $modulesByCode = [];
 foreach ($allModules as $mId => $mObj) {
     $modulesByCode[$mObj['code']] = $mObj;
 }
 ?>
 
-<div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.35rem;">
-    <div style="min-width: 0; flex: 1;">
+<div class="d-flex justify-between items-end flex-wrap gap-1 mb-lg">
+    <div class="flex-1 min-w-0">
         <span class="badge-code">CATALOGUE STRUCTURÉ PAR PARCOURS & JOURNÉES • QUALIOPI</span>
-        <h1 style="font-size: 1.7rem; margin: 0.4rem 0 0.2rem;">
-            <?= $activeTab === 'labs' ? '🧪 Les 34 Ateliers Pratiques & Labs Docker' : '📚 Les 4 Parcours & 34 Modules de Formation' ?>
+        <h1 class="hero-title-lg mt-xs mb-xxs">
+            <?= $activeTab === 'labs'
+                ? '🧪 Les ' . $totalLabsCount . ' Ateliers Pratiques & Labs Docker'
+                : '📚 Les ' . $totalTracksCount . ' Parcours & ' . $totalModulesCount . ' Modules de Formation' ?>
         </h1>
-        <p style="color: var(--text-secondary); margin: 0; font-size: 0.9rem;">
+        <p class="hero-subtitle-sm">
             Chaque étape couple un <strong>Module de Cours</strong> (lisible en mode texte interactif ou en <strong>Diaporama 16:9</strong>) et un <strong>Atelier Pratique Docker</strong>, avec téléchargement direct en <code>PDF</code>, <code>Slides PDF</code>, <code>PPTX</code>, <code>MD</code>, <code>HTML</code> et <code>DOCX</code>.
         </p>
     </div>
 
-    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+    <div class="d-flex gap-sm flex-wrap">
         <a href="index.php?page=catalog&tab=modules&track=<?= urlencode($selectedTrack) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn <?= $activeTab !== 'labs' ? 'btn-primary' : 'btn-outline' ?>">
-            📚 Modules & Parcours (<?= count($allModules) ?>)
+            📚 Modules & Parcours (<?= $totalModulesCount ?>)
         </a>
         <a href="index.php?page=catalog&tab=labs&track=<?= urlencode($selectedTrack) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn <?= $activeTab === 'labs' ? 'btn-emerald' : 'btn-outline' ?>">
-            🧪 Ateliers & TP Docker (<?= count($allLabs) ?>)
+            🧪 Ateliers & TP Docker (<?= $totalLabsCount ?>)
         </a>
     </div>
 </div>
 
-<!-- SÉLECTEUR VISUEL DES 4 PARCOURS PÉDAGOGIQUES -->
+<!-- Track filter strip -->
 <div class="track-selector-strip">
     <a href="index.php?page=catalog&tab=<?= urlencode($activeTab) ?>&track=all&course=<?= urlencode($currentCourseSlug) ?>"
        class="track-filter-pill <?= $selectedTrack === 'all' ? 'active' : '' ?>">
         <span class="track-filter-num">Vue Globale</span>
-        <span class="track-filter-name">Les 4 Parcours Complets</span>
-        <span class="track-filter-count tabular-nums">34 étapes</span>
+        <span class="track-filter-name">Les <?= $totalTracksCount ?> Parcours Complets</span>
+        <span class="track-filter-count tabular-nums"><?= $activeTab === 'labs' ? $totalLabsCount : $totalModulesCount ?> étapes</span>
     </a>
     <?php foreach ($tracks as $tKey => $track):
-        $tCodes = $track['module_Filter'] ?? [];
+        $tCodes = $track['module_filter'] ?? $track['module_Filter'] ?? [];
         $tDone = 0;
         foreach ($tCodes as $c) {
             if (isset($modulesByCode[$c])) {
@@ -74,12 +79,12 @@ foreach ($allModules as $mId => $mObj) {
 </div>
 
 <?php if ($activeTab !== 'labs'): ?>
-    <!-- AFFICHAGE DES MODULES REGROUPÉS PAR PARCOURS ET PAR JOURNÉES / ÉTAPES -->
+    <!-- Modules grouped by track and learning phase -->
     <?php foreach ($tracks as $tKey => $track):
         if ($selectedTrack !== 'all' && $selectedTrack !== (string)$tKey) {
             continue;
         }
-        $tCodes = $track['module_Filter'] ?? [];
+        $tCodes = $track['module_filter'] ?? $track['module_Filter'] ?? [];
         $tTotal = count($tCodes);
         $tDone = 0;
         foreach ($tCodes as $c) {
@@ -230,7 +235,7 @@ foreach ($allModules as $mId => $mObj) {
     <?php endforeach; ?>
 
 <?php else: ?>
-    <!-- GRILLE DES 34 ATELIERS PRATIQUES (LABS DOCKER) FILTRABLE PAR PARCOURS -->
+    <!-- Practice labs grid filterable by track -->
     <div class="card-grid">
         <?php foreach ($allLabs as $labId => $lab):
             if ($selectedTrack !== 'all' && ($lab['track_id'] ?? '') !== $selectedTrack) {
@@ -242,8 +247,8 @@ foreach ($allModules as $mId => $mObj) {
                      data-searchable="<?= Security::e($lab['badge_code'] . ' ' . $lab['title'] . ' ' . $lab['bloom'] . ' ' . ($lab['track_title'] ?? '')) ?>">
                 <div>
                     <div class="card-top-meta">
-                        <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
-                            <span class="badge-code" style="background: rgba(16, 185, 129, 0.16); color: #34D399; border-color: rgba(16, 185, 129, 0.35);">
+                        <div class="d-flex items-center gap-xs flex-wrap">
+                            <span class="badge-code badge-emerald-soft">
                                 <?= Security::e($lab['badge_code']) ?>
                             </span>
                             <span class="badge-phase tabular-nums">
@@ -253,24 +258,24 @@ foreach ($allModules as $mId => $mObj) {
                         <?php if ($isLabDone): ?>
                             <span class="badge-completed">✔ Oracle Validé</span>
                         <?php else: ?>
-                            <span style="font-size: 0.75rem; color: var(--text-muted);">⏱ <?= Security::e($lab['duration']) ?></span>
+                            <span class="text-xs text-muted">⏱ <?= Security::e($lab['duration']) ?></span>
                         <?php endif; ?>
                     </div>
 
-                    <h3 style="font-size: 1.04rem; margin-bottom: 0.4rem;">
-                        <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&course=<?= urlencode($currentCourseSlug) ?>" style="color: var(--text-primary);">
+                    <h3 class="card-heading-sm">
+                        <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="link-primary">
                             <?= Security::e($lab['title']) ?>
                         </a>
                     </h3>
 
-                    <p style="font-size: 0.81rem; color: var(--text-secondary); margin-bottom: 0.85rem;">
+                    <p class="card-desc-sm">
                         <?= Security::e($lab['bloom']) ?>
                     </p>
                 </div>
 
                 <div>
-                    <div style="display: flex; gap: 0.45rem; flex-wrap: wrap;">
-                        <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald btn-sm" style="flex: 1;">
+                    <div class="d-flex gap-xs flex-wrap">
+                        <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald btn-sm flex-1">
                             🐳 Studio Lab & Console SQL
                         </a>
                         <?php if (!empty($lab['linked_module_id'])): ?>

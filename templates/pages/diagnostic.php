@@ -13,7 +13,7 @@ $showRetake = isset($_GET['retake']) && $_GET['retake'] === '1';
     <div style="flex: 1; min-width: 0;">
         <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.45rem;">
             <span class="badge-code">QUALIOPI INDICATEUR 8 • POSITIONNEMENT INITIAL</span>
-            <span class="badge-phase">15 Questions QCM • 5 Domaines DBA PostgreSQL 18</span>
+            <span class="badge-phase tabular-nums"><?= count($questions) ?> Questions QCM • 5 Domaines DBA</span>
         </div>
         <h1 style="font-size: 1.6rem; margin-bottom: 0.35rem;">🧭 Évaluation Diagnostique & Positionnement Pré-Formation</h1>
         <p style="color: var(--text-secondary); margin: 0; font-size: 0.9rem;">
@@ -30,7 +30,7 @@ $showRetake = isset($_GET['retake']) && $_GET['retake'] === '1';
 </div>
 
 <?php if ($existingDiag !== null && !$showRetake): ?>
-    <!-- RÉSULTAT DU DIAGNOSTIC ENREGISTRÉ -->
+    <!-- Saved diagnostic assessment result -->
     <div class="lms-card" style="margin-bottom: 1.75rem; border-color: var(--brand-cyan);">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.25rem;">
             <div>
@@ -49,7 +49,7 @@ $showRetake = isset($_GET['retake']) && $_GET['retake'] === '1';
             </div>
         </div>
 
-        <!-- Barres de compétences par domaine -->
+        <!-- Competency breakdown by DBA domain -->
         <h3 style="font-size: 1.05rem; margin-bottom: 0.75rem;">📊 Profil de Compétences par Domaine DBA</h3>
         <div class="card-grid" style="margin-bottom: 1.25rem;">
             <?php foreach (($existingDiag['domains'] ?? []) as $dKey => $dInfo): ?>
@@ -77,10 +77,10 @@ $showRetake = isset($_GET['retake']) && $_GET['retake'] === '1';
     </div>
 <?php endif; ?>
 
-<!-- FORMULAIRE DES 15 QUESTIONS DE POSITIONNEMENT -->
+<!-- Diagnostic positioning questionnaire form -->
 <form method="POST" action="index.php?page=diagnostic&action=submit_diagnostic&course=<?= urlencode($currentCourseSlug) ?>" class="lms-card">
     <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
-    <h2 style="font-size: 1.25rem; margin-bottom: 1rem;">📋 Questionnaire de Positionnement Technique (15 QCM)</h2>
+    <h2 style="font-size: 1.25rem; margin-bottom: 1rem;">📋 Questionnaire de Positionnement Technique (<?= count($questions) ?> QCM)</h2>
 
     <?php foreach ($questions as $idx => $q):
         $qid = $q['id'];

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * LightPath Training Portal — Test de Défi Adversarial (Challenger 2 - Milestones 3 & 4)
- * Vérification empirique approfondie :
- *  1. Tenue responsive stricte (375x812, 768x1024, 1440x900) sur toutes les vues critiques
- *     (diagnostic formulaire & résultat, catalogue par parcours modules & labs, dashboard, reader, slides, lab enonce & corrige)
- *  2. Audit fin de tout élément débordant (bounding box right > innerWidth)
- *  3. Parcours complet Diagnostic Qualiopi -> Recommandation -> Navigation Catalogue avec filtre de parcours
- *     (Cas Bas <45%, Moyen 45-74%, Haut >=75%, et Retake)
+ * LightPath Training Portal — Adversarial Challenge E2E Test (Challenger 2 - Milestones 3 & 4)
+ * Empirical verification:
+ *  1. Strict responsive layout (375x812, 768x1024, 1440x900) across all critical views
+ *     (diagnostic form & result, track-filtered modules & labs catalog, dashboard, reader, slides, lab prompt & solutions)
+ *  2. Overflow bounding-box audit (right > innerWidth)
+ *  3. Full Qualiopi Diagnostic -> Track Recommendation -> Catalog Filter journey
+ *     (Low <45%, Intermediate 45-74%, High >=75%, and Retake)
  */
 
 import { spawn } from 'node:child_process';
@@ -193,7 +193,7 @@ async function runAdversarialCampaign() {
         await waitForHttpReady(`${baseUrl}/index.php?page=login`);
         await mcp.start();
 
-        // 1. Authentification Apprenant
+        // 1. Student Authentication
         console.log('--- Phase 1 : Authentification Session Stagiaire ---');
         await mcp.callTool('browser_navigate', { url: `${baseUrl}/index.php?page=login` });
         await mcp.evaluateJson(`() => {
@@ -210,7 +210,7 @@ async function runAdversarialCampaign() {
         })`);
         assert(authCheck.logged, 'Authentification réussie, session active');
 
-        // 2. Audit Responsive Initial : Formulaire Diagnostic (15 QCM) & Vues Critiques sur 3 Viewports
+        // 2. Initial Responsive Audit: Diagnostic Form (15 MCQs) & Critical Views Across 3 Viewports
         console.log('\n--- Phase 2 : Audit Responsive Formulaire Diagnostic (15 QCM) & Vues Critiques ---');
         const viewports = [
             { name: 'Mobile', width: 375, height: 812 },
@@ -244,7 +244,7 @@ async function runAdversarialCampaign() {
                     const scrollW = document.documentElement.scrollWidth;
                     const culprits = [];
                     
-                    // Fonction vérifiant si un élément est contenu dans un conteneur défilable légitime (pre, .lms-table-wrap)
+                    // Helper checking whether an element is inside a legitimate scrollable container (pre, .lms-table-wrap)
                     const isInsideScrollContainer = (el) => {
                         let cur = el.parentElement;
                         while (cur && cur !== document.body) {
@@ -286,10 +286,10 @@ async function runAdversarialCampaign() {
             }
         }
 
-        // 3. Stress-Test Adversarial : Parcours Diagnostic -> Recommandation -> Catalogue Filtré
+        // 3. Adversarial Stress-Test: Diagnostic Flow -> Recommendation -> Filtered Catalog
         console.log('\n--- Phase 3 : Stress-Test Adversarial du Flux Diagnostic Qualiopi ---');
 
-        // Récupérer les identifiants et réponses des 15 QCM
+        // Retrieve the identifiers and answers of all 15 MCQs
         await mcp.callTool('browser_navigate', { url: `${baseUrl}/index.php?page=diagnostic` });
         const diagMeta = await mcp.evaluateJson(`() => {
             const boxes = Array.from(document.querySelectorAll('.quiz-question-box'));
@@ -309,7 +309,7 @@ async function runAdversarialCampaign() {
         }`);
         assert(diagMeta.questions.length === 15, `15 questions QCM détectées sur le formulaire (CSRF présent: ${Boolean(diagMeta.csrf)})`);
 
-        // Test Scénario A : Score Faible (< 45%) -> Recommandation Parcours 4 (fondamentaux-sql)
+        // Test Scenario A: Low Score (< 45%) -> Track 4 Recommendation (fondamentaux-sql)
         console.log('\n--- Scénario A : Diagnostic Score Faible (<45%) -> Recommandation Parcours 4 ---');
         await mcp.evaluateJson(`async () => {
             const form = document.querySelector('form.lms-card');
@@ -341,7 +341,7 @@ async function runAdversarialCampaign() {
         assert(resA.href.includes('track=fondamentaux-sql'), `Lien CTA cible bien 'track=fondamentaux-sql' (href: ${resA.href})`);
         assert(resA.title.includes('Parcours 4'), `Titre de parcours recommandé conforme : "${resA.title}"`);
 
-        // Vérification responsive du résultat de diagnostic (carte scores + barres compétences)
+        // Responsive check of the diagnostic result view (score card + skill bars)
         for (const vp of viewports) {
             await mcp.callTool('browser_resize', { width: vp.width, height: vp.height });
             const cardOverflow = await mcp.evaluateJson(`() => {
@@ -357,7 +357,7 @@ async function runAdversarialCampaign() {
             );
         }
 
-        // Clic sur le CTA et vérification de la vue Catalogue résultante
+        // Click the CTA and verify the resulting Catalog view
         console.log('\n--- Vérification Clic CTA -> Catalogue Parcours 4 (fondamentaux-sql) ---');
         await mcp.callTool('browser_navigate', { url: `${baseUrl}/${resA.href}` });
         const catalogA = await mcp.evaluateJson(`() => {
@@ -377,7 +377,7 @@ async function runAdversarialCampaign() {
         assert(catalogA.cardsCount === 5, `Exactement 5 modules affichés pour Parcours 4 (trouvés: ${catalogA.cardsCount})`);
         assert(catalogA.bannerText.includes('Parcours 4'), `Bannière de parcours affichée pour Parcours 4`);
 
-        // Test Scénario B : Retake -> Score Intermédiaire (8/15 = 53%) -> Recommandation Parcours 1 (cursus-complet)
+        // Test Scenario B: Retake -> Intermediate Score (8/15 = 53%) -> Track 1 Recommendation (cursus-complet)
         console.log('\n--- Scénario B : Retake & Score Intermédiaire (53%) -> Recommandation Parcours 1 ---');
         await mcp.callTool('browser_navigate', { url: `${baseUrl}/index.php?page=diagnostic&retake=1` });
         const retakeFormCheck = await mcp.evaluateJson(`() => {
@@ -387,7 +387,7 @@ async function runAdversarialCampaign() {
         }`);
         assert(retakeFormCheck.hasForm && retakeFormCheck.inputsCount > 0, 'Mode Retake actif : formulaire complet affiché');
 
-        // Soumettre 8 bonnes réponses et 7 mauvaises
+        // Submit 8 correct answers and 7 incorrect answers
         await mcp.evaluateJson(`() => {
             const answers = {
                 'diag_01': 'B', 'diag_02': 'B', 'diag_03': 'A', 'diag_04': 'A',
@@ -415,7 +415,7 @@ async function runAdversarialCampaign() {
         assert(resB.href.includes('track=cursus-complet'), `Lien CTA cible bien 'track=cursus-complet' (href: ${resB.href})`);
         assert(resB.title.includes('Parcours 1'), `Titre de parcours recommandé conforme : "${resB.title}"`);
 
-        // Navigation CTA vers Catalogue Parcours 1
+        // CTA navigation to Track 1 Catalog
         await mcp.callTool('browser_navigate', { url: `${baseUrl}/${resB.href}` });
         const catalogB = await mcp.evaluateJson(`() => {
             const cards = document.querySelectorAll('.card-grid .lms-card');
@@ -428,7 +428,7 @@ async function runAdversarialCampaign() {
         assert(catalogB.pillText.includes('Parcours 1') || catalogB.pillText.includes('Cursus'), `Pillule de filtre Parcours 1 active ("${catalogB.pillText}")`);
         assert(catalogB.cardsCount === 20, `Exactement 20 modules affichés pour Parcours 1 (trouvés: ${catalogB.cardsCount})`);
 
-        // Test Scénario C : Retake -> Score Avancé (15/15 = 100%) -> Recommandation Parcours 2 (performance-tuning)
+        // Test Scenario C: Retake -> Advanced Score (15/15 = 100%) -> Track 2 Recommendation (performance-tuning)
         console.log('\n--- Scénario C : Retake & Score Parfait (100%) -> Recommandation Parcours 2 ---');
         await mcp.callTool('browser_navigate', { url: `${baseUrl}/index.php?page=diagnostic&retake=1` });
         await mcp.evaluateJson(`() => {
@@ -458,7 +458,7 @@ async function runAdversarialCampaign() {
         assert(resC.href.includes('track=performance-tuning'), `Lien CTA cible bien 'track=performance-tuning' (href: ${resC.href})`);
         assert(resC.title.includes('Parcours 2'), `Titre de parcours recommandé conforme : "${resC.title}"`);
 
-        // Navigation CTA vers Catalogue Parcours 2
+        // CTA navigation to Track 2 Catalog
         await mcp.callTool('browser_navigate', { url: `${baseUrl}/${resC.href}` });
         const catalogC = await mcp.evaluateJson(`() => {
             const cards = document.querySelectorAll('.card-grid .lms-card');

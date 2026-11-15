@@ -12,18 +12,18 @@ return [
     'version' => '2.0.0',
     'qualiopi_ref' => 'LP-LMS-QUALIOPI-2026',
 
-    // Driver de stockage : 'json' (Flat-File Atomique Zéro-Config par défaut) ou 'pdo' (PostgreSQL / MySQL / SQLite)
+    // Storage backend: 'json' (zero-config atomic flat-file default) or 'pdo' (PostgreSQL / MySQL / SQLite)
     'storage_driver' => getenv('LMS_STORAGE_DRIVER') ?: 'json',
     'storage_path' => getenv('LMS_DATA_DIR') ?: (__DIR__ . '/../storage/data'),
 
-    // Configuration PDO optionnelle pour hébergement web en production
+    // Optional PDO configuration for production web hosting
     'pdo' => [
         'dsn' => getenv('LMS_PDO_DSN') ?: 'pgsql:host=localhost;port=5432;dbname=lightpath_lms',
         'username' => getenv('LMS_PDO_USER') ?: 'postgres',
         'password' => getenv('LMS_PDO_PASS') ?: '',
     ],
 
-    // Configuration Docker Multi-Utilisateurs
+    // Multi-user Docker lab configuration
     'docker' => [
         'enabled' => true,
         'wsl_distro' => getenv('LMS_WSL_DISTRO') ?: 'Ubuntu-24.04',

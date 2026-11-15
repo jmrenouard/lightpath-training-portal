@@ -152,25 +152,8 @@ $isExamLockedForStudent = !empty($classroomState['lock_exam']) && !$auth->isStaf
         </div>
     <?php endforeach; ?>
 
-    <button type="submit" class="btn btn-emerald" style="width: 100%; padding: 0.9rem; font-size: 1rem;">
+    <button type="submit" class="btn btn-emerald w-100 btn-submit-lg">
         🏆 Soumettre mon Examen Final de Certification PostgreSQL 18
     </button>
 </form>
-
-<script>
-(function () {
-    var startTs = Date.now();
-    var display = document.getElementById('exam-timer-display');
-    var input = document.getElementById('exam-duration-seconds');
-    setInterval(function () {
-        var elapsed = Math.floor((Date.now() - startTs) / 1000);
-        if (input) input.value = String(elapsed);
-        if (display) {
-            var m = String(Math.floor(elapsed / 60)).padStart(2, '0');
-            var s = String(elapsed % 60).padStart(2, '0');
-            display.textContent = m + ':' + s;
-        }
-    }, 1000);
-})();
-</script>
 <?php endif; ?>

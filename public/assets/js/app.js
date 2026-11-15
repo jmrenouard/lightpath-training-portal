@@ -1,6 +1,6 @@
 /**
  * LightPath Academy LMS — Client-Side Interactive Engine (Vanilla ES2022, Zero CDN)
- * Inclut : ScrollSpy temps réel, Lecteur Diaporama 16:9, Lightbox Schémas, Mermaid local & Console SQL Docker
+ * Includes: real-time ScrollSpy, 16:9 Slide Deck player, Diagram Lightbox, local Mermaid & Docker SQL console.
  */
 document.addEventListener('DOMContentLoaded', () => {
     const csrfMeta = document.querySelector('meta[name="csrf-token"]');
@@ -11,8 +11,33 @@ document.addEventListener('DOMContentLoaded', () => {
         || (document.getElementById('course-switcher') ? document.getElementById('course-switcher').value : '')
         || 'postgresql-18';
 
+    const buildApiUrl = (action, courseSlug = currentCourse) =>
+        `index.php?action=${encodeURIComponent(action)}&course=${encodeURIComponent(courseSlug || currentCourse)}`;
+
+    const postApiJson = (action, payload = {}, courseSlug = currentCourse) => fetch(buildApiUrl(action, courseSlug), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({ csrf_token: csrfToken, ...payload })
+    });
+
+    // Demo account quick-login buttons (delegated cleanly from login.php)
+    const demoEmailInput = document.getElementById('login-email');
+    const demoPassInput = document.getElementById('login-password');
+    const demoLoginForm = document.getElementById('login-form');
+    document.querySelectorAll('[data-demo-email]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            if (demoEmailInput && demoPassInput && demoLoginForm) {
+                demoEmailInput.value = btn.getAttribute('data-demo-email') || '';
+                demoPassInput.value = btn.getAttribute('data-demo-pass') || '';
+                demoLoginForm.submit();
+            } else {
+                window.location.href = 'index.php?page=login&tab=login';
+            }
+        });
+    });
+
     // ------------------------------------------------------------------------
-    // 1. Bascule Thème Sombre / Clair & Logos Adaptatifs (Dark / Light)
+    // 1. Dark / Light Theme Toggle & Adaptive Logos
     // ------------------------------------------------------------------------
     const themeBtn = document.getElementById('btn-toggle-theme');
     const syncThemeLogos = () => {
@@ -42,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ------------------------------------------------------------------------
-    // 1b. Filtre Rapide & Centrage du Module Actif dans la Barre Latérale Gauche
+    // 1b. Quick Sidebar Module Filter & Auto-Centering of Active Module
     // ------------------------------------------------------------------------
     const sidebarFilterInput = document.getElementById('sidebar-module-filter');
     if (sidebarFilterInput) {
@@ -85,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ------------------------------------------------------------------------
-    // 2. Chargement Paresseux (Lazy) de Mermaid Vectoriel Local (uniquement si requis)
+    // 2. Lazy Loading of Local Vector Mermaid Renderer (only when required)
     // ------------------------------------------------------------------------
     if (document.querySelectorAll('.mermaid').length > 0) {
         const initMermaid = () => {
@@ -113,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ------------------------------------------------------------------------
-    // 3. Lightbox Plein Écran pour Diagrammes Mermaid & Infographies Studio
+    // 3. Full-Screen Lightbox for Mermaid Diagrams & Studio Infographics
     // ------------------------------------------------------------------------
     const lightbox = document.getElementById('diagram-lightbox');
     const lightboxImg = document.getElementById('diagram-lightbox-img');
@@ -171,7 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ------------------------------------------------------------------------
-    // 4. ScrollSpy Temps Réel du Sommaire & Barre de Progression de Lecture
+    // 4. Real-Time Table of Contents ScrollSpy & Reading Progress Bar
     // ------------------------------------------------------------------------
     const articleEl = document.getElementById('reader-article-content');
     const tocNav = document.getElementById('toc-scrollspy-nav');
@@ -179,7 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const tocReadBar = document.getElementById('toc-read-bar');
     const tocReadPct = document.getElementById('toc-read-pct');
 
-    // Centrer automatiquement l'étape courante dans le Stepper de Parcours (au chargement et à l'ouverture du <details>)
+    // Auto-center active step inside the track stepper on load and <details> toggle
     const currentStepperItem = document.querySelector('.curriculum-stepper-list .stepper-item.is-current');
     if (currentStepperItem) {
         const stepperContainer = currentStepperItem.closest('.curriculum-stepper-list');
@@ -257,7 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ------------------------------------------------------------------------
-    // 4b. Réduction / Extension des Barres Verticales Gauche & Droite (RCA-LMS-14)
+    // 4b. Collapsible Left & Right Vertical Sidebars
     // ------------------------------------------------------------------------
     const btnToggleLeft = document.getElementById('btn-toggle-left-sidebar');
     const btnCollapseLeftInline = document.getElementById('btn-collapse-left-inline');
@@ -287,7 +312,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const savedLeftCollapsed = localStorage.getItem('lp_lms_left_sidebar') === 'collapsed';
+    const savedLeftPref = localStorage.getItem('lp_lms_left_sidebar');
+    const savedLeftCollapsed = savedLeftPref !== null ? (savedLeftPref === 'collapsed') : (window.innerWidth <= 1024);
     const savedRightCollapsed = localStorage.getItem('lp_lms_right_sidebar') === 'collapsed';
     applyLeftSidebarState(savedLeftCollapsed);
     applyRightSidebarState(savedRightCollapsed);
@@ -317,7 +343,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.addEventListener('click', toggleRightSidebar);
     });
 
-    // Raccourcis clavier Alt+G (barre gauche) et Alt+D (barre droite)
+    // Keyboard shortcuts Alt+G (left sidebar) and Alt+D (right sidebar)
     document.addEventListener('keydown', (e) => {
         if (e.altKey && !e.ctrlKey && !e.metaKey) {
             const k = e.key.toLowerCase();
@@ -332,7 +358,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ------------------------------------------------------------------------
-    // 4c. Bouton Afficher / Masquer les Solutions dans les Ateliers (RCA-LMS-15)
+    // 4c. Show / Hide Solutions Toggle in Practice Labs
     // ------------------------------------------------------------------------
     const btnToggleLabSolutions = document.getElementById('btn-toggle-lab-solutions');
     if (btnToggleLabSolutions) {
@@ -340,7 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const article = document.getElementById('reader-article-content');
             const detailsList = article ? Array.from(article.querySelectorAll('details.lms-details')) : [];
             if (detailsList.length === 0) {
-                // Si aucun bloc repliable n'est présent dans l'énoncé courant, basculer vers l'onglet Corrigé Complet
+                // If no collapsible solution block exists in the current statement, switch to Solution tab
                 const corrigeTab = document.querySelector('.view-mode-tab[href*="mode=corrige"]');
                 if (corrigeTab) {
                     window.location.href = corrigeTab.getAttribute('href');
@@ -358,7 +384,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ------------------------------------------------------------------------
-    // 5. Moteur Diaporama Interactif 16:9 (Slide Deck Player — RCA-LMS-11 & 12)
+    // 5. Interactive 16:9 Slide Deck Player Engine
     // ------------------------------------------------------------------------
     const slideDeckWrapper = document.getElementById('lms-slide-deck-wrapper');
     if (slideDeckWrapper) {
@@ -441,7 +467,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (totalSlides === 0) return;
             currentSlide = Math.max(0, Math.min(totalSlides - 1, index));
 
-            // Charger immédiatement la diapositive courante et pré-charger la suivante/précédente
+            // Immediately load current slide and preload adjacent slides
             ensureSlideImageLoaded(currentSlide);
             ensureSlideImageLoaded(currentSlide + 1);
             ensureSlideImageLoaded(currentSlide - 1);
@@ -527,7 +553,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btnEnginePdf.addEventListener('click', () => switchSlideEngine('pdf'));
         }
 
-        // Interaction Quiz à l'intérieur des slides
+        // Quiz interaction inside slide deck
         slideDeckWrapper.querySelectorAll('.slide-quiz-opt').forEach((opt) => {
             opt.addEventListener('click', () => {
                 const card = opt.closest('.slide-quiz-card');
@@ -560,7 +586,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        // Navigation clavier (← / → / Espace / F)
+        // Keyboard navigation (Left / Right / Space / F)
         document.addEventListener('keydown', (e) => {
             const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
             if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
@@ -580,7 +606,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Support d'ancre #slide-N ou paramètre ?slide=N au chargement
+        // Anchor #slide-N or query parameter ?slide=N support on initial load
         let initialSlideIdx = 0;
         const urlParams = new URLSearchParams(window.location.search);
         const slideParam = parseInt(urlParams.get('slide') || '0', 10);
@@ -595,7 +621,7 @@ document.addEventListener('DOMContentLoaded', () => {
         goToSlide(initialSlideIdx);
     }
 
-    // Fermer la lightbox avec Échap hors mode slides
+    // Close lightbox with Escape outside slide deck mode
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && lightbox && !lightbox.hidden) {
             closeLightbox();
@@ -603,7 +629,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ------------------------------------------------------------------------
-    // 6. Raccourci Recherche Globale Ctrl+K
+    // 6. Global Quick Search Shortcut (Ctrl+K / Cmd+K)
     // ------------------------------------------------------------------------
     const searchInput = document.getElementById('global-search-input');
     document.addEventListener('keydown', (e) => {
@@ -633,7 +659,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ------------------------------------------------------------------------
-    // 7. Copie de code 1-clic & Exécution SQL directe dans le Lab
+    // 7. One-Click Code Copy & Direct SQL Lab Execution (UTF-8 safe Base64 decode)
     // ------------------------------------------------------------------------
     document.querySelectorAll('.btn-copy-code').forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -651,7 +677,14 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.btn-run-sql').forEach((btn) => {
         btn.addEventListener('click', () => {
             const b64 = btn.getAttribute('data-sql-b64') || '';
-            const sql = atob(b64);
+            let sql = '';
+            try {
+                const binary = atob(b64);
+                const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+                sql = new TextDecoder('utf-8').decode(bytes);
+            } catch (_) {
+                sql = atob(b64);
+            }
             const editor = document.getElementById('lab-sql-editor');
             if (editor) {
                 editor.value = sql;
@@ -663,7 +696,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ------------------------------------------------------------------------
-    // 8. Marquer un Module ou un Lab comme terminé
+    // 8. Toggle Module or Lab Completion State
     // ------------------------------------------------------------------------
     document.querySelectorAll('.btn-toggle-complete').forEach((btn) => {
         btn.addEventListener('click', async () => {
@@ -674,16 +707,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             btn.disabled = true;
             try {
-                const res = await fetch(`index.php?action=api_toggle_complete&course=${encodeURIComponent(course)}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-                    body: JSON.stringify({
-                        csrf_token: csrfToken,
-                        item_type: itemType,
-                        item_id: itemId,
-                        completed: !currentlyDone
-                    })
-                });
+                const res = await postApiJson('api_toggle_complete', {
+                    item_type: itemType,
+                    item_id: itemId,
+                    completed: !currentlyDone
+                }, course);
                 const data = await res.json();
                 if (data.success) {
                     window.location.reload();
@@ -695,27 +723,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ------------------------------------------------------------------------
-    // 9. Sauvegarde des notes personnelles de l'apprenant
+    // 9. Personal Study Notes Saving
     // ------------------------------------------------------------------------
     const saveNoteBtn = document.getElementById('btn-save-note');
     if (saveNoteBtn) {
         saveNoteBtn.addEventListener('click', async () => {
             const itemId = saveNoteBtn.getAttribute('data-id');
-            const course = saveNoteBtn.getAttribute('data-course') || 'postgresql-18';
+            const course = saveNoteBtn.getAttribute('data-course') || currentCourse;
             const noteArea = document.getElementById('user-personal-note');
             const statusSpan = document.getElementById('note-save-status');
             if (!noteArea) return;
 
             saveNoteBtn.disabled = true;
-            const res = await fetch(`index.php?action=api_save_note&course=${encodeURIComponent(course)}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-                body: JSON.stringify({
-                    csrf_token: csrfToken,
-                    item_id: itemId,
-                    note: noteArea.value
-                })
-            });
+            const res = await postApiJson('api_save_note', {
+                item_id: itemId,
+                note: noteArea.value
+            }, course);
             const data = await res.json();
             saveNoteBtn.disabled = false;
             if (data.success && statusSpan) {
@@ -725,14 +748,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ------------------------------------------------------------------------
-    // 10. Quiz QCM Interactif Auto-Corrigé
+    // 10. Interactive Self-Graded QCM Quiz
     // ------------------------------------------------------------------------
     const quizForm = document.getElementById('interactive-quiz-form');
     if (quizForm) {
         quizForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const moduleId = quizForm.getAttribute('data-module-id');
-            const course = quizForm.getAttribute('data-course') || 'postgresql-18';
+            const course = quizForm.getAttribute('data-course') || currentCourse;
             const questions = quizForm.querySelectorAll('.quiz-question-box');
             let score = 0;
             const total = questions.length;
@@ -759,17 +782,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            const res = await fetch(`index.php?action=api_submit_quiz&course=${encodeURIComponent(course)}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-                body: JSON.stringify({
-                    csrf_token: csrfToken,
-                    module_id: moduleId,
-                    score: score,
-                    total: total,
-                    answers: answers
-                })
-            });
+            const res = await postApiJson('api_submit_quiz', {
+                module_id: moduleId,
+                score: score,
+                total: total,
+                answers: answers
+            }, course);
             const data = await res.json();
             const summaryBanner = document.getElementById('quiz-result-banner');
             if (summaryBanner && data.quiz_result) {
@@ -784,11 +802,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ------------------------------------------------------------------------
-    // 11. Pilotage des Conteneurs Docker par Utilisateur (Start / Stop / Reset)
+    // 11. Per-User Docker Container Lifecycle Controls (Start / Stop / Reset / Restart)
     // ------------------------------------------------------------------------
     document.querySelectorAll('.btn-docker-cmd').forEach((btn) => {
         btn.addEventListener('click', async () => {
             const cmd = btn.getAttribute('data-cmd');
+            const confirmMsg = btn.getAttribute('data-confirm');
+            if ((confirmMsg || cmd === 'reset') && !window.confirm(confirmMsg || 'Réinitialiser le conteneur Docker à l\'état initial ?')) {
+                return;
+            }
             const targetUserId = btn.getAttribute('data-user-id') || '';
             const statusLog = document.getElementById('docker-action-feedback');
 
@@ -796,19 +818,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const origText = btn.innerText;
             btn.innerText = '⏳ Opération Docker en cours...';
             if (statusLog) {
+                statusLog.hidden = false;
                 statusLog.style.display = 'block';
                 statusLog.innerText = `⏳ Exécution de la commande Docker (${cmd}) en cours...`;
             }
 
             try {
-                const res = await fetch('index.php?action=api_docker_action', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-                    body: JSON.stringify({
-                        csrf_token: csrfToken,
-                        docker_cmd: cmd,
-                        target_user_id: targetUserId ? parseInt(targetUserId, 10) : undefined
-                    })
+                const res = await postApiJson('api_docker_action', {
+                    docker_cmd: cmd,
+                    target_user_id: targetUserId ? parseInt(targetUserId, 10) : undefined
                 });
                 const data = await res.json();
                 if (statusLog) {
@@ -823,7 +841,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ------------------------------------------------------------------------
-    // 12. Console SQL Interactive, Sélecteur de Base, Schéma, EXPLAIN & Oracles 1-Clic
+    // 12. Interactive SQL Console, Database Selector, Schema Explorer, EXPLAIN & Oracles
     // ------------------------------------------------------------------------
     const getSelectedLabDb = () => {
         const sel = document.getElementById('lab-sql-db-select');
@@ -882,14 +900,9 @@ document.addEventListener('DOMContentLoaded', () => {
             execSqlBtn.disabled = true;
             outBox.innerText = `⏳ Exécution SQL sur votre instance PostgreSQL 18 (base : ${db})...`;
 
-            const res = await fetch('index.php?action=api_run_sql', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-                body: JSON.stringify({
-                    csrf_token: csrfToken,
-                    sql: editor.value,
-                    database: db
-                })
+            const res = await postApiJson('api_run_sql', {
+                sql: editor.value,
+                database: db
             });
             const data = await res.json();
             execSqlBtn.disabled = false;
@@ -919,11 +932,7 @@ document.addEventListener('DOMContentLoaded', () => {
             inspectSchemaBtn.disabled = true;
             outBox.innerText = `⏳ Inspection du catalogue relationnel de la base ${db}...`;
             try {
-                const res = await fetch('index.php?action=api_schema_inspect', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-                    body: JSON.stringify({ csrf_token: csrfToken, database: db })
-                });
+                const res = await postApiJson('api_schema_inspect', { database: db });
                 const data = await res.json();
                 const tables = Array.isArray(data.tables) ? data.tables : [];
                 let lines = [`[EXPLORATEUR DE SCHÉMA — Base : ${data.database || db} | Source : ${data.source || 'catalog'} | ${tables.length} table(s)]`, ''];
@@ -942,7 +951,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (oracleBtn) {
         oracleBtn.addEventListener('click', async () => {
             const labId = oracleBtn.getAttribute('data-lab-id');
-            const course = oracleBtn.getAttribute('data-course') || 'postgresql-18';
+            const course = oracleBtn.getAttribute('data-course') || currentCourse;
             const outBox = document.getElementById('lab-sql-output');
             const db = getSelectedLabDb();
 
@@ -950,15 +959,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const origText = oracleBtn.innerText;
             oracleBtn.innerText = '⏳ Vérification Oracle en cours...';
 
-            const res = await fetch(`index.php?action=api_run_oracle&course=${encodeURIComponent(course)}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-                body: JSON.stringify({
-                    csrf_token: csrfToken,
-                    lab_id: labId,
-                    database: db
-                })
-            });
+            const res = await postApiJson('api_run_oracle', {
+                lab_id: labId,
+                database: db
+            }, course);
             const data = await res.json();
             oracleBtn.disabled = false;
             oracleBtn.innerText = origText;
@@ -978,7 +982,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (runSolutionBtn) {
         runSolutionBtn.addEventListener('click', async () => {
             const labId = runSolutionBtn.getAttribute('data-lab-id');
-            const course = runSolutionBtn.getAttribute('data-course') || 'postgresql-18';
+            const course = runSolutionBtn.getAttribute('data-course') || currentCourse;
             const outBox = document.getElementById('lab-sql-output');
             const db = getSelectedLabDb();
 
@@ -986,21 +990,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const origText = runSolutionBtn.innerText;
             runSolutionBtn.innerText = '⏳ Exécution du corrigé officiel...';
 
-            const res = await fetch(`index.php?action=api_run_lab_solution&course=${encodeURIComponent(course)}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-                body: JSON.stringify({
-                    csrf_token: csrfToken,
-                    lab_id: labId,
-                    database: db
-                })
-            });
+            const res = await postApiJson('api_run_lab_solution', {
+                lab_id: labId,
+                database: db
+            }, course);
             const data = await res.json();
             runSolutionBtn.disabled = false;
             runSolutionBtn.innerText = origText;
 
             if (outBox) {
-                outBox.innerText = `[TEST DU CORRIGÉ OFFICIEL — ${data.steps_executed || 0} bloc(s) SQL exécuté(s) | Base: ${data.database || db}]\n`
+                const stepsCount = data.steps_executed ?? data.steps_count ?? 0;
+                outBox.innerText = `[TEST DU CORRIGÉ OFFICIEL — ${stepsCount} bloc(s) SQL exécuté(s) | Base: ${data.database || db}]\n`
                     + `Statut Oracle : ${data.passed ? '✅ CORRIGÉ & ORACLE VALIDÉS (VALIDATION_OK)' : '⚠️ VÉRIFICATION PARTIELLE'}\n\n`
                     + (data.output || '');
             }
@@ -1011,7 +1011,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ------------------------------------------------------------------------
-    // 12b. Favoris (Bookmarks), Cartes Mémo SRS & Heartbeat Temps d'Étude Qualiopi
+    // 12b. Bookmarks, Flashcards SRS Rating & Study-Time Heartbeat
     // ------------------------------------------------------------------------
     document.querySelectorAll('.btn-toggle-bookmark').forEach((btn) => {
         btn.addEventListener('click', async () => {
@@ -1020,15 +1020,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const title = btn.getAttribute('data-title') || itemId;
             btn.disabled = true;
             try {
-                const res = await fetch('index.php?action=api_toggle_bookmark', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-                    body: JSON.stringify({
-                        csrf_token: csrfToken,
-                        item_type: itemType,
-                        item_id: itemId,
-                        title: title
-                    })
+                const res = await postApiJson('api_toggle_bookmark', {
+                    item_type: itemType,
+                    item_id: itemId,
+                    title: title
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -1046,18 +1041,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const level = parseInt(btn.getAttribute('data-level') || '2', 10);
             const cardBox = btn.closest('.flashcard-box');
             const badge = cardBox ? cardBox.querySelector('.fc-status-badge') : null;
-            const res = await fetch('index.php?action=api_flashcard_rate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-                body: JSON.stringify({
-                    csrf_token: csrfToken,
-                    card_id: cardId,
-                    level: level
-                })
+            const res = await postApiJson('api_flashcard_rate', {
+                card_id: cardId,
+                level: level
             });
             const data = await res.json();
             if (data.success && badge) {
                 badge.textContent = level === 3 ? '🟢 Maîtrisé' : (level === 2 ? '🟡 En acquisition' : '🔴 À revoir');
+            }
+            if (cardBox) {
+                cardBox.setAttribute('data-level', String(level));
             }
         });
     });
@@ -1065,11 +1058,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (csrfToken) {
         setInterval(() => {
             if (document.visibilityState === 'visible') {
-                fetch(`index.php?action=api_heartbeat&course=${encodeURIComponent(currentCourse)}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-                    body: JSON.stringify({ csrf_token: csrfToken, seconds: 60 })
-                })
+                postApiJson('api_heartbeat', { seconds: 60 })
                 .then((r) => r.json())
                 .then((data) => {
                     if (data && data.classroom_state) {
@@ -1085,8 +1074,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                     const at = (data.classroom_state.updated_at || '').substring(11, 16);
                                     bMeta.textContent = by ? `(${by}${at ? ' • ' + at : ''})` : '';
                                 }
+                                bCont.hidden = false;
                                 bCont.style.display = '';
                             } else {
+                                bCont.hidden = true;
                                 bCont.style.display = 'none';
                             }
                         }
@@ -1098,7 +1089,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ------------------------------------------------------------------------
-    // 13. Boutons Chaos Engineering DBA (Admin / Formateur)
+    // 13. DBA Chaos Engineering Triggers (Admin / Trainer)
     // ------------------------------------------------------------------------
     document.querySelectorAll('.btn-chaos-trigger').forEach((btn) => {
         btn.addEventListener('click', async () => {
@@ -1107,14 +1098,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const logBox = document.getElementById('chaos-feedback-box');
 
             btn.disabled = true;
-            const res = await fetch('index.php?action=api_chaos', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-                body: JSON.stringify({
-                    csrf_token: csrfToken,
-                    scenario: scenario,
-                    chaos_action: chaosAction
-                })
+            const res = await postApiJson('api_chaos', {
+                scenario: scenario,
+                chaos_action: chaosAction
             });
             const data = await res.json();
             btn.disabled = false;
@@ -1126,17 +1112,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ------------------------------------------------------------------------
-    // 14. Rafraîchissement Manuel du Statut Docker (uniquement sur clic explicite, zéro blocage navigation)
+    // 14. Manual Docker Status Refresh (explicit click only, zero navigation block)
     // ------------------------------------------------------------------------
     const refreshDockerBtn = document.getElementById('btn-refresh-docker');
     if (refreshDockerBtn && csrfToken) {
         refreshDockerBtn.addEventListener('click', () => {
             refreshDockerBtn.disabled = true;
-            fetch('index.php?action=api_docker_status', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-                body: JSON.stringify({ csrf_token: csrfToken })
-            })
+            postApiJson('api_docker_status', {})
                 .then((r) => r.json())
                 .then((data) => {
                     refreshDockerBtn.disabled = false;
@@ -1155,5 +1137,386 @@ document.addEventListener('DOMContentLoaded', () => {
                     refreshDockerBtn.disabled = false;
                 });
         });
+    }
+
+    // ------------------------------------------------------------------------
+    // 15. Course Switcher, Delegated Print/Auto-Submit/Confirm & Video Speed
+    // ------------------------------------------------------------------------
+    const courseSwitcher = document.getElementById('course-switcher');
+    if (courseSwitcher) {
+        courseSwitcher.addEventListener('change', () => {
+            window.location.href = `index.php?page=dashboard&course=${encodeURIComponent(courseSwitcher.value)}`;
+        });
+    }
+
+    document.addEventListener('click', (e) => {
+        const printBtn = e.target.closest('[data-action="print"]');
+        if (printBtn) {
+            e.preventDefault();
+            window.print();
+            return;
+        }
+        const confirmTrigger = e.target.closest('button[data-confirm], a[data-confirm]');
+        if (confirmTrigger && !confirmTrigger.classList.contains('btn-docker-cmd')) {
+            const msg = confirmTrigger.getAttribute('data-confirm');
+            if (msg && !window.confirm(msg)) {
+                e.preventDefault();
+            }
+        }
+    });
+
+    document.addEventListener('submit', (e) => {
+        const msg = e.target && e.target.getAttribute ? e.target.getAttribute('data-confirm') : null;
+        if (msg && !window.confirm(msg)) {
+            e.preventDefault();
+        }
+    });
+
+    document.addEventListener('change', (e) => {
+        const sel = e.target.closest('[data-auto-submit="change"]');
+        if (sel && sel.form) {
+            sel.form.submit();
+        }
+    });
+
+    document.querySelectorAll('.btn-video-speed').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const video = document.getElementById('lms-module-video');
+            const speed = parseFloat(btn.getAttribute('data-speed') || '1');
+            if (video && Number.isFinite(speed) && speed > 0) {
+                video.playbackRate = speed;
+            }
+        });
+    });
+
+    // ------------------------------------------------------------------------
+    // 16. Lab Dataset Seeder & Admin Docker Container Logs Viewer
+    // ------------------------------------------------------------------------
+    const seedLabBtn = document.getElementById('btn-seed-lab');
+    if (seedLabBtn) {
+        seedLabBtn.addEventListener('click', async () => {
+            const outBox = document.getElementById('lab-sql-output');
+            const dataset = seedLabBtn.getAttribute('data-dataset') || 'all';
+            const forceReset = seedLabBtn.getAttribute('data-force') !== '0';
+            seedLabBtn.disabled = true;
+            const origText = seedLabBtn.innerText;
+            seedLabBtn.innerText = '⏳ Amorçage en cours...';
+            try {
+                const res = await postApiJson('api_seed_lab', { dataset, force_reset: forceReset });
+                const data = await res.json();
+                const msg = (data.success ? '✅ ' : '⚠️ ') + (data.message || 'Amorçage terminé.')
+                    + (data.output ? `\n\n${data.output}` : '');
+                if (outBox) {
+                    outBox.innerText = msg;
+                } else {
+                    window.alert(msg);
+                }
+            } catch (_) {
+                if (outBox) outBox.innerText = '❌ Erreur réseau lors de l\'amorçage.';
+            } finally {
+                seedLabBtn.disabled = false;
+                seedLabBtn.innerText = origText;
+            }
+        });
+    }
+
+    const dockerLogsPanel = document.getElementById('docker-logs-panel');
+    const dockerLogsOutput = document.getElementById('docker-logs-output');
+    const dockerLogsTitle = document.getElementById('docker-logs-title');
+    const closeDockerLogsBtn = document.getElementById('btn-close-docker-logs');
+    if (closeDockerLogsBtn && dockerLogsPanel) {
+        closeDockerLogsBtn.addEventListener('click', () => {
+            dockerLogsPanel.hidden = true;
+        });
+    }
+    document.querySelectorAll('.btn-docker-logs, #btn-docker-logs').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const uid = parseInt(btn.getAttribute('data-user-id') || '0', 10);
+            const cname = btn.getAttribute('data-container-name') || btn.getAttribute('data-container') || '';
+            const labSqlOut = document.getElementById('lab-sql-output');
+            const bodyPayload = uid > 0
+                ? { target_user_id: uid, tail: 60 }
+                : { tail: 60 };
+            if (dockerLogsPanel) {
+                dockerLogsPanel.classList.remove('is-hidden');
+                dockerLogsPanel.hidden = false;
+            }
+            if (dockerLogsTitle) dockerLogsTitle.textContent = cname || `Conteneur #${uid}`;
+            if (dockerLogsOutput) {
+                dockerLogsOutput.textContent = '⏳ Chargement des logs PostgreSQL 18...';
+            } else if (labSqlOut) {
+                labSqlOut.textContent = '⏳ Chargement des logs PostgreSQL 18...';
+            }
+            btn.disabled = true;
+            try {
+                const res = await postApiJson('api_docker_logs', bodyPayload);
+                const data = await res.json();
+                const logText = data.logs || data.message || 'Aucun log disponible.';
+                if (dockerLogsOutput) {
+                    dockerLogsOutput.textContent = logText;
+                } else if (labSqlOut) {
+                    labSqlOut.textContent = logText;
+                }
+            } catch (_) {
+                const errText = '❌ Erreur réseau lors de la lecture des logs.';
+                if (dockerLogsOutput) {
+                    dockerLogsOutput.textContent = errText;
+                } else if (labSqlOut) {
+                    labSqlOut.textContent = errText;
+                }
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    });
+
+    // ------------------------------------------------------------------------
+    // 17. Admin Live Table Filters & Inline Enrollments Toggle
+    // ------------------------------------------------------------------------
+    const filterTableIds = new Set();
+    document.querySelectorAll('[data-filter-table]').forEach((el) => {
+        const id = el.getAttribute('data-filter-table');
+        if (id) filterTableIds.add(id);
+    });
+    document.querySelectorAll('[data-filter-role-table]').forEach((el) => {
+        const id = el.getAttribute('data-filter-role-table');
+        if (id) filterTableIds.add(id);
+    });
+
+    filterTableIds.forEach((tableId) => {
+        const tableEl = document.getElementById(tableId);
+        if (!tableEl) return;
+        const searchCtrl = document.querySelector(`[data-filter-table="${tableId}"]`);
+        const roleCtrl = document.querySelector(`[data-filter-role-table="${tableId}"]`);
+        const applyFilter = () => {
+            const q = searchCtrl ? searchCtrl.value.trim().toLowerCase() : '';
+            const r = roleCtrl ? roleCtrl.value.trim().toLowerCase() : '';
+            tableEl.querySelectorAll('tbody tr').forEach((row) => {
+                const hay = (row.getAttribute('data-search') || row.getAttribute('data-searchable') || row.textContent || '').toLowerCase();
+                const rowRole = (row.getAttribute('data-role') || '').toLowerCase();
+                const match = (q === '' || hay.includes(q)) && (r === '' || rowRole === r);
+                row.hidden = !match;
+                row.style.display = match ? '' : 'none';
+            });
+        };
+        if (searchCtrl) searchCtrl.addEventListener('input', applyFilter);
+        if (roleCtrl) roleCtrl.addEventListener('change', applyFilter);
+    });
+
+    document.querySelectorAll('.btn-toggle-enroll-box').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const uid = btn.getAttribute('data-user-id') || '';
+            const box = document.querySelector(`[data-enroll-box="${uid}"]`);
+            if (box) {
+                box.hidden = !box.hidden;
+                btn.setAttribute('aria-expanded', box.hidden ? 'false' : 'true');
+            }
+        });
+    });
+
+    // ------------------------------------------------------------------------
+    // 18. Final Certification Exam Live Timer
+    // ------------------------------------------------------------------------
+    const examTimerDisplay = document.getElementById('exam-timer-display');
+    const examDurationInput = document.getElementById('exam-duration-seconds');
+    if (document.getElementById('final-exam-form') && (examTimerDisplay || examDurationInput)) {
+        const startTs = Date.now();
+        setInterval(() => {
+            const elapsed = Math.floor((Date.now() - startTs) / 1000);
+            if (examDurationInput) examDurationInput.value = String(elapsed);
+            if (examTimerDisplay) {
+                const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+                const s = String(elapsed % 60).padStart(2, '0');
+                examTimerDisplay.textContent = `${m}:${s}`;
+            }
+        }, 1000);
+    }
+
+    // ------------------------------------------------------------------------
+    // 19. Study Notes Notebook Page & Glossary / Flashcards SRS Filters
+    // ------------------------------------------------------------------------
+    const saveNewNoteBtn = document.getElementById('btn-save-new-note');
+    const newNoteSelect = document.getElementById('new-note-item-select');
+    const newNoteArea = document.getElementById('new-note-textarea');
+    const newNoteFeedback = document.getElementById('new-note-feedback');
+    const postNoteUpdate = async (itemId, noteText) => {
+        const res = await postApiJson('api_save_note', { item_id: itemId, note: noteText });
+        return res.json();
+    };
+    if (saveNewNoteBtn && newNoteSelect && newNoteArea) {
+        saveNewNoteBtn.addEventListener('click', async () => {
+            try {
+                const res = await postNoteUpdate(newNoteSelect.value, newNoteArea.value);
+                if (res && res.success) {
+                    if (newNoteFeedback) newNoteFeedback.hidden = false;
+                    window.location.reload();
+                }
+            } catch (_) {}
+        });
+    }
+    document.querySelectorAll('.btn-save-inline-note').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const card = btn.closest('.note-item-card');
+            if (!card) return;
+            const itemId = btn.getAttribute('data-item-id') || '';
+            const area = card.querySelector('.note-inline-editor');
+            const status = card.querySelector('.note-save-status');
+            if (!area) return;
+            try {
+                const res = await postNoteUpdate(itemId, area.value);
+                if (res && res.success && status) {
+                    status.textContent = `✔ Enregistré à ${res.saved_at || ''}`;
+                    status.classList.add('text-emerald');
+                }
+            } catch (_) {}
+        });
+    });
+    const notesFilterInput = document.getElementById('notes-filter-input');
+    if (notesFilterInput) {
+        const noteCards = Array.from(document.querySelectorAll('.note-item-card'));
+        notesFilterInput.addEventListener('input', () => {
+            const q = notesFilterInput.value.trim().toLowerCase();
+            noteCards.forEach((c) => {
+                const hay = (c.getAttribute('data-searchable') || '').toLowerCase();
+                c.style.display = (q === '' || hay.includes(q)) ? '' : 'none';
+            });
+        });
+    }
+
+    const glossaryFilterInput = document.getElementById('glossary-filter-input');
+    if (glossaryFilterInput) {
+        const glossaryCards = Array.from(document.querySelectorAll('.glossary-item-card'));
+        const applyGlossaryFilter = () => {
+            const q = glossaryFilterInput.value.trim().toLowerCase();
+            glossaryCards.forEach((c) => {
+                const hay = (c.getAttribute('data-searchable') || '').toLowerCase();
+                c.style.display = (q === '' || hay.includes(q)) ? '' : 'none';
+            });
+        };
+        glossaryFilterInput.addEventListener('input', applyGlossaryFilter);
+        if (glossaryFilterInput.value) applyGlossaryFilter();
+    }
+
+    const fcGrid = document.getElementById('flashcards-grid');
+    if (fcGrid) {
+        const modSelect = document.getElementById('fc-filter-module');
+        const lvlSelect = document.getElementById('fc-filter-level');
+        const fcSearchInput = document.getElementById('fc-filter-search');
+        const focusBtn = document.getElementById('btn-fc-focus-toggle');
+        const focusControls = document.getElementById('fc-focus-controls');
+        const focusPos = document.getElementById('fc-focus-position');
+        const counterEl = document.getElementById('fc-visible-counter');
+        const prevBtn = document.getElementById('btn-fc-prev');
+        const nextBtn = document.getElementById('btn-fc-next');
+        const flipBtn = document.getElementById('btn-fc-flip');
+        const allCards = Array.from(document.querySelectorAll('.flashcard-box'));
+
+        let isFocusMode = false;
+        let focusIndex = 0;
+        let filteredCards = allCards.slice();
+
+        const renderFcCards = () => {
+            if (counterEl) {
+                counterEl.textContent = `${filteredCards.length} carte(s) affichée(s)`;
+            }
+            allCards.forEach((c) => { c.style.display = 'none'; });
+            const emptyEl = document.getElementById('fc-empty-state');
+            if (emptyEl) {
+                emptyEl.style.display = filteredCards.length === 0 ? 'block' : 'none';
+            }
+            if (!isFocusMode) {
+                filteredCards.forEach((c) => { c.style.display = ''; });
+                if (focusControls) focusControls.style.display = 'none';
+            } else {
+                if (focusControls) focusControls.style.display = 'flex';
+                if (filteredCards.length > 0) {
+                    const activeCard = filteredCards[focusIndex] || filteredCards[0];
+                    activeCard.style.display = '';
+                    if (focusPos) {
+                        focusPos.textContent = `Carte ${focusIndex + 1} / ${filteredCards.length}`;
+                    }
+                } else if (focusPos) {
+                    focusPos.textContent = '0 / 0 carte';
+                }
+            }
+        };
+
+        const applyFlashcardFilters = () => {
+            const mVal = modSelect ? modSelect.value : '';
+            const lVal = lvlSelect ? lvlSelect.value : '';
+            const qVal = fcSearchInput ? fcSearchInput.value.trim().toLowerCase() : '';
+            filteredCards = allCards.filter((card) => {
+                const cMod = card.getAttribute('data-module') || '';
+                const cLvl = card.getAttribute('data-level') || '0';
+                const cHay = (card.getAttribute('data-searchable') || '').toLowerCase();
+                if (mVal !== '' && cMod !== mVal) return false;
+                if (lVal !== '' && cLvl !== lVal) return false;
+                if (qVal !== '' && !cHay.includes(qVal)) return false;
+                return true;
+            });
+            if (focusIndex >= filteredCards.length) focusIndex = 0;
+            renderFcCards();
+        };
+
+        const resetFcBtn = document.getElementById('btn-fc-reset');
+        if (resetFcBtn) {
+            resetFcBtn.addEventListener('click', () => {
+                if (!window.confirm('Voulez-vous vraiment réinitialiser toutes vos auto-évaluations SRS pour ce cours ?')) {
+                    return;
+                }
+                resetFcBtn.disabled = true;
+                postApiJson('api_reset_flashcards', {})
+                    .then((r) => r.json())
+                    .then((data) => {
+                        resetFcBtn.disabled = false;
+                        if (data.success) window.location.reload();
+                        else window.alert(data.message || 'Erreur lors de la réinitialisation.');
+                    })
+                    .catch(() => {
+                        resetFcBtn.disabled = false;
+                        window.location.reload();
+                    });
+            });
+        }
+
+        if (modSelect) modSelect.addEventListener('change', applyFlashcardFilters);
+        if (lvlSelect) lvlSelect.addEventListener('change', applyFlashcardFilters);
+        if (fcSearchInput) fcSearchInput.addEventListener('input', applyFlashcardFilters);
+        if (focusBtn) {
+            focusBtn.addEventListener('click', () => {
+                isFocusMode = !isFocusMode;
+                focusIndex = 0;
+                focusBtn.classList.toggle('btn-primary', isFocusMode);
+                focusBtn.classList.toggle('btn-outline-cyan', !isFocusMode);
+                focusBtn.textContent = isFocusMode ? '📋 Retourner à la Grille Complète' : '🎯 Mode Focus (Carte par Carte)';
+                renderFcCards();
+            });
+        }
+        if (prevBtn) {
+            prevBtn.addEventListener('click', () => {
+                if (filteredCards.length === 0) return;
+                focusIndex = (focusIndex - 1 + filteredCards.length) % filteredCards.length;
+                renderFcCards();
+            });
+        }
+        if (nextBtn) {
+            nextBtn.addEventListener('click', () => {
+                if (filteredCards.length === 0) return;
+                focusIndex = (focusIndex + 1) % filteredCards.length;
+                renderFcCards();
+            });
+        }
+        if (flipBtn) {
+            flipBtn.addEventListener('click', () => {
+                if (filteredCards.length === 0) return;
+                const activeCard = filteredCards[focusIndex];
+                if (!activeCard) return;
+                const det = activeCard.querySelector('details');
+                if (det) det.open = !det.open;
+            });
+        }
+        if (fcSearchInput && fcSearchInput.value) {
+            applyFlashcardFilters();
+        }
     }
 });

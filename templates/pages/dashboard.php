@@ -1,34 +1,45 @@
 <?php
 declare(strict_types=1);
 use LightPath\LMS\Core\Security;
+
+$firstDashModId = (string)(array_key_first($currentCourse['modules'] ?? []) ?: 'module_01_introduction_postgresql_18');
+$dashTrackCount = count($currentCourse['tracks'] ?? []);
+$dashCourseDays = !empty($currentCourse['attendance_days'])
+    ? (int)$currentCourse['attendance_days']
+    : (preg_match('/(\d+)\s*JOURS?/i', (string)($currentCourse['duration'] ?? ''), $dm) ? (int)$dm[1] : 10);
+$dashTotalHalfDays = max(2, $dashCourseDays * 2);
+$gamificationEnabled = !isset($featureManager) || $featureManager->isEnabled('gamification');
+$dockerLabsEnabled = !isset($featureManager) || $featureManager->isEnabled('docker_labs');
 ?>
 
-<!-- BANNIÈRE HERO DE LA FORMATION ACTIVE -->
+<!-- Active course hero banner -->
 <section class="hero-banner">
-    <div style="max-width: 780px; min-width: 0;">
-        <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.65rem;">
+    <div class="hero-content-col">
+        <div class="d-flex items-center gap-sm flex-wrap mb-xs">
             <span class="badge-code"><?= Security::e($currentCourse['badge']) ?></span>
-            <span class="badge-code" style="background: rgba(16, 185, 129, 0.15); color: #34D399; border-color: rgba(16, 185, 129, 0.3);">
+            <span class="badge-code badge-emerald-soft">
                 ✔ Certifié Qualiopi & Datadock
             </span>
-            <span style="font-size: 0.8rem; color: var(--text-secondary);">
+            <span class="text-sm text-secondary">
                 ⏱ <?= Security::e($currentCourse['duration']) ?>
             </span>
         </div>
-        <h1 style="font-size: 1.7rem; margin-bottom: 0.5rem;"><?= Security::e($currentCourse['title']) ?></h1>
-        <p style="color: var(--text-secondary); margin: 0; font-size: 0.92rem;">
+        <h1 class="hero-title-lg mb-xs"><?= Security::e($currentCourse['title']) ?></h1>
+        <p class="hero-subtitle-sm">
             <?= Security::e($currentCourse['description']) ?>
         </p>
-        <div style="display: flex; flex-wrap: wrap; gap: 0.65rem; margin-top: 1.25rem;">
+        <div class="d-flex flex-wrap gap-sm mt-1">
             <a href="index.php?page=catalog&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-primary">
-                📚 Explorer les 4 Parcours & <?= $totalModules ?> Modules
+                📚 Explorer les <?= $dashTrackCount ?> Parcours & <?= $totalModules ?> Modules
             </a>
-            <a href="index.php?page=module&id=module_01_introduction_postgresql_18&mode=slides&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline-cyan">
+            <a href="index.php?page=module&id=<?= urlencode($firstDashModId) ?>&mode=slides&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline-cyan">
                 🖥️ Lancer en Mode Diaporama 16:9
             </a>
-            <a href="index.php?page=catalog&tab=labs&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald">
-                🧪 Accéder aux <?= $totalLabs ?> Ateliers Docker
-            </a>
+            <?php if ($dockerLabsEnabled): ?>
+                <a href="index.php?page=catalog&tab=labs&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald">
+                    🧪 Accéder aux <?= $totalLabs ?> Ateliers Docker
+                </a>
+            <?php endif; ?>
             <a href="index.php?page=documents&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline">
                 📥 Centre de Téléchargement (6 formats)
             </a>
@@ -41,22 +52,22 @@ use LightPath\LMS\Core\Security;
         </div>
     </div>
 
-    <div style="min-width: 240px; text-align: center; background: rgba(11, 17, 32, 0.65); padding: 1.35rem; border-radius: var(--radius-md); border: 1px solid var(--border-hairline);">
+    <div class="hero-progress-box">
         <div class="kpi-label">Votre Progression Globale</div>
-        <div class="kpi-value tabular-nums" style="color: var(--brand-cyan-light); font-size: 2.4rem;"><?= $globalCompletionPct ?>%</div>
+        <div class="kpi-value tabular-nums text-cyan hero-kpi-pct"><?= $globalCompletionPct ?>%</div>
         <div class="progress-bar-track">
             <div class="progress-bar-fill" style="width: <?= $globalCompletionPct ?>%;"></div>
         </div>
-        <div class="kpi-sub tabular-nums" style="margin-top: 0.55rem;">
+        <div class="kpi-sub tabular-nums mt-xs">
             <strong><?= $doneModules ?></strong>/<?= $totalModules ?> Modules • <strong><?= $doneLabs ?></strong>/<?= $totalLabs ?> Labs
         </div>
-        <a href="index.php?page=certificate&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm" style="margin-top: 0.85rem; width: 100%;">
+        <a href="index.php?page=certificate&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm mt-sm w-100">
             🎓 Voir mon Attestation Qualiopi
         </a>
     </div>
 </section>
 
-<!-- CARTES KPI TABULAR-NUMS -->
+<!-- Tabular-nums KPI cards -->
 <?php
 $lastVisited = $userProgress['last_visited'] ?? null;
 $bookmarksList = $userProgress['bookmarks'] ?? [];
@@ -100,8 +111,8 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
     </div>
     <div class="kpi-card">
         <div class="kpi-label">❓ Quiz QCM Réussis</div>
-        <div class="kpi-value tabular-nums"><?= count($userProgress['quiz_scores'] ?? []) ?> <span style="font-size: 1rem; color: var(--text-muted);">/ <?= $totalModules ?></span></div>
-        <div class="kpi-sub">Évaluations formatives Bloom C01–C29</div>
+        <div class="kpi-value tabular-nums"><?= count($userProgress['quiz_scores'] ?? []) ?> <span class="kpi-denom">/ <?= $totalModules ?></span></div>
+        <div class="kpi-sub">Évaluations formatives Bloom (<?= $totalModules ?> modules)</div>
     </div>
     <div class="kpi-card">
         <?php
@@ -117,19 +128,26 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
     </div>
 </div>
 
-<!-- GAMIFICATION DBA : BADGES DE COMPÉTENCES, XP & FAVORIS -->
-<section class="lms-card" style="margin-bottom: 2rem;">
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
-        <div>
-            <span class="badge-code">🏅 GAMIFICATION & CERTIFICATION DE COMPÉTENCES DBA</span>
-            <h2 style="font-size: 1.25rem; margin: 0.3rem 0 0;">
-                Grade : <span style="color: var(--brand-cyan-light);"><?= Security::e($userGamification['rank'] ?? 'Apprenant DBA') ?></span>
-                (<span class="tabular-nums"><?= (int)($userGamification['xp'] ?? 0) ?> XP</span> • Temps actif : <span class="tabular-nums"><?= Security::e($userGamification['learning_hours_formatted'] ?? '0 min') ?></span>)
-            </h2>
-        </div>
-        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+<!-- DBA quick tools, optional gamification badges/XP, and bookmarks -->
+<section class="lms-card mb-2">
+    <div class="d-flex justify-between items-center flex-wrap gap-1 mb-1">
+        <?php if ($gamificationEnabled): ?>
+            <div>
+                <span class="badge-code">🏅 GAMIFICATION & CERTIFICATION DE COMPÉTENCES DBA</span>
+                <h2 class="section-heading-md mt-xxs mb-0">
+                    Grade : <span class="text-cyan"><?= Security::e($userGamification['rank'] ?? 'Apprenant DBA') ?></span>
+                    (<span class="tabular-nums"><?= (int)($userGamification['xp'] ?? 0) ?> XP</span> • Temps actif : <span class="tabular-nums"><?= Security::e($userGamification['learning_hours_formatted'] ?? '0 min') ?></span>)
+                </h2>
+            </div>
+        <?php else: ?>
+            <div>
+                <span class="badge-code">🛠️ OUTILS DE SUIVI & RÉVISION QUALIOPI</span>
+                <h2 class="section-heading-md mt-xxs mb-0">Raccourcis Émargement, Révisions & Notes</h2>
+            </div>
+        <?php endif; ?>
+        <div class="d-flex gap-sm flex-wrap">
             <a href="index.php?page=attendance&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">
-                ✍️ Émargement (<?= count($userAttendance ?? []) ?>/20)
+                ✍️ Émargement (<?= count($userAttendance ?? []) ?>/<?= (int)$dashTotalHalfDays ?>)
             </a>
             <a href="index.php?page=flashcards&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">
                 🧠 Révision SRS (<?= count(\LightPath\LMS\Course\LmsCatalog::getFlashcards()) ?> cartes)
@@ -143,28 +161,30 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
         </div>
     </div>
 
-    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.75rem;">
-        <?php foreach (($userGamification['badges'] ?? []) as $badge): ?>
-            <div style="padding: 0.75rem 0.9rem; border-radius: var(--radius-sm); background: var(--bg-base); border: 1px solid <?= !empty($badge['unlocked']) ? 'rgba(16, 185, 129, 0.45)' : 'var(--border-hairline)' ?>; opacity: <?= !empty($badge['unlocked']) ? '1' : '0.6' ?>;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                    <strong style="font-size: 0.88rem;"><?= Security::e($badge['icon'] . ' ' . $badge['title']) ?></strong>
-                    <?php if (!empty($badge['unlocked'])): ?>
-                        <span class="badge-completed" style="font-size: 0.68rem;">Débloqué</span>
-                    <?php endif; ?>
+    <?php if ($gamificationEnabled): ?>
+        <div class="badges-auto-grid">
+            <?php foreach (($userGamification['badges'] ?? []) as $badge): ?>
+                <div class="gamification-badge-card <?= !empty($badge['unlocked']) ? 'is-unlocked' : 'is-locked' ?>">
+                    <div class="d-flex justify-between items-center mb-xxs">
+                        <strong class="text-sm"><?= Security::e($badge['icon'] . ' ' . $badge['title']) ?></strong>
+                        <?php if (!empty($badge['unlocked'])): ?>
+                            <span class="badge-completed badge-xs">Débloqué</span>
+                        <?php endif; ?>
+                    </div>
+                    <div class="text-xs text-secondary"><?= Security::e($badge['description']) ?></div>
                 </div>
-                <div style="font-size: 0.76rem; color: var(--text-secondary);"><?= Security::e($badge['description']) ?></div>
-            </div>
-        <?php endforeach; ?>
-    </div>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
 
     <?php if (!empty($bookmarksList)): ?>
-        <div style="margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid var(--border-hairline);">
-            <strong style="font-size: 0.84rem; color: var(--brand-cyan-light);">⭐ Mes Favoris Enregistrés :</strong>
-            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.45rem;">
+        <div class="mt-1 pt-sm border-top-hairline">
+            <strong class="text-sm text-cyan">⭐ Mes Favoris Enregistrés :</strong>
+            <div class="d-flex gap-sm flex-wrap mt-xs">
                 <?php foreach ($bookmarksList as $bm):
                     $bmUrl = 'index.php?page=' . urlencode((string)($bm['type'] ?? 'module')) . '&id=' . urlencode((string)($bm['id'] ?? '')) . '&course=' . urlencode($currentCourseSlug);
                 ?>
-                    <a href="<?= Security::e($bmUrl) ?>" class="badge-code" style="text-decoration: none;">
+                    <a href="<?= Security::e($bmUrl) ?>" class="badge-code no-underline">
                         ⭐ <?= Security::e((string)($bm['title'] ?? $bm['id'] ?? '')) ?>
                     </a>
                 <?php endforeach; ?>
@@ -173,14 +193,14 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
     <?php endif; ?>
 </section>
 
-<!-- LES 4 PARCOURS CERTIFIANTS DE LA FORMATION (DÉCOUPE STRUCTURÉE PAR JOURNÉES & PUBLIC CIBLE) -->
-<section style="margin-bottom: 2.5rem;">
-    <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.15rem;">
+<!-- Curriculum tracks structured by learning phase and target audience -->
+<section class="mb-2">
+    <div class="d-flex justify-between items-end flex-wrap gap-1 mb-1">
         <div>
-            <span class="badge-code">ARCHITECTURE PÉDAGOGIQUE QUALIOPI • 4 PARCOURS MODULAIRES</span>
-            <h2 style="font-size: 1.4rem; margin: 0.35rem 0 0.15rem;">🧭 Choisissez votre Parcours de Formation</h2>
-            <p style="margin: 0; font-size: 0.88rem; color: var(--text-secondary);">
-                Le cursus PostgreSQL 18 (77h) est structuré en <strong>4 parcours complémentaires</strong> organisés par profil métier, niveau et journées pédagogiques. Chaque étape associe un <strong>Module de Cours (texte + slides 16:9)</strong> et un <strong>Atelier Pratique Docker</strong>.
+            <span class="badge-code">ARCHITECTURE PÉDAGOGIQUE QUALIOPI • <?= $dashTrackCount ?> PARCOURS MODULAIRES</span>
+            <h2 class="section-heading-lg mt-xs mb-0">🧭 Choisissez votre Parcours de Formation</h2>
+            <p class="hero-subtitle-sm mb-0">
+                Le cursus (<?= Security::e((string)($currentCourse['duration'] ?? '70h')) ?>) est structuré en <strong><?= $dashTrackCount ?> parcours complémentaires</strong> organisés par profil métier, niveau et journées pédagogiques. Chaque étape associe un <strong>Module de Cours (texte + slides 16:9)</strong> et un <strong>Atelier Pratique Docker</strong>.
             </p>
         </div>
         <?php if (isset($currentCourse['referentiel']['GUIDE_PARCOURS'])): ?>
@@ -192,7 +212,7 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
 
     <div class="tracks-roadmap-grid">
         <?php foreach (($currentCourse['tracks'] ?? []) as $tKey => $track):
-            $trackMods = $track['module_Filter'] ?? [];
+            $trackMods = $track['module_filter'] ?? $track['module_Filter'] ?? [];
             $trackTotal = count($trackMods);
             $trackDone = 0;
             $firstUncompletedModId = null;
@@ -210,7 +230,7 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
                     }
                 }
             }
-            $resumeModId = $firstUncompletedModId ?? $firstTrackModId ?? 'module_01_introduction_postgresql_18';
+            $resumeModId = $firstUncompletedModId ?? $firstTrackModId ?? $firstDashModId;
             $trackPct = $trackTotal > 0 ? (int)round(($trackDone / $trackTotal) * 100) : 0;
             $accentColor = (string)($track['color'] ?? '#00B0F0');
         ?>
@@ -230,7 +250,7 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
                 <h3 class="track-roadmap-title"><?= Security::e($track['title']) ?></h3>
                 <p class="track-roadmap-desc"><?= Security::e($track['description']) ?></p>
 
-                <!-- Métadonnées Public Cible / Prérequis / Objectif -->
+                <!-- Target audience, prerequisites and learning objective metadata -->
                 <div class="track-meta-boxes">
                     <?php if (!empty($track['target_audience'])): ?>
                         <div class="track-meta-row">
@@ -252,7 +272,7 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
                     <?php endif; ?>
                 </div>
 
-                <!-- Découpage par Journées / Étapes du Parcours -->
+                <!-- Phase breakdown by training day and step -->
                 <?php if (!empty($track['phases'])): ?>
                     <div class="track-phases-list">
                         <?php foreach ($track['phases'] as $phase): ?>
@@ -308,31 +328,32 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
     </div>
 </section>
 
-<!-- COCKPIT DOCKER PERSONNEL PAR UTILISATEUR -->
+<?php if ($dockerLabsEnabled): ?>
+<!-- Per-user isolated Docker container cockpit -->
 <section id="docker-panel" class="docker-cockpit">
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-        <div style="min-width: 0; flex: 1;">
-            <div style="display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap;">
+    <div class="d-flex justify-between items-center flex-wrap gap-1">
+        <div class="flex-1 min-w-0">
+            <div class="d-flex items-center gap-sm flex-wrap">
                 <span class="badge-code">🐳 ENVIRONNEMENT LAB DOCKER ISOLÉ PAR UTILISATEUR</span>
-                <span style="font-size: 0.8rem; color: var(--text-secondary);">
+                <span class="text-sm text-secondary">
                     Moteur détecté : <strong><?= Security::e($dockerStatus['runtime_version'] ?? '') ?></strong>
                 </span>
             </div>
-            <h2 style="font-size: 1.25rem; margin: 0.45rem 0 0.25rem;">
+            <h2 class="section-heading-md mt-xs mb-xxs">
                 Instance Dédiée : <code><?= Security::e($dockerStatus['container_name']) ?></code>
                 (Port Hôte : <code class="tabular-nums"><?= (int)$dockerStatus['port'] ?></code>)
             </h2>
-            <p style="margin: 0; font-size: 0.86rem; color: var(--text-secondary);">
+            <p class="hero-subtitle-sm mb-0">
                 Connexion CLI locale : <code><?= Security::e($dockerStatus['connection_string']) ?></code>
                 • Base pré-configurée : <code>formation_pg</code> (Extensions <code>pageinspect</code>, <code>pg_stat_statements</code> & Base <code>Sakila</code>).
             </p>
         </div>
 
-        <div style="display: flex; flex-wrap: wrap; gap: 0.55rem;">
+        <div class="d-flex flex-wrap gap-sm">
             <button type="button" class="btn btn-emerald btn-docker-cmd" data-cmd="start">
                 ▶ Démarrer mon Lab Docker
             </button>
-            <button type="button" class="btn btn-outline btn-docker-cmd" data-cmd="reset">
+            <button type="button" class="btn btn-outline btn-docker-cmd" data-cmd="reset" data-confirm="Réinitialiser votre conteneur Docker PostgreSQL 18 à l'état initial ?">
                 🔄 Réinitialiser (Clean State)
             </button>
             <button type="button" class="btn btn-danger btn-docker-cmd" data-cmd="stop">
@@ -340,12 +361,13 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
             </button>
         </div>
     </div>
-    <div id="docker-action-feedback" class="flash-banner flash-success" style="display: none; margin-top: 1rem; margin-bottom: 0;"></div>
+    <div id="docker-action-feedback" class="flash-banner flash-success mt-1 mb-0" hidden></div>
 </section>
+<?php endif; ?>
 
-<!-- ACCÈS RAPIDE AUX PREMIERS MODULES DE COURS ET TÉLÉCHARGEMENTS -->
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
-    <h2 style="font-size: 1.35rem; margin: 0;">📖 Accès Rapide aux Premiers Modules & Supports</h2>
+<!-- Quick access to initial modules and multi-format downloads -->
+<div class="d-flex justify-between items-center mb-1 flex-wrap gap-sm">
+    <h2 class="section-heading-lg mb-0">📖 Accès Rapide aux Premiers Modules & Supports</h2>
     <a href="index.php?page=catalog&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">Voir les <?= $totalModules ?> Modules classés par Parcours →</a>
 </div>
 
@@ -386,7 +408,7 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
                     <a href="index.php?page=module&id=<?= urlencode($mId) ?>&mode=slides&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline-cyan btn-sm" title="Suivre sous forme de Slides 16:9">
                         🖥️ Slides 16:9
                     </a>
-                    <?php if (!empty($mod['linked_lab_id'])): ?>
+                    <?php if ($dockerLabsEnabled && !empty($mod['linked_lab_id'])): ?>
                         <a href="index.php?page=lab&id=<?= urlencode((string)$mod['linked_lab_id']) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald btn-sm">
                             🧪 Lab Docker
                         </a>

@@ -5,23 +5,27 @@ use LightPath\LMS\Core\Security;
 
 $searchQuery = trim((string)($_GET['q'] ?? ''));
 $results = $searchQuery !== '' ? $courseRepo->searchContent($currentCourseSlug, $searchQuery) : [];
+$searchModulesCount = count($currentCourse['modules'] ?? []);
+$searchLabsCount = count($currentCourse['labs'] ?? []);
+$searchCheatsheetsCount = count($currentCourse['cheatsheets'] ?? []);
+$searchGlossaryCount = count(\LightPath\LMS\Course\LmsCatalog::getGlossary());
 ?>
 
-<div class="hero-banner" style="padding: 1.5rem 2rem;">
-    <div style="flex: 1; min-width: 0;">
+<div class="hero-banner hero-banner-compact">
+    <div class="flex-1 min-w-0">
         <span class="badge-code">MOTEUR DE RECHERCHE PLEIN-TEXTE INSTANTANÉ (CTRL+K)</span>
-        <h1 style="font-size: 1.6rem; margin: 0.4rem 0 0.35rem;">🔍 Recherche Globale dans le Cursus PostgreSQL 18</h1>
-        <p style="color: var(--text-secondary); margin: 0; font-size: 0.9rem;">
-            Recherchez simultanément dans les 34 modules de cours, les 34 ateliers pratiques Docker, les 69 fiches mémo et les 52 définitions du glossaire DBA.
+        <h1 class="hero-title-md mt-xs mb-xxs">🔍 Recherche Globale — <?= Security::e($currentCourse['short_title'] ?? 'Formation') ?></h1>
+        <p class="hero-subtitle-sm mb-0">
+            Recherchez simultanément dans les <?= $searchModulesCount ?> modules de cours, les <?= $searchLabsCount ?> ateliers pratiques Docker, les <?= $searchCheatsheetsCount ?> fiches mémo et les <?= $searchGlossaryCount ?> définitions du glossaire DBA.
         </p>
     </div>
 </div>
 
-<div class="lms-card" style="margin-bottom: 1.5rem;">
-    <form method="GET" action="index.php" style="display: flex; gap: 0.65rem; flex-wrap: wrap;">
+<div class="lms-card mb-lg">
+    <form method="GET" action="index.php" class="d-flex gap-sm flex-wrap">
         <input type="hidden" name="page" value="search"/>
         <input type="hidden" name="course" value="<?= Security::e($currentCourseSlug) ?>"/>
-        <input type="search" name="q" class="form-control" style="flex: 1; min-width: 260px;" placeholder="Ex: pg_stat_io, mvcc, patroni, pgbackrest, hugepages, uuidv7, scram..." value="<?= Security::e($searchQuery) ?>" autofocus/>
+        <input type="search" name="q" class="form-control flex-1 search-query-input" aria-label="Rechercher dans tout le cursus" placeholder="Ex: pg_stat_io, mvcc, patroni, pgbackrest, hugepages, uuidv7, scram..." value="<?= Security::e($searchQuery) ?>" autofocus/>
         <button type="submit" class="btn btn-primary">🔍 Rechercher</button>
     </form>
 </div>

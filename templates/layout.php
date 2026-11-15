@@ -6,7 +6,7 @@ use LightPath\LMS\Core\Security;
 $csrfToken = Security::getCsrfToken();
 
 /**
- * Helper d'affichage des liens de téléchargement multi-formats (PDF, Slides PDF, PPTX, MD, HTML, DOCX)
+ * Render multi-format download links (PDF, Slides PDF, PPTX, MD, HTML, DOCX, MP4/VTT).
  */
 function renderDownloadStrip(string $courseSlug, string $itemType, string $itemId, array $downloads, bool $compact = false): string
 {
@@ -48,7 +48,7 @@ function renderDownloadStrip(string $courseSlug, string $itemType, string $itemI
 }
 
 /**
- * Helper unifié d'affichage du Forum Q&A et de modération Formateur (Audit #7 & Feature D2)
+ * Render unified Q&A forum and trainer moderation controls when qna_forum feature is enabled.
  */
 function renderDiscussionSection(
     string $courseSlug,
@@ -58,46 +58,50 @@ function renderDiscussionSection(
     string $csrfToken,
     bool $isStaff = false
 ): string {
+    global $featureManager;
+    if (isset($featureManager) && !$featureManager->isEnabled('qna_forum')) {
+        return '';
+    }
     $labelItem = $returnPage === 'lab' ? 'cet Atelier' : 'ce Module';
     ob_start();
     ?>
-    <section id="discussion-section" class="lms-card" style="margin-top: 1.5rem;">
+    <section id="discussion-section" class="lms-card mt-2">
         <span class="badge-code">ENTRAIDE TECHNIQUE & ACCOMPAGNEMENT FORMATEUR</span>
-        <h3 style="font-size: 1.15rem; margin: 0.35rem 0 0.75rem;">💬 Questions & Réponses sur <?= Security::e($labelItem) ?> (<span class="tabular-nums"><?= count($discussions) ?></span>)</h3>
+        <h3 class="qna-heading">💬 Questions & Réponses sur <?= Security::e($labelItem) ?> (<span class="tabular-nums"><?= count($discussions) ?></span>)</h3>
         <?php if (!empty($discussions)): ?>
-            <div style="display: flex; flex-direction: column; gap: 0.65rem; margin-bottom: 1rem;">
+            <div class="qna-thread-list">
                 <?php foreach ($discussions as $msg):
                     $msgId = (string)($msg['id'] ?? '');
                     $isResolved = !empty($msg['resolved']);
                 ?>
-                    <div style="padding: 0.75rem 1rem; border-radius: var(--radius-sm); background: var(--bg-base); border: 1px solid <?= $isResolved ? 'rgba(16, 185, 129, 0.45)' : 'var(--border-hairline)' ?>;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.3rem; font-size: 0.78rem;">
-                            <span style="display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+                    <div class="qna-msg-card <?= $isResolved ? 'is-resolved' : '' ?>">
+                        <div class="qna-msg-header">
+                            <span class="qna-msg-author">
                                 <strong><?= Security::e((string)($msg['user_name'] ?? 'Apprenant')) ?></strong>
                                 <span class="role-badge role-<?= Security::e((string)($msg['user_role'] ?? 'student')) ?>"><?= Security::e((string)($msg['user_role'] ?? 'student')) ?></span>
                                 <?php if ($isResolved): ?>
-                                    <span class="badge-completed" style="font-size: 0.7rem;">✔ Résolu</span>
+                                    <span class="badge-completed badge-xs">✔ Résolu</span>
                                 <?php endif; ?>
                             </span>
-                            <div style="display: inline-flex; align-items: center; gap: 0.45rem;">
-                                <span style="color: var(--text-muted);" class="tabular-nums"><?= Security::e(substr((string)($msg['created_at'] ?? ''), 0, 16)) ?></span>
+                            <div class="qna-msg-actions">
+                                <span class="text-muted tabular-nums"><?= Security::e(substr((string)($msg['created_at'] ?? ''), 0, 16)) ?></span>
                                 <?php if ($isStaff && $msgId !== ''): ?>
-                                    <form method="POST" action="index.php?page=<?= urlencode($returnPage) ?>&action=moderate_discussion&course=<?= urlencode($courseSlug) ?>" style="display: inline;">
+                                    <form method="POST" action="index.php?page=<?= urlencode($returnPage) ?>&action=moderate_discussion&course=<?= urlencode($courseSlug) ?>" class="d-inline">
                                         <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
                                         <input type="hidden" name="item_id" value="<?= Security::e($itemId) ?>"/>
                                         <input type="hidden" name="message_id" value="<?= Security::e($msgId) ?>"/>
                                         <input type="hidden" name="return_page" value="<?= Security::e($returnPage) ?>"/>
-                                        <button type="submit" name="mod_action" value="resolve" class="btn btn-outline btn-sm" style="padding: 0.1rem 0.45rem; font-size: 0.7rem;" title="Basculer statut Résolu">
+                                        <button type="submit" name="mod_action" value="resolve" class="btn btn-outline btn-xs" title="Basculer statut Résolu">
                                             <?= $isResolved ? '↩ Rouvrir' : '✔ Résolu' ?>
                                         </button>
-                                        <button type="submit" name="mod_action" value="delete" class="btn btn-danger btn-sm" style="padding: 0.1rem 0.45rem; font-size: 0.7rem;" title="Supprimer ce message">
+                                        <button type="submit" name="mod_action" value="delete" class="btn btn-danger btn-xs" title="Supprimer ce message" aria-label="Supprimer ce message">
                                             🗑️
                                         </button>
                                     </form>
                                 <?php endif; ?>
                             </div>
                         </div>
-                        <div style="font-size: 0.86rem; color: var(--text-secondary); white-space: pre-line;"><?= Security::e((string)($msg['message'] ?? '')) ?></div>
+                        <div class="qna-msg-body"><?= Security::e((string)($msg['message'] ?? '')) ?></div>
                     </div>
                 <?php endforeach; ?>
             </div>
@@ -107,7 +111,7 @@ function renderDiscussionSection(
             <input type="hidden" name="item_id" value="<?= Security::e($itemId) ?>"/>
             <input type="hidden" name="return_page" value="<?= Security::e($returnPage) ?>"/>
             <textarea name="message" class="form-control" rows="2" required placeholder="Posez une question technique ou partagez un retour d'expérience sur <?= Security::e($labelItem) ?>..."></textarea>
-            <div style="margin-top: 0.5rem; text-align: right;">
+            <div class="mt-xs text-right">
                 <button type="submit" class="btn btn-primary btn-sm">💬 Publier ma question / remarque</button>
             </div>
         </form>
@@ -116,11 +120,16 @@ function renderDiscussionSection(
     return (string)ob_get_clean();
 }
 
-// Déterminer le parcours et l'élément actif si on consulte un module, un lab ou un filtre de catalogue
+// Resolve active track, module ID, and dynamic attendance half-day denominator for sidebar navigation
+$firstLayoutModId = (string)(array_key_first($currentCourse['modules'] ?? []) ?: 'module_01_introduction_postgresql_18');
+$layoutCourseDays = !empty($currentCourse['attendance_days'])
+    ? (int)$currentCourse['attendance_days']
+    : (preg_match('/(\d+)\s*JOURS?/i', (string)($currentCourse['duration'] ?? ''), $dm) ? (int)$dm[1] : 10);
+$layoutTotalHalfDays = max(2, $layoutCourseDays * 2);
 $activeSidebarTrack = (string)($_GET['track'] ?? '');
 $activeModuleId = '';
 if ($page === 'module') {
-    $activeModuleId = (string)($_GET['id'] ?? 'module_01_introduction_postgresql_18');
+    $activeModuleId = (string)($_GET['id'] ?? $firstLayoutModId);
     if ($activeSidebarTrack === '') {
         $activeSidebarTrack = (string)($currentCourse['modules'][$activeModuleId]['track_id'] ?? '');
     }
@@ -146,7 +155,9 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
     <link rel="stylesheet" href="assets/css/app.css"/>
 </head>
 <body>
-<!-- Barre de progression de lecture globale (ScrollSpy) -->
+<a href="#main-content" class="skip-link">Aller au contenu principal</a>
+
+<!-- Global reading progress bar (ScrollSpy) -->
 <div id="reading-progress-container" class="reading-progress-container" aria-hidden="true">
     <div id="reading-progress-bar" class="reading-progress-bar"></div>
 </div>
@@ -154,7 +165,7 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
 <div class="app-shell">
 
     <!-- ==================================================================
-         SIDEBAR DE NAVIGATION PRINCIPALE + ACCÈS DIRECT AUX 34 MODULES
+         PRIMARY NAVIGATION SIDEBAR + DIRECT MODULE TREE ACCESS
          ================================================================== -->
     <aside class="app-sidebar" id="app-left-sidebar">
         <div class="sidebar-brand">
@@ -179,10 +190,10 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
             </button>
         </div>
 
-        <!-- Sélecteur Multi-Formations -->
+        <!-- Multi-course selector (navigation bound in app.js) -->
         <div class="sidebar-course-selector">
             <label for="course-switcher">🎓 Formation Active</label>
-            <select id="course-switcher" class="course-select" onchange="window.location.href='index.php?page=dashboard&course=' + encodeURIComponent(this.value)">
+            <select id="course-switcher" class="course-select">
                 <?php foreach ($allCourses as $cSlug => $cItem): ?>
                     <option value="<?= Security::e((string)$cSlug) ?>" <?= $cSlug === $currentCourseSlug ? 'selected' : '' ?>>
                         <?= Security::e($cItem['short_title']) ?>
@@ -201,7 +212,7 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
                 <span>📚 Catalogue des Parcours</span>
                 <span class="nav-badge tabular-nums"><?= $doneModules ?>/<?= $totalModules ?></span>
             </a>
-            <a href="index.php?page=module&id=<?= urlencode($activeModuleId !== '' ? $activeModuleId : 'module_01_introduction_postgresql_18') ?>&mode=slides&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= ($page === 'module' && ($_GET['mode'] ?? '') === 'slides') ? 'active' : '' ?>">
+            <a href="index.php?page=module&id=<?= urlencode($activeModuleId !== '' ? $activeModuleId : $firstLayoutModId) ?>&mode=slides&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= ($page === 'module' && ($_GET['mode'] ?? '') === 'slides') ? 'active' : '' ?>">
                 <span>🖥️ Diaporama Studio 16:9</span>
                 <span class="nav-badge">Slides</span>
             </a>
@@ -218,7 +229,7 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
                 <span class="nav-badge">Bloom</span>
             </a>
 
-            <div class="nav-section-title" style="margin-top: 0.85rem;">🎯 Évaluations & Outils Qualiopi</div>
+            <div class="nav-section-title mt-sm">🎯 Évaluations & Outils Qualiopi</div>
             <a href="index.php?page=diagnostic&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'diagnostic' ? 'active' : '' ?>">
                 <span>🧭 Positionnement Initial</span>
                 <span class="nav-badge tabular-nums"><?= $userDiagnostic !== null ? ((int)$userDiagnostic['percent'] . '%') : '15 QCM' ?></span>
@@ -229,7 +240,7 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
             </a>
             <a href="index.php?page=attendance&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'attendance' ? 'active' : '' ?>">
                 <span>✍️ Émargement & Assiduité</span>
-                <span class="nav-badge tabular-nums"><?= count($userAttendance ?? []) ?>/20</span>
+                <span class="nav-badge tabular-nums"><?= count($userAttendance ?? []) ?>/<?= (int)$layoutTotalHalfDays ?></span>
             </a>
             <a href="index.php?page=flashcards&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'flashcards' ? 'active' : '' ?>">
                 <span>🧠 Cartes SRS & Glossaire</span>
@@ -252,9 +263,9 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
                 <span class="nav-badge">Ctrl+K</span>
             </a>
 
-            <!-- NAVIGATION DIRECTE PAR PARCOURS ET PAR MODULE (M01..M29, SQL-01..SQL-05) -->
-            <div class="nav-section-title" style="margin-top: 0.9rem; display: flex; justify-content: space-between; align-items: center;">
-                <span>Navigation Directe (34 Modules)</span>
+            <!-- Direct navigation organized by curriculum track and module -->
+            <div class="nav-section-title mt-sm d-flex justify-between items-center">
+                <span>Navigation Directe (<?= (int)$totalModules ?> Modules)</span>
             </div>
             <div class="sidebar-module-filter-wrap">
                 <input type="search"
@@ -268,12 +279,13 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
             <div id="sidebar-tracks-accordion" class="sidebar-tracks-accordion">
                 <?php
                 $allCourseModules = $currentCourse['modules'] ?? [];
+                $firstTrackKey = (string)(array_key_first($currentCourse['tracks'] ?? []) ?? '');
                 foreach (($currentCourse['tracks'] ?? []) as $tKey => $track):
-                    $tFilter = $track['module_Filter'] ?? [];
+                    $tFilter = $track['module_filter'] ?? $track['module_Filter'] ?? [];
                     $isTrackActive = ($activeSidebarTrack === (string)$tKey);
-                    $shouldOpen = $isTrackActive || ($activeSidebarTrack === '' && $tKey === 'cursus-complet');
+                    $shouldOpen = $isTrackActive || ($activeSidebarTrack === '' && ($tKey === 'cursus-complet' || $tKey === $firstTrackKey));
 
-                    // Collecter les modules appartenant à ce parcours
+                    // Collect modules belonging to this track
                     $trackModsList = [];
                     $trackDone = 0;
                     foreach ($allCourseModules as $mKey => $mInfo) {
@@ -324,7 +336,7 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
             </div>
 
             <?php if ($auth->isStaff($currentUser)): ?>
-                <div class="nav-section-title" style="margin-top: 1rem;">Administration & Formateur</div>
+                <div class="nav-section-title mt-1">Administration & Formateur</div>
                 <a href="index.php?page=admin&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'admin' ? 'active' : '' ?>">
                     <span>🛡️ Cockpit Administration</span>
                     <span class="nav-badge">Admin</span>
@@ -332,16 +344,16 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
             <?php endif; ?>
 
             <?php if ($currentUser !== null): ?>
-                <div class="nav-section-title" style="margin-top: 1rem;">Mon Compte</div>
+                <div class="nav-section-title mt-1">Mon Compte</div>
                 <a href="index.php?page=profile&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'profile' ? 'active' : '' ?>">
                     <span>👤 Profil & Paramètres</span>
                 </a>
-                <a href="index.php?action=logout" class="nav-item" style="color: #FB7185;">
+                <a href="index.php?action=logout" class="nav-item nav-logout-link">
                     <span>🚪 Déconnexion</span>
                 </a>
             <?php else: ?>
-                <div class="nav-section-title" style="margin-top: 1rem;">Accès Portail</div>
-                <a href="index.php?page=login" class="nav-item" style="color: var(--accent-cyan);">
+                <div class="nav-section-title mt-1">Accès Portail</div>
+                <a href="index.php?page=login" class="nav-item nav-login-link">
                     <span>🔐 Connexion</span>
                 </a>
             <?php endif; ?>
@@ -350,12 +362,12 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
         <div class="sidebar-footer">
             <div><strong><?= Security::e($appConfig['company']) ?></strong></div>
             <div>Formateur : <?= Security::e($appConfig['trainer_name']) ?></div>
-            <div style="margin-top: 0.25rem;">Certifié Qualiopi & Datadock</div>
+            <div class="mt-xxs">Certifié Qualiopi & Datadock</div>
         </div>
     </aside>
 
     <!-- ==================================================================
-         ZONE PRINCIPALE (TOPBAR + VUE DYNAMIQUE)
+         MAIN WORKSPACE AREA (TOPBAR + DYNAMIC PAGE VIEW)
          ================================================================== -->
     <div class="app-main">
         <header class="app-topbar">
@@ -370,7 +382,7 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
                 </button>
                 <div class="topbar-search">
                     <span class="search-icon">🔍</span>
-                    <input type="search" id="global-search-input" placeholder="Filtrer un module, lab, commande SQL, cheatsheet... (Ctrl+K)"/>
+                    <input type="search" id="global-search-input" aria-label="Rechercher un module, lab, commande SQL ou fiche mémo" placeholder="Filtrer un module, lab, commande SQL, cheatsheet... (Ctrl+K)"/>
                 </div>
             </div>
 
@@ -387,21 +399,25 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
                 <?php endif; ?>
 
                 <?php if ($currentUser !== null): ?>
-                    <!-- Statut du Conteneur Docker Personnel (rafraîchi en asynchrone sans bloquer la navigation) -->
-                    <a href="index.php?page=dashboard&course=<?= urlencode($currentCourseSlug) ?>#docker-panel"
-                       id="topbar-docker-pill"
-                       class="docker-pill"
-                       title="État de votre conteneur PostgreSQL 18 dédié">
-                        <span id="topbar-docker-dot" class="status-dot <?= !empty($dockerStatus['running']) ? 'online' : 'offline' ?>"></span>
-                        <span id="topbar-docker-text" class="tabular-nums">
-                            🐳 <?= Security::e($dockerStatus['container_name']) ?>
-                            (Port <?= (int)$dockerStatus['port'] ?> : <?= !empty($dockerStatus['running']) ? 'ACTIF' : 'PRÊT' ?>)
-                        </span>
-                    </a>
+                    <?php if (!isset($featureManager) || $featureManager->isEnabled('docker_labs')): ?>
+                        <!-- Personal Docker container status (refreshed asynchronously without blocking navigation) -->
+                        <a href="index.php?page=dashboard&course=<?= urlencode($currentCourseSlug) ?>#docker-panel"
+                           id="topbar-docker-pill"
+                           class="docker-pill"
+                           title="État de votre conteneur PostgreSQL 18 dédié">
+                            <span id="topbar-docker-dot" class="status-dot <?= !empty($dockerStatus['running']) ? 'online' : 'offline' ?>"></span>
+                            <span id="topbar-docker-text" class="tabular-nums">
+                                🐳 <?= Security::e($dockerStatus['container_name']) ?>
+                                (Port <?= (int)$dockerStatus['port'] ?> : <?= !empty($dockerStatus['running']) ? 'ACTIF' : 'PRÊT' ?>)
+                            </span>
+                        </a>
+                    <?php endif; ?>
 
-                    <span class="badge-code tabular-nums" title="<?= Security::e($userGamification['rank'] ?? 'DBA PostgreSQL 18') ?>">
-                        ⚡ <?= (int)($userGamification['xp'] ?? 0) ?> XP • 🏅 <?= (int)($userGamification['unlocked_count'] ?? 0) ?>/<?= (int)($userGamification['total_badges'] ?? 8) ?>
-                    </span>
+                    <?php if (!isset($featureManager) || $featureManager->isEnabled('gamification')): ?>
+                        <span class="badge-code tabular-nums" title="<?= Security::e($userGamification['rank'] ?? 'DBA PostgreSQL 18') ?>">
+                            ⚡ <?= (int)($userGamification['xp'] ?? 0) ?> XP • 🏅 <?= (int)($userGamification['unlocked_count'] ?? 0) ?>/<?= (int)($userGamification['total_badges'] ?? 8) ?>
+                        </span>
+                    <?php endif; ?>
                 <?php endif; ?>
 
                 <button type="button" id="btn-toggle-theme" class="btn btn-outline btn-sm" title="Basculer Thème Sombre / Clair">
@@ -421,17 +437,17 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
             </div>
         </header>
 
-        <main class="app-content">
+        <main class="app-content" id="main-content">
             <?php
             $classroomState = $storage->getClassroomState($currentCourseSlug);
             $broadcastMsg = trim((string)($classroomState['broadcast_message'] ?? ''));
             ?>
-            <div id="classroom-broadcast-container" style="<?= $broadcastMsg !== '' ? '' : 'display: none;' ?>">
-                <div class="flash-banner" id="classroom-broadcast-banner" style="background: rgba(56, 189, 248, 0.14); border: 1px solid rgba(56, 189, 248, 0.45); color: var(--text-primary); display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+            <div id="classroom-broadcast-container" <?= $broadcastMsg !== '' ? '' : 'hidden' ?>>
+                <div class="flash-banner classroom-broadcast-banner" id="classroom-broadcast-banner">
                     <div>
-                        <span class="badge-code" style="margin-right: 0.45rem;">📢 MESSAGE SALLE EN DIRECT</span>
+                        <span class="badge-code mr-xs">📢 MESSAGE SALLE EN DIRECT</span>
                         <strong id="classroom-broadcast-text"><?= Security::e($broadcastMsg) ?></strong>
-                        <span id="classroom-broadcast-meta" style="font-size: 0.75rem; color: var(--text-muted); margin-left: 0.5rem;">
+                        <span id="classroom-broadcast-meta" class="broadcast-meta">
                             <?= !empty($classroomState['updated_by']) ? '(' . Security::e((string)$classroomState['updated_by']) . ' • ' . Security::e(substr((string)($classroomState['updated_at'] ?? ''), 11, 5)) . ')' : '' ?>
                         </span>
                     </div>
@@ -478,7 +494,7 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
 </button>
 <?php endif; ?>
 
-<!-- Lightbox Plein Écran pour Schémas Mermaid & Infographies Studio -->
+<!-- Full-screen Lightbox for Mermaid Diagrams & Studio Infographics -->
 <div id="diagram-lightbox" class="diagram-lightbox" hidden>
     <div class="diagram-lightbox-backdrop"></div>
     <div class="diagram-lightbox-content">

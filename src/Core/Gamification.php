@@ -4,19 +4,23 @@ declare(strict_types=1);
 namespace LightPath\LMS\Core;
 
 /**
- * Moteur de Gamification, XP et Badges de Compétences DBA PostgreSQL 18
+ * Gamification engine computing learner XP, DBA rank, and competency badges.
  */
 class Gamification
 {
     /**
-     * Calcule l'expérience (XP), le grade DBA et les 8 badges de compétences d'un apprenant.
+     * Computes learner XP, DBA rank, and 8 competency badges using dynamic course counts when supplied.
      */
     public static function computeUserBadgesAndXp(
         array $progress,
         ?array $diagnostic = null,
         ?array $bestExam = null,
-        array $attendance = []
+        array $attendance = [],
+        int $totalModules = 34,
+        int $totalLabs = 34
     ): array {
+        $safeTotalModules = max(1, $totalModules);
+        $safeTotalLabs = max(1, $totalLabs);
         $completedModules = $progress['completed_modules'] ?? [];
         $completedLabs = $progress['completed_labs'] ?? [];
         $quizScores = $progress['quiz_scores'] ?? [];
@@ -116,9 +120,11 @@ class Gamification
             [
                 'id' => 'sakila_grandmaster',
                 'icon' => '🏆',
-                'title' => 'Grand Maître Sakila (34/34 Labs)',
-                'description' => 'Valider l\'intégralité des 34 ateliers pratiques sur conteneurs Docker PostgreSQL 18.',
-                'unlocked' => count($completedLabs) >= 34,
+                'title' => $safeTotalLabs === 34
+                    ? 'Grand Maître Sakila (34/34 Labs)'
+                    : sprintf('Grand Maître Pratique (%d/%d Labs)', $safeTotalLabs, $safeTotalLabs),
+                'description' => sprintf('Valider l\'intégralité des %d ateliers pratiques sur conteneurs Docker PostgreSQL 18.', $safeTotalLabs),
+                'unlocked' => count($completedLabs) >= $safeTotalLabs,
             ],
             [
                 'id' => 'pg18_certified',
@@ -144,6 +150,8 @@ class Gamification
             'learning_hours_formatted' => self::formatDurationHours($learningSeconds),
             'unlocked_count' => $unlockedCount,
             'total_badges' => count($badges),
+            'total_modules' => $safeTotalModules,
+            'total_labs' => $safeTotalLabs,
             'badges' => $badges,
         ];
     }

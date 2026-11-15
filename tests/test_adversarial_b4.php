@@ -3,20 +3,20 @@ declare(strict_types=1);
 
 /**
  * ============================================================================
- * EMPIRICAL ADVERSARIAL TEST SUITE — BOUCLE 4 (CHALLENGER_B4_1)
+ * EMPIRICAL ADVERSARIAL TEST SUITE — CYCLE 4 (CHALLENGER_B4_1)
  * ============================================================================
- * Banc d'essai adverse empirique et oracles de stress pour la Boucle 4
- * du portail LMS (RCA-167 / RCA-LMS-37) :
+ * Empirical adversarial stress tests and oracles certifying Cycle 4
+ * of lightpath-training-portal (RCA-167 / RCA-LMS-37):
  *
- * 1. Concurrence & Protection contre l'Écrasement Destructif (mutateFile & writeFile)
- * 2. Registre d'Émargement Qualiopi — Préservation du Visa Formateur & Hash SHA-256
- * 3. Sécurité Console SQL Docker (LabSqlRunner) — Injections & Commandes Backslash
- * 4. Sécurité des Sessions, Inactivité (14400s), Déconnexion & Fuseau Horaire
- * 5. Vérification Publique des Attestations Qualiopi (findCertificateByCode LP-PG18-ATT-*)
- * 6. Importation CSV des Cohortes (UTF-8 BOM, TSV, Mots de passe courts, Injections CSV)
- * 7. Export OPCO d'Émargement & Inclusion des Stagiaires Absents
- * 8. Invalidation & Purge des Caches Administrateur (admin_clear_cache)
- * 9. Non-Régression Globale & Vérification des Suites Antérieures (b1, b2, b3, run_tests)
+ * 1. Concurrency & Destructive Overwrite Protection (mutateFile & writeFile)
+ * 2. Qualiopi Attendance Registry — Trainer Countersignature Preservation & SHA-256 Hash
+ * 3. Docker SQL Console Security (LabSqlRunner) — Injections & Backslash Commands
+ * 4. Session Security, Inactivity Timeout (14400s), Logout & Timezone
+ * 5. Public Qualiopi Certificate Verification (findCertificateByCode LP-PG18-ATT-*)
+ * 6. Cohort CSV Import (UTF-8 BOM, TSV, Short Passwords, CSV Injections)
+ * 7. OPCO Attendance Export & Inclusion of Non-Signing Learners
+ * 8. Admin Cache Invalidation & Purge (admin_clear_cache)
+ * 9. Global Non-Regression Across Prior Suites (b1, b2, b3, run_tests)
  * ============================================================================
  */
 
@@ -89,7 +89,7 @@ echo " ADVERSARIAL CHALLENGER B4 — EMPIRICAL VERIFICATION HARNESS\n";
 echo " Target: lightpath-training-portal (PHP 8.3.36)\n";
 echo str_repeat('=', 72) . "\n";
 
-// Configuration d'un stockage de test isolé
+// Configure isolated temporary test storage
 $testDataDir = sys_get_temp_dir() . '/lms_adversarial_b4_' . mt_rand(10000, 99999);
 @mkdir($testDataDir, 0777, true);
 $storage = new JsonStorage($testDataDir);
@@ -98,14 +98,14 @@ $docker = new DockerManager($storage);
 $sqlRunner = new LabSqlRunner($docker);
 
 // ============================================================================
-// SUITE 1 : Concurrence & Protection contre l'Écrasement Destructif (mutateFile)
+// SUITE 1: Concurrency & Destructive Overwrite Protection (mutateFile)
 // ============================================================================
 echo "\n--- Suite 1 : Concurrence & Protection contre l'Écrasement Destructif ---\n";
 
-// 1.1 Tentative d'écrasement avec JSON invalide via writeFile (données non encodables)
+// 1.1 Attempted overwrite with non-encodable invalid JSON via writeFile
 $threwOnInvalidJson = false;
 try {
-    // Utilisation d'une classe anonyme étendant JsonStorage pour exposer writeFile
+    // Anonymous JsonStorage subclass exposing protected writeFile
     $exposedStorage = new class($testDataDir) extends JsonStorage {
         public function testWriteFile(string $name, array $data): void {
             $this->writeFile($name, $data);
@@ -115,7 +115,7 @@ try {
         }
     };
 
-    // Une séquence d'octets UTF-8 invalide fait échouer json_encode
+    // Invalid UTF-8 byte sequence forces json_encode failure
     $invalidUtf8Data = ["bad_data" => "\xB1\x31"];
     $exposedStorage->testWriteFile('test_invalid_json', $invalidUtf8Data);
 } catch (\RuntimeException $e) {
@@ -128,7 +128,7 @@ $suite->assert(
     "writeFile lève une RuntimeException et refuse d'écrire un JSON corrompu ou vide"
 );
 
-// 1.2 Protection de mutateFile contre la destruction d'un fichier corrompu existant
+// 1.2 Guard mutateFile against overwriting an existing corrupt file
 $corruptedFilePath = $testDataDir . '/cohort_critical_data.json';
 file_put_contents($corruptedFilePath, "{\"users\": [{\"id\": 1, \"name\": \"Valid User\"}, TRUNCATED_CRASH");
 
@@ -136,12 +136,12 @@ $threwOnCorruptMutate = false;
 $corruptedFilePreserved = false;
 try {
     $exposedStorage->testMutateFile('cohort_critical_data', [], function(array $current) {
-        // Si readFile renvoie [] à tort, ce mutateur tenterait d'écraser la promotion avec un tableau vide
+        // If readFile mistakenly returned [], this mutator would wipe data with an empty array
         return [['wiped' => true], 'ok'];
     });
 } catch (\RuntimeException $e) {
     $threwOnCorruptMutate = str_contains($e->getMessage(), 'Données corrompues ou illisibles');
-    // Vérifier que le fichier sur disque contient toujours le contenu original et n'a pas été écrasé
+    // Verify file on disk still retains original contents uncorrupted
     $onDisk = file_get_contents($corruptedFilePath);
     $corruptedFilePreserved = str_contains((string)$onDisk, 'TRUNCATED_CRASH');
 }
@@ -155,7 +155,7 @@ $suite->assert(
     "Le fichier existant corrompu n'a PAS été écrasé par les données par défaut []"
 );
 
-// 1.3 Cas légitime où le fichier contient [] : mutateFile autorise la mutation
+// 1.3 Valid empty-array file: mutateFile permits mutation
 $emptyArrFilePath = $testDataDir . '/legit_empty_file.json';
 file_put_contents($emptyArrFilePath, "[]");
 $mutateEmptySuccess = false;
@@ -174,22 +174,22 @@ $suite->assert(
 );
 
 // ============================================================================
-// SUITE 2 : Registre d'Émargement Qualiopi — Préservation Visa & Hash SHA-256
+// SUITE 2: Qualiopi Attendance Registry — Countersignature Preservation & SHA-256 Hash
 // ============================================================================
 echo "\n--- Suite 2 : Registre d'Émargement Qualiopi — Préservation Visa & SHA-256 ---\n";
 
-// Création d'un stagiaire de test
+// Create test student user
 $studentUser = $auth->registerUser("Alice Dubois", "alice.dubois@test.fr", "StudentPass2026!", "student", "Acme Corp");
 $aliceId = (int)($studentUser['id'] ?? 101);
 
-// Stagiaire émerge pour J1_AM
+// Student signs J1_AM slot
 $initialSign = $storage->signAttendance($aliceId, 'postgresql-18', 'J1_AM', 'Signature Initiale Alice');
 $suite->assert(
     isset($initialSign['J1_AM']),
     "Émargement initial stagiaire J1_AM enregistré avec succès"
 );
 
-// Formateur contre-signe pour J1_AM
+// Trainer countersigns J1_AM slot
 $trainerName = "Jean-Marie Renouard";
 $trainerSigned = $storage->signTrainerAttendance($aliceId, 'postgresql-18', 'J1_AM', $trainerName);
 $visaTrainerAt = $trainerSigned['J1_AM']['trainer_signed_at'] ?? '';
@@ -200,7 +200,7 @@ $suite->assert(
     "Le formateur appose son visa horodaté et son condensat SHA-256"
 );
 
-// L'apprenant ré-émarge ensuite ou modifie sa signature
+// Student re-signs or updates signature afterward
 $studentReSign = $storage->signAttendance($aliceId, 'postgresql-18', 'J1_AM', 'Signature Modifiée / Rectifiée Alice');
 $reSignedRecord = $studentReSign['J1_AM'] ?? [];
 
@@ -220,7 +220,7 @@ $suite->assert(
     "Attendu: {$visaTrainerHash}, Obtenu: " . ($reSignedRecord['trainer_hash'] ?? 'NULL')
 );
 
-// Test de contre-signature journée complète J3_DAY
+// Full-day J3_DAY countersignature test
 $storage->signTrainerAttendance($aliceId, 'postgresql-18', 'J3_DAY', $trainerName);
 $aliceAttAfterDay = $storage->getUserAttendance($aliceId, 'postgresql-18');
 $suite->assert(
@@ -228,8 +228,8 @@ $suite->assert(
     "Contre-signature journée complète J3_DAY valide simultanément J3_AM et J3_PM"
 );
 
-// Test de l'entropie temporelle du condensat SHA-256 d'émargement
-// Calcul du hash à deux secondes différentes
+// Temporal entropy check on SHA-256 attendance digest
+// Compute hash at two distinct seconds
 $hashT1 = substr(hash('sha256', $aliceId . '|postgresql-18|J1_AM|Sig|2026-11-02 09:00:00'), 0, 16);
 $hashT2 = substr(hash('sha256', $aliceId . '|postgresql-18|J1_AM|Sig|2026-11-02 09:05:00'), 0, 16);
 $suite->assert(
@@ -238,11 +238,11 @@ $suite->assert(
 );
 
 // ============================================================================
-// SUITE 3 : Sécurité Console SQL Docker (LabSqlRunner) — Injections & Commandes
+// SUITE 3: Docker SQL Console Security (LabSqlRunner) — Injections & Commands
 // ============================================================================
 echo "\n--- Suite 3 : Sécurité Console SQL Docker (LabSqlRunner) ---\n";
 
-// 3.1 Commandes d'échappement psql interactives standard
+// 3.1 Standard interactive psql escape meta-commands
 $interactiveBackslashCommands = [
     '\\! whoami' => 'Échappement shell \\! whoami',
     '\\! id' => 'Échappement shell \\! id',
@@ -271,7 +271,7 @@ foreach ($interactiveBackslashCommands as $cmd => $desc) {
     );
 }
 
-// 3.2 Commandes interactives supplémentaires (\connect, \cd) et contournements de commentaires
+// 3.2 Additional interactive commands (\connect, \cd) and comment-bypass attempts
 $advancedBypassCommands = [
     '\\connect dvdrental' => 'Changement de connexion de base \\connect',
     '\\cd /tmp' => 'Changement de répertoire hôte \\cd',
@@ -289,7 +289,7 @@ foreach ($advancedBypassCommands as $cmd => $desc) {
     );
 }
 
-// 3.3 Neutralisation des modifications de statement_timeout
+// 3.3 Blocking statement_timeout tampering attempts
 $timeoutTamperCommands = [
     'SET statement_timeout = 0;' => 'Désactivation timeout via SET = 0',
     'set statement_timeout = 0;' => 'Désactivation en minuscules set = 0',
@@ -313,20 +313,20 @@ foreach ($timeoutTamperCommands as $cmd => $desc) {
 }
 
 // ============================================================================
-// SUITE 4 : Sécurité des Sessions, Inactivité (14400s), Déconnexion & Timezone
+// SUITE 4: Session Security, Inactivity (14400s), Logout & Timezone
 // ============================================================================
 echo "\n--- Suite 4 : Sécurité des Sessions, Inactivité (14400s), Déconnexion & Timezone ---\n";
 
-// 4.1 Vérification du fuseau horaire Europe/Paris
+// 4.1 Verify Europe/Paris timezone default
 $tz = date_default_timezone_get();
 $suite->assert(
     $tz === 'Europe/Paris',
     "Fuseau horaire système configuré sur 'Europe/Paris' (Actuel: {$tz})"
 );
 
-// 4.2 Expiration de session après inactivité > 14400s (4 heures)
+// 4.2 Session expiration after > 14400s (4 hours) inactivity
 $_SESSION['user_id'] = $aliceId;
-$_SESSION['last_activity'] = time() - 14401; // Inactif depuis 4h + 1s
+$_SESSION['last_activity'] = time() - 14401; // Inactive for 4h + 1s
 
 $expiredUser = $auth->currentUser();
 $suite->assert(
@@ -338,9 +338,9 @@ $suite->assert(
     "La session inactive est révoquée et \$_SESSION['user_id'] est vidé"
 );
 
-// 4.3 Maintien de session si inactivité < 14400s
+// 4.3 Session preserved when inactivity < 14400s
 $_SESSION['user_id'] = $aliceId;
-$_SESSION['last_activity'] = time() - 3600; // Inactif depuis 1h seulement
+$_SESSION['last_activity'] = time() - 3600; // Inactive for 1h only
 $activeUser = $auth->currentUser();
 $suite->assert(
     $activeUser !== null && (int)$activeUser['id'] === $aliceId,
@@ -351,7 +351,7 @@ $suite->assert(
     "currentUser() rafraîchit \$_SESSION['last_activity'] lors d'un accès légitime"
 );
 
-// 4.4 Déconnexion propre via logout()
+// 4.4 Clean session termination via logout()
 $auth->logout();
 $suite->assert(
     empty($_SESSION),
@@ -359,11 +359,11 @@ $suite->assert(
 );
 
 // ============================================================================
-// SUITE 5 : Vérification Publique des Attestations Qualiopi (findCertificateByCode)
+// SUITE 5: Public Qualiopi Certificate Verification (findCertificateByCode)
 // ============================================================================
 echo "\n--- Suite 5 : Vérification Publique des Attestations Qualiopi ---\n";
 
-// 5.1 Code d'attestation valide pour utilisateur existant
+// 5.1 Valid certificate code for existing learner
 $today = date('Ymd');
 $validAttCode = "LP-PG18-ATT-{$aliceId}-{$today}";
 $certResult = $storage->findCertificateByCode($validAttCode);
@@ -389,7 +389,7 @@ $suite->assert(
     "Le nom du titulaire certifié résout fidèlement 'Alice Dubois'"
 );
 
-// 5.2 Insensibilité à la casse
+// 5.2 Case-insensitive certificate lookup
 $lowerAttCode = strtolower($validAttCode);
 $certLowerResult = $storage->findCertificateByCode($lowerAttCode);
 $suite->assert(
@@ -397,7 +397,7 @@ $suite->assert(
     "findCertificateByCode résout le code insensiblement à la casse"
 );
 
-// 5.3 Rejet des codes invalides ou pour utilisateur inexistant
+// 5.3 Reject invalid codes or unknown users
 $invalidAttCodes = [
     "LP-PG18-ATT-999999-{$today}" => "Utilisateur non existant #999999",
     "LP-PG18-ATT-" => "Code tronqué sans UID ni date",
@@ -422,11 +422,11 @@ foreach ($invalidAttCodes as $badCode => $reason) {
 }
 
 // ============================================================================
-// SUITE 6 : Importation CSV des Cohortes (UTF-8 BOM, TSV, Mots de passe)
+// SUITE 6: Cohort CSV Import (UTF-8 BOM, TSV, Passwords)
 // ============================================================================
 echo "\n--- Suite 6 : Importation CSV des Cohortes (BOM, TSV, Délimiteurs) ---\n";
 
-// 6.1 CSV exporté par Microsoft Excel avec BOM UTF-8 (\xEF\xBB\xBF)
+// 6.1 Excel-exported CSV containing UTF-8 BOM (\xEF\xBB\xBF)
 $excelCsv = "\xEF\xBB\xBFNom;Email;Entreprise;Role;Password\n" .
     "Benoît Girard;benoit.girard@acme.fr;Acme France;student;Secure2026!\n";
 
@@ -442,7 +442,7 @@ $suite->assert(
     "Nom obtenu: '" . ($benoit['name'] ?? 'NULL') . "'"
 );
 
-// 6.2 Détection automatique des séparateurs tabulations (TSV)
+// 6.2 Automatic tab-delimiter detection (TSV)
 $tsvPayload = "Nom\tEmail\tEntreprise\tRole\tPassword\n" .
     "Camille Roux\tcamille.roux@acme.fr\tAcme Logistique\tstudent\tCamille2026!\n";
 
@@ -452,7 +452,7 @@ $suite->assert(
     "importUsersFromCsv détecte le délimiteur tabulation (TSV) et crée le compte"
 );
 
-// 6.3 Détection automatique du séparateur virgule (,)
+// 6.3 Automatic comma-delimiter detection (,)
 $commaPayload = "Damien Morel,damien.morel@acme.fr,Acme SI,student,Damien2026!\n";
 $importCommaRes = $storage->importUsersFromCsv($commaPayload);
 $suite->assert(
@@ -460,7 +460,7 @@ $suite->assert(
     "importUsersFromCsv détecte le délimiteur virgule (,) et crée le compte"
 );
 
-// 6.4 Sécurisation des mots de passe trop courts (< 6 caractères)
+// 6.4 Hardening short passwords (< 6 chars)
 $shortPassPayload = "Élodie Faure;elodie.faure@acme.fr;Acme RH;student;123\n";
 $importShortRes = $storage->importUsersFromCsv($shortPassPayload, 'DefaultPass2026!');
 $suite->assert(
@@ -473,7 +473,7 @@ $suite->assert(
     "Le mot de passe trop court ('123') a été substitué par le mot de passe par défaut sécurisé (>= 6 caractères)"
 );
 
-// 6.5 Neutralisation des injections de formules de tableur (CSV Injection / DDE)
+// 6.5 Neutralizing spreadsheet formula injections (CSV Injection / DDE)
 $formulaPayload = "=cmd|' /C calc'!A0;hacker.formula@evil.fr;@MALICIOUS;student;Evil2026!\n";
 $storage->importUsersFromCsv($formulaPayload);
 $hacker = $storage->getUserByEmail('hacker.formula@evil.fr');
@@ -489,15 +489,15 @@ $suite->assert(
 );
 
 // ============================================================================
-// SUITE 7 : Export OPCO d'Émargement & Inclusion des Stagiaires Absents
+// SUITE 7: OPCO Attendance Export & Inclusion of Non-Signing Learners
 // ============================================================================
 echo "\n--- Suite 7 : Export OPCO d'Émargement & Inclusion des Stagiaires Absents ---\n";
 
-// Création d'un stagiaire inscrit sans AUCUN émargement
+// Create enrolled student with zero attendance entries
 $absentUser = $auth->registerUser("Fabien Absent", "fabien.absent@test.fr", "AbsentPass2026!", "student", "Inactifs SA");
 $fabienId = (int)($absentUser['id'] ?? 109);
 
-// Simulation de la logique de génération de l'export CSV OPCO
+// Simulate OPCO CSV export generation logic
 $csvBuffer = fopen('php://memory', 'w+b');
 fwrite($csvBuffer, "\xEF\xBB\xBF");
 fputcsv($csvBuffer, [
@@ -552,7 +552,7 @@ $suite->assert(
 );
 
 // ============================================================================
-// SUITE 8 : Invalidation & Purge des Caches Administrateur (admin_clear_cache)
+// SUITE 8: Admin Cache Invalidation & Purge (admin_clear_cache)
 // ============================================================================
 echo "\n--- Suite 8 : Invalidation & Purge des Caches Administrateur ---\n";
 
@@ -560,7 +560,7 @@ $coursesConfig = require __DIR__ . '/../config/courses.php';
 $courseRepo = new CourseRepository($coursesConfig, $storage->getCustomCourses());
 $mdParser = new MarkdownParser();
 
-// 1. Création d'un faux fichier de cache Markdown
+// 1. Create synthetic Markdown cache artifact
 $parsedCacheDir = __DIR__ . '/../storage/data/parsed_cache';
 @mkdir($parsedCacheDir, 0777, true);
 $dummyCacheFile = $parsedCacheDir . '/dummy_adversarial_test_' . md5('test') . '.json';
@@ -572,7 +572,7 @@ $suite->assert(
     "MarkdownParser::clearParsedCache() purge les fichiers du cache de rendu Markdown"
 );
 
-// 2. Invalidation du cache catalogue
+// 2. Invalidate catalog cache
 $catalogCleared = $courseRepo->clearCatalogCache();
 $suite->assert(
     $catalogCleared >= 0,
@@ -580,11 +580,11 @@ $suite->assert(
 );
 
 // ============================================================================
-// SUITE 9 : Non-Régression Globale & Vérification des Suites Antérieures
+// SUITE 9: Global Non-Regression & Prior Test Suites
 // ============================================================================
 echo "\n--- Suite 9 : Non-Régression Globale & Suites Antérieures ---\n";
 
-// 9.1 Exécution de tests/run_tests.php
+// 9.1 Execute tests/run_tests.php
 $cmdRun = 'php "' . __DIR__ . '/run_tests.php" 2>&1';
 exec($cmdRun, $outRun, $exitRun);
 $outRunStr = implode("\n", $outRun);
@@ -595,7 +595,7 @@ $suite->assert(
     "Exit: {$exitRun}, Sortie: " . substr($outRunStr, -250)
 );
 
-// 9.2 Exécution de tests/test_adversarial_b1.php
+// 9.2 Execute tests/test_adversarial_b1.php
 $cmdB1 = 'php "' . __DIR__ . '/test_adversarial_b1.php" 2>&1';
 exec($cmdB1, $outB1, $exitB1);
 $outB1Str = implode("\n", $outB1);
@@ -605,7 +605,7 @@ $suite->assert(
     "Suite adverse tests/test_adversarial_b1.php : 69/69 passés, VERDICT : APPROVE"
 );
 
-// 9.3 Exécution de tests/test_adversarial_b2.php
+// 9.3 Execute tests/test_adversarial_b2.php
 $cmdB2 = 'php "' . __DIR__ . '/test_adversarial_b2.php" 2>&1';
 exec($cmdB2, $outB2, $exitB2);
 $outB2Str = implode("\n", $outB2);
@@ -615,7 +615,7 @@ $suite->assert(
     "Suite adverse tests/test_adversarial_b2.php : 50/50 passés, VERDICT : APPROVE"
 );
 
-// 9.4 Exécution de tests/test_adversarial_b3.php
+// 9.4 Execute tests/test_adversarial_b3.php
 $cmdB3 = 'php "' . __DIR__ . '/test_adversarial_b3.php" 2>&1';
 exec($cmdB3, $outB3, $exitB3);
 $outB3Str = implode("\n", $outB3);
@@ -625,7 +625,7 @@ $suite->assert(
     "Suite adverse tests/test_adversarial_b3.php : 69/69 passés, VERDICT : APPROVE"
 );
 
-// Nettoyage de l'environnement de test temporaire
+// Clean up temporary test storage directory
 $files = glob($testDataDir . '/*');
 if ($files) {
     foreach ($files as $f) {

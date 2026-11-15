@@ -10,10 +10,15 @@ $activeTrackDuration = (string)($currentCourse['duration'] ?? '70 HEURES (10 JOU
 
 if ($selectedTrackKey !== '' && $selectedTrackKey !== 'all' && isset($tracksMap[$selectedTrackKey])) {
     $tCfg = $tracksMap[$selectedTrackKey];
-    $activeTrackFilter = $tCfg['module_Filter'] ?? null;
+    $activeTrackFilter = $tCfg['module_filter'] ?? $tCfg['module_Filter'] ?? null;
     $activeTrackTitle = (string)($tCfg['title'] ?? $activeTrackTitle);
     $activeTrackDuration = (string)($tCfg['badge'] ?? $activeTrackDuration);
 }
+$certCourseDays = !empty($currentCourse['attendance_days'])
+    ? (int)$currentCourse['attendance_days']
+    : (preg_match('/(\d+)\s*JOURS?/i', (string)($currentCourse['duration'] ?? ''), $dm) ? (int)$dm[1] : 10);
+$certTotalHalfDays = max(2, $certCourseDays * 2);
+$certTotalBadges = max(1, (int)($userGamification['total_badges'] ?? 8));
 
 $filteredModules = [];
 $filteredDoneModules = 0;
@@ -48,16 +53,16 @@ $baseUrl = ($host !== '') ? "{$proto}://{$host}" : rtrim((string)($appConfig['we
 $verifyUrl = $baseUrl . '/index.php?page=verify&code=' . urlencode($certCode);
 ?>
 
-<div class="no-print" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1.5rem;">
+<div class="no-print d-flex justify-between items-center flex-wrap gap-sm mb-lg">
     <div>
         <span class="badge-code">TRAÇABILITÉ QUALIOPI & TAXONOMIE DE BLOOM</span>
-        <h1 style="font-size: 1.65rem; margin: 0.35rem 0 0;">🎓 Attestation de Compétences & Relevé Qualiopi</h1>
+        <h1 class="hero-title-lg mt-xs mb-0">🎓 Attestation de Compétences & Relevé Qualiopi</h1>
     </div>
-    <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
-        <form method="GET" action="index.php" style="display: inline-flex; align-items: center; gap: 0.45rem;">
+    <div class="d-flex items-center gap-sm flex-wrap">
+        <form method="GET" action="index.php" class="d-inline-flex items-center gap-xs">
             <input type="hidden" name="page" value="certificate"/>
             <input type="hidden" name="course" value="<?= Security::e($currentCourseSlug) ?>"/>
-            <select name="track" class="form-control" onchange="this.form.submit()" style="min-width: 250px;">
+            <select name="track" class="form-control cert-track-select" data-auto-submit="change" aria-label="Sélectionner le parcours de l'attestation">
                 <option value="all" <?= $selectedTrackKey === 'all' ? 'selected' : '' ?>>Cursus Complet (<?= $totalModules ?> Modules • <?= $totalLabs ?> Labs)</option>
                 <?php foreach ($tracksMap as $tKey => $tCfg): ?>
                     <option value="<?= Security::e((string)$tKey) ?>" <?= $selectedTrackKey === (string)$tKey ? 'selected' : '' ?>>
@@ -66,13 +71,13 @@ $verifyUrl = $baseUrl . '/index.php?page=verify&code=' . urlencode($certCode);
                 <?php endforeach; ?>
             </select>
         </form>
-        <button type="button" onclick="window.print()" class="btn btn-primary">
+        <button type="button" data-action="print" class="btn btn-primary">
             🖨️ Imprimer / Exporter en PDF Officiel
         </button>
     </div>
 </div>
 
-<div style="background: var(--bg-surface); border: 2px solid var(--brand-cyan); border-radius: var(--radius-lg); padding: clamp(1rem, 4vw, 3rem); box-shadow: var(--shadow-elevated); max-width: 1050px; margin: 0 auto;">
+<div class="certificate-sheet" style="padding: clamp(1rem, 4vw, 3rem);">
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; border-bottom: 2px solid var(--border-hairline); padding-bottom: 1.5rem; margin-bottom: 2rem;">
         <div style="display: flex; align-items: center; gap: 1rem;">
             <img src="assets/img/lightpath_logo_white_text.png"
@@ -115,17 +120,17 @@ $verifyUrl = $baseUrl . '/index.php?page=verify&code=' . urlencode($certCode);
         <div class="kpi-card">
             <div class="kpi-label">Modules Théoriques Validés</div>
             <div class="kpi-value tabular-nums"><?= $filteredDoneModules ?> / <?= $filteredTotalModules ?></div>
-            <div class="kpi-sub">Taxonomie de Bloom C01–C29</div>
+            <div class="kpi-sub">Taxonomie de Bloom (<?= $filteredTotalModules ?> modules)</div>
         </div>
         <div class="kpi-card">
             <div class="kpi-label">Ateliers Docker Validés</div>
             <div class="kpi-value tabular-nums"><?= $filteredDoneLabs ?> / <?= $filteredTotalLabs ?></div>
-            <div class="kpi-sub">Oracles d'exécution PostgreSQL 18</div>
+            <div class="kpi-sub">Oracles d'exécution du cursus</div>
         </div>
         <div class="kpi-card">
             <div class="kpi-label">Examen Sommatif & Assiduité</div>
             <div class="kpi-value tabular-nums"><?= $userBestExam !== null ? ((int)$userBestExam['percent'] . '%') : 'En attente' ?></div>
-            <div class="kpi-sub tabular-nums"><?= count($userAttendance ?? []) ?>/20 demi-journées • <?= (int)($userGamification['unlocked_count'] ?? 0) ?>/8 Badges DBA</div>
+            <div class="kpi-sub tabular-nums"><?= count($userAttendance ?? []) ?>/<?= $certTotalHalfDays ?> demi-journées • <?= (int)($userGamification['unlocked_count'] ?? 0) ?>/<?= $certTotalBadges ?> Badges DBA</div>
         </div>
     </div>
 

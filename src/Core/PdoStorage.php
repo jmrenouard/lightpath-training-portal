@@ -6,12 +6,13 @@ namespace LightPath\LMS\Core;
 use PDO;
 
 /**
- * Adaptateur PDO (PostgreSQL / MySQL / SQLite) pour hébergement Web de production
- * Encapsule la persistance dans une table relationnelle JSONB/TEXT ou bascule sur JsonStorage.
+ * PDO storage adapter (PostgreSQL / MySQL / SQLite) for production web hosting.
+ * Persists JSON KV payloads in a relational table or falls back to JsonStorage when offline.
  */
 class PdoStorage extends JsonStorage
 {
     protected ?PDO $pdo = null;
+    protected ?string $lastError = null;
 
     public function __construct(array $pdoConfig, string $fallbackDataDir)
     {
@@ -30,8 +31,10 @@ class PdoStorage extends JsonStorage
             if ($this->pdo !== null) {
                 $this->initSchema();
             }
-        } catch (\Throwable) {
-            // Repli transparent vers JsonStorage si la base distante n'est pas joignable
+        } catch (\Throwable $e) {
+            // Fall back cleanly to JsonStorage when the configured DB is unreachable at boot.
+            $this->lastError = $e->getMessage();
+            error_log('[LightPath LMS PdoStorage init] ' . $this->lastError);
             $this->pdo = null;
         }
 
@@ -57,6 +60,11 @@ class PdoStorage extends JsonStorage
         return $this->pdo !== null;
     }
 
+    public function getLastError(): ?string
+    {
+        return $this->lastError;
+    }
+
     protected function readFile(string $name, array $default = []): array
     {
         if ($this->pdo !== null) {
@@ -69,7 +77,9 @@ class PdoStorage extends JsonStorage
                     return is_array($decoded) ? $decoded : $default;
                 }
                 return $default;
-            } catch (\Throwable) {
+            } catch (\Throwable $e) {
+                $this->lastError = $e->getMessage();
+                error_log('[LightPath LMS PdoStorage readFile] ' . $this->lastError);
                 return parent::readFile($name, $default);
             }
         }
@@ -80,11 +90,14 @@ class PdoStorage extends JsonStorage
     {
         if ($this->pdo !== null) {
             try {
-                $json = (string)json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                if ($json === false || $json === '') {
+                    throw new \RuntimeException("JSON encoding failed for '$name'");
+                }
                 $now = date('Y-m-d H:i:s');
                 $driver = (string)$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
 
-                // FIX-03: PostgreSQL / SQLite avec ON CONFLICT DO UPDATE atomique
+                // PostgreSQL / SQLite atomic upsert via ON CONFLICT DO UPDATE
                 if ($driver === 'pgsql' || $driver === 'sqlite') {
                     $stmt = $this->pdo->prepare('
                         INSERT INTO lms_kv_store (store_key, payload, updated_at)
@@ -92,10 +105,11 @@ class PdoStorage extends JsonStorage
                         ON CONFLICT (store_key) DO UPDATE SET payload = EXCLUDED.payload, updated_at = EXCLUDED.updated_at
                     ');
                     $stmt->execute([':k' => $name, ':p' => $json, ':u' => $now]);
+                    $this->lastError = null;
                     return;
                 }
 
-                // MySQL avec ON DUPLICATE KEY UPDATE atomique
+                // MySQL atomic upsert via ON DUPLICATE KEY UPDATE
                 if ($driver === 'mysql') {
                     $stmt = $this->pdo->prepare('
                         INSERT INTO lms_kv_store (store_key, payload, updated_at)
@@ -103,6 +117,7 @@ class PdoStorage extends JsonStorage
                         ON DUPLICATE KEY UPDATE payload = VALUES(payload), updated_at = VALUES(updated_at)
                     ');
                     $stmt->execute([':k' => $name, ':p' => $json, ':u' => $now]);
+                    $this->lastError = null;
                     return;
                 }
 
@@ -112,9 +127,13 @@ class PdoStorage extends JsonStorage
                     $ins = $this->pdo->prepare('INSERT INTO lms_kv_store (store_key, payload, updated_at) VALUES (:k, :p, :u)');
                     $ins->execute([':k' => $name, ':p' => $json, ':u' => $now]);
                 }
+                $this->lastError = null;
                 return;
-            } catch (\Throwable) {
-                // Repli transparent sur le stockage fichier atomique
+            } catch (\Throwable $e) {
+                // Do not silently fall back to local JSON once PDO is connected to avoid split-brain writes.
+                $this->lastError = $e->getMessage();
+                error_log('[LightPath LMS PdoStorage writeFile] ' . $this->lastError);
+                throw new \RuntimeException("PDO write error for '$name': " . $this->lastError, 0, $e);
             }
         }
         parent::writeFile($name, $data);
@@ -127,12 +146,14 @@ class PdoStorage extends JsonStorage
             if ($ownTx) {
                 try {
                     $this->pdo->beginTransaction();
-                } catch (\Throwable) {
+                } catch (\Throwable $e) {
+                    $this->lastError = $e->getMessage();
+                    error_log('[LightPath LMS PdoStorage beginTx] ' . $this->lastError);
                     $ownTx = false;
                 }
             }
             try {
-                // FIX-03: FOR UPDATE sous PostgreSQL / MySQL pour éviter le Lost Update
+                // Lock target row on PostgreSQL / MySQL to prevent lost updates
                 $driver = (string)$this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
                 $forUpdate = ($driver === 'pgsql' || $driver === 'mysql') ? ' FOR UPDATE' : '';
                 $stmt = $this->pdo->prepare("SELECT payload FROM lms_kv_store WHERE store_key = :k{$forUpdate} LIMIT 1");
@@ -155,6 +176,8 @@ class PdoStorage extends JsonStorage
                 }
                 return $result;
             } catch (\Throwable $e) {
+                $this->lastError = $e->getMessage();
+                error_log('[LightPath LMS PdoStorage mutateFile] ' . $this->lastError);
                 if ($ownTx && $this->pdo->inTransaction()) {
                     $this->pdo->rollBack();
                 }
@@ -162,5 +185,29 @@ class PdoStorage extends JsonStorage
             }
         }
         return parent::mutateFile($name, $default, $mutator);
+    }
+
+    protected function listAuditArchiveKeys(): array
+    {
+        if ($this->pdo !== null) {
+            try {
+                $stmt = $this->pdo->query("SELECT store_key FROM lms_kv_store WHERE store_key LIKE 'audit_logs_%' ORDER BY store_key DESC");
+                $keys = [];
+                if ($stmt !== false) {
+                    foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $key) {
+                        $name = (string)$key;
+                        if (preg_match('/^audit_logs_\d{6}$/', $name)) {
+                            $keys[] = $name;
+                        }
+                    }
+                }
+                return $keys;
+            } catch (\Throwable $e) {
+                $this->lastError = $e->getMessage();
+                error_log('[LightPath LMS PdoStorage listAuditArchiveKeys] ' . $this->lastError);
+                return parent::listAuditArchiveKeys();
+            }
+        }
+        return parent::listAuditArchiveKeys();
     }
 }

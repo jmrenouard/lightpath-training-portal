@@ -2,9 +2,9 @@
 declare(strict_types=1);
 
 /**
- * Registre Multi-Formations (Course-Pack Engine)
- * Permet d'ajouter ou brancher n'importe quelle formation passée ou future
- * en pointant vers son dossier source ou un pack synchronisé dans storage/courses/<slug>.
+ * Multi-course registry (Course-Pack Engine).
+ * Connects any past or future course pack by pointing to its source root
+ * or a synchronized course bundle under storage/courses/<slug>.
  */
 
 $pgSourceRoot = realpath(__DIR__ . '/../../training_postgresql') ?: (__DIR__ . '/../../training_postgresql');
@@ -38,7 +38,7 @@ return [
                 'objective' => 'Déployer, sécuriser, sauvegarder, répliquer, conteneuriser et interfacer PostgreSQL 18 en production critique.',
                 'color' => '#00B0F0',
                 'description' => 'Maîtrise intégrale du cycle de vie PostgreSQL 18 : architecture interne & AIO, installation PGDG, SQL avancé, indexation, tuning, pgBackRest, sécurité SCRAM/RLS, Patroni, PgBouncer, Docker, Swarm, Kubernetes CloudNativePG, connecteurs Python/PHP/Go, maîtrise psql, migration pgcopydb et durcissement noyau Linux.',
-                'module_Filter' => ['01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20'],
+                'module_filter' => ['01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20'],
                 'phases' => [
                     [
                         'code' => 'JOUR 1',
@@ -83,7 +83,7 @@ return [
                 'objective' => 'Diagnostiquer scientifiquement et résoudre les goulets d\'étranglement CPU, I/O, mémoire et verrous MVCC.',
                 'color' => '#F59E0B',
                 'description' => 'Dissection du Cost-Based Optimizer (CBO), statistiques multivariées, introspection physique d\'index B-Tree/GIN/GiST/BRIN avec pageinspect, élimination des temp spills mémoire/I/O AIO et résolution chirurgicale des contentions MVCC et de l\'autovacuum.',
-                'module_Filter' => ['21','22','23','24','25'],
+                'module_filter' => ['21','22','23','24','25'],
                 'phases' => [
                     [
                         'code' => 'ÉTAPE 1',
@@ -116,7 +116,7 @@ return [
                 'objective' => 'Gérer des tables multi-téraoctets, instrumenter l\'observabilité forensique et fédérer des architectures distribuées.',
                 'color' => '#10B981',
                 'description' => 'Partitionnement déclaratif haute volumétrie (Range/List/Hash & Partition Pruning), observabilité forensique pgBadger & Prometheus/Grafana, fédération de données distribuées postgres_fdw et haute disponibilité automatisée pg_auto_failover.',
-                'module_Filter' => ['26','27','28','29'],
+                'module_filter' => ['26','27','28','29'],
                 'phases' => [
                     [
                         'code' => 'VOLET 1',
@@ -143,7 +143,7 @@ return [
                 'objective' => 'Écrire des requêtes SQL:2023 fiables, performantes et conformes ACID sur le schéma de référence Sakila.',
                 'color' => '#38BDF8',
                 'description' => 'Maîtrise progressive du langage SQL : projection et filtrage déclaratif, transactions DML ACID et clause RETURNING, jointures multi-tables et anti-joins, agrégations analytiques GROUPING SETS/CUBE/FILTER et modélisation DDL (IDENTITY, contraintes, vues matérialisées).',
-                'module_Filter' => ['sql_01','sql_02','sql_03','sql_04','sql_05'],
+                'module_filter' => ['sql_01','sql_02','sql_03','sql_04','sql_05'],
                 'phases' => [
                     [
                         'code' => 'SOCLE 1',

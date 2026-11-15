@@ -21,7 +21,7 @@ interface StorageInterface
     public function saveCustomCourse(array $course): void;
 
     public function logAuditEvent(string $actor, string $action, string $details): void;
-    public function getAuditLogs(int $limit = 50): array;
+    public function getAuditLogs(int $limit = 50, bool $includeArchives = false): array;
 
     public function saveDiagnosticResult(int $userId, string $courseSlug, array $result): void;
     public function getDiagnosticResult(int $userId, string $courseSlug = 'postgresql-18'): ?array;
@@ -59,4 +59,13 @@ interface StorageInterface
     public function deleteDiscussionMessage(string $courseSlug, string $itemId, string $messageId): bool;
     public function getAllCourseDiscussions(string $courseSlug = 'postgresql-18'): array;
     public function importUsersFromCsv(string $csvContent, string $defaultPassword = 'LightPath2026!', string $courseSlug = 'postgresql-18'): array;
+
+    public function getLoginThrottle(string $key): ?array;
+    public function recordLoginFailure(string $key, int $windowSeconds = 300): array;
+    public function clearLoginThrottle(string $key): void;
+    public function getFeatureFlags(): array;
+    public function saveFeatureFlags(array $flags): array;
+    public function resetUserProgress(int $userId, string $courseSlug): bool;
+    public function toggleCustomCourse(string $slug, bool $active): bool;
+    public function deleteCustomCourse(string $slug): bool;
 }
