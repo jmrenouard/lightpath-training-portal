@@ -48,7 +48,7 @@ $coldRatings = $coldSurvey['ratings'] ?? [];
 <form method="POST" action="index.php?page=satisfaction&tab=cold&action=submit_cold_satisfaction&course=<?= urlencode($currentCourseSlug) ?>" class="lms-card">
     <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
 
-    <h2 style="font-size: 1.25rem; margin-bottom: 1rem;">❄️ Évaluation d'Impact Métier à Froid (J+60 — 1 = Faible impact à 5 = Impact majeur)</h2>
+    <h2 class="section-heading-md mb-1">❄️ Évaluation d'Impact Métier à Froid (J+60 — 1 = Faible impact à 5 = Impact majeur)</h2>
 
     <?php
     $coldCriteria = [
@@ -61,11 +61,11 @@ $coldRatings = $coldSurvey['ratings'] ?? [];
     foreach ($coldCriteria as $cKey => $cLabel):
         $curVal = (int)($coldRatings[$cKey] ?? ($coldSurvey[$cKey] ?? 5));
     ?>
-        <div class="quiz-question-box" style="margin-bottom: 1rem;">
-            <div style="font-weight: 700; margin-bottom: 0.55rem;"><?= Security::e($cLabel) ?></div>
-            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <div class="quiz-question-box mb-1">
+            <div class="font-bold mb-xs"><?= Security::e($cLabel) ?></div>
+            <div class="d-flex gap-md flex-wrap">
                 <?php for ($v = 1; $v <= 5; $v++): ?>
-                    <label style="display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer;">
+                    <label class="satisfaction-radio-label">
                         <input type="radio" name="<?= Security::e($cKey) ?>" value="<?= $v ?>" <?= $curVal === $v ? 'checked' : '' ?> required/>
                         <span class="tabular-nums"><strong><?= $v ?> / 5</strong> <?= str_repeat('★', $v) ?></span>
                     </label>
@@ -106,11 +106,11 @@ $coldRatings = $coldSurvey['ratings'] ?? [];
     foreach ($criteria as $cKey => $cLabel):
         $curVal = (int)($r[$cKey] ?? 5);
     ?>
-        <div class="quiz-question-box" style="margin-bottom: 1rem;">
-            <div style="font-weight: 700; margin-bottom: 0.55rem;"><?= Security::e($cLabel) ?></div>
-            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <div class="quiz-question-box mb-1">
+            <div class="font-bold mb-xs"><?= Security::e($cLabel) ?></div>
+            <div class="d-flex gap-md flex-wrap">
                 <?php for ($v = 1; $v <= 5; $v++): ?>
-                    <label style="display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer;">
+                    <label class="satisfaction-radio-label">
                         <input type="radio" name="<?= Security::e($cKey) ?>" value="<?= $v ?>" <?= $curVal === $v ? 'checked' : '' ?> required/>
                         <span class="tabular-nums"><strong><?= $v ?> / 5</strong> <?= str_repeat('★', $v) ?></span>
                     </label>

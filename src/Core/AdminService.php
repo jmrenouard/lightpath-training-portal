@@ -62,20 +62,9 @@ class AdminService
 
             $doneMods = count((array)($uProg['completed_modules'] ?? []));
             $doneLabs = count((array)($uProg['completed_labs'] ?? []));
-            $quizzes = is_array($uProg['quiz_scores'] ?? null)
-                ? $uProg['quiz_scores']
-                : (is_array($uProg['quizzes'] ?? null) ? $uProg['quizzes'] : []);
-            $quizCount = count($quizzes);
-            $quizAvg = 0;
-            if ($quizCount > 0) {
-                $pctSum = 0;
-                foreach ($quizzes as $qz) {
-                    if (is_array($qz)) {
-                        $pctSum += (int)($qz['percentage'] ?? $qz['percent'] ?? 0);
-                    }
-                }
-                $quizAvg = (int)round($pctSum / $quizCount);
-            }
+            $quizStats = self::extractQuizStats($uProg);
+            $quizCount = $quizStats['count'];
+            $quizAvg = $quizStats['avg'];
 
             $modulePct = $totalModules > 0 ? min(100, (int)round(($doneMods / $totalModules) * 100)) : 0;
             $labPct = $totalLabs > 0 ? min(100, (int)round(($doneLabs / $totalLabs) * 100)) : 0;
@@ -216,6 +205,363 @@ class AdminService
         }
 
         return $bucket;
+    }
+
+    /**
+     * Extracts quiz completion count and average percentage from a user progress entry.
+     *
+     * @return array{count: int, avg: int}
+     */
+    private static function extractQuizStats(array $uProg): array
+    {
+        $quizzes = is_array($uProg['quiz_scores'] ?? null)
+            ? $uProg['quiz_scores']
+            : (is_array($uProg['quizzes'] ?? null) ? $uProg['quizzes'] : []);
+        $quizCount = count($quizzes);
+        $quizAvg = 0;
+        if ($quizCount > 0) {
+            $pctSum = 0;
+            foreach ($quizzes as $qz) {
+                if (is_array($qz)) {
+                    $pctSum += (int)($qz['percentage'] ?? $qz['percent'] ?? 0);
+                }
+            }
+            $quizAvg = (int)round($pctSum / $quizCount);
+        }
+        return ['count' => $quizCount, 'avg' => $quizAvg];
+    }
+
+    /**
+     * Checks whether a learner account is enrolled in the target course slug.
+     */
+    private static function isLearnerEnrolledInCourse(array $user, string $courseSlug): bool
+    {
+        if (!array_key_exists('enrolled_courses', $user) || $user['enrolled_courses'] === null) {
+            return $courseSlug === 'postgresql-18';
+        }
+        if (!is_array($user['enrolled_courses'])) {
+            return false;
+        }
+        return in_array($courseSlug, $user['enrolled_courses'], true);
+    }
+
+    /**
+     * Detects active enrolled learners whose global module/lab completion falls below the threshold.
+     */
+    public function detectAtRiskLearners(array $users, array $allProgress, array $course, int $thresholdPct = 20): array
+    {
+        $courseSlug = (string)($course['slug'] ?? 'postgresql-18');
+        $modules = is_array($course['modules'] ?? null) ? $course['modules'] : [];
+        $labs = is_array($course['labs'] ?? null) ? $course['labs'] : [];
+        $totalItems = max(1, count($modules) + count($labs));
+        $limitPct = max(0, min(100, $thresholdPct));
+        $atRisk = [];
+
+        foreach ($users as $u) {
+            if (!is_array($u)) {
+                continue;
+            }
+            $uid = (int)($u['id'] ?? 0);
+            $role = (string)($u['role'] ?? 'student');
+            if ($uid <= 0 || in_array($role, ['admin', 'trainer'], true)) {
+                continue;
+            }
+            if (array_key_exists('active', $u) && empty($u['active'])) {
+                continue;
+            }
+            if (!self::isLearnerEnrolledInCourse($u, $courseSlug)) {
+                continue;
+            }
+
+            $uProg = self::resolveCourseEntry($allProgress, $uid, $courseSlug);
+            $uProg = is_array($uProg) ? $uProg : [];
+            $doneMods = count((array)($uProg['completed_modules'] ?? []));
+            $doneLabs = count((array)($uProg['completed_labs'] ?? []));
+            $completionPct = min(100, (int)round((($doneMods + $doneLabs) / $totalItems) * 100));
+            $learningSeconds = (int)($uProg['learning_seconds'] ?? $uProg['time_spent_seconds'] ?? 0);
+
+            $isAtRisk = ($limitPct === 0) ? ($completionPct === 0) : ($completionPct < $limitPct);
+            if (!$isAtRisk) {
+                continue;
+            }
+
+            $atRisk[] = [
+                'user_id' => $uid,
+                'name' => (string)($u['name'] ?? ''),
+                'email' => (string)($u['email'] ?? ''),
+                'company' => (string)($u['company'] ?? ''),
+                'done_modules' => $doneMods,
+                'done_labs' => $doneLabs,
+                'completion_pct' => $completionPct,
+                'learning_seconds' => $learningSeconds,
+                'last_login' => $u['last_login'] ?? null,
+                'risk_reason' => ($doneMods === 0 && $doneLabs === 0)
+                    ? 'Aucune activité enregistrée (0%)'
+                    : sprintf('Progression inférieure au seuil (%d%% < %d%%)', $completionPct, $limitPct),
+            ];
+        }
+
+        usort($atRisk, static function (array $a, array $b): int {
+            $cmp = $a['completion_pct'] <=> $b['completion_pct'];
+            return $cmp !== 0 ? $cmp : strcmp($a['name'], $b['name']);
+        });
+
+        return $atRisk;
+    }
+
+    /**
+     * Computes per-module and per-lab cohort completion percentages and average quiz scores.
+     */
+    public function computeModuleCompletionMatrix(array $users, array $allProgress, array $course): array
+    {
+        $courseSlug = (string)($course['slug'] ?? 'postgresql-18');
+        $modules = is_array($course['modules'] ?? null) ? $course['modules'] : [];
+        $labs = is_array($course['labs'] ?? null) ? $course['labs'] : [];
+
+        $learnerProgress = [];
+        foreach ($users as $u) {
+            if (!is_array($u)) {
+                continue;
+            }
+            $uid = (int)($u['id'] ?? 0);
+            $role = (string)($u['role'] ?? 'student');
+            if ($uid <= 0 || in_array($role, ['admin', 'trainer'], true)) {
+                continue;
+            }
+            if (!self::isLearnerEnrolledInCourse($u, $courseSlug)) {
+                continue;
+            }
+            $uProg = self::resolveCourseEntry($allProgress, $uid, $courseSlug);
+            $learnerProgress[$uid] = is_array($uProg) ? $uProg : [];
+        }
+
+        $learnersCount = count($learnerProgress);
+        $moduleMatrix = [];
+        foreach ($modules as $modId => $mod) {
+            $modIdStr = (string)$modId;
+            $doneCount = 0;
+            $quizPctSum = 0;
+            $quizAttempts = 0;
+            foreach ($learnerProgress as $uProg) {
+                if (in_array($modIdStr, (array)($uProg['completed_modules'] ?? []), true)) {
+                    $doneCount++;
+                }
+                $qEntry = $uProg['quiz_scores'][$modIdStr] ?? $uProg['quizzes'][$modIdStr] ?? null;
+                if (is_array($qEntry)) {
+                    $quizPctSum += (int)($qEntry['percentage'] ?? $qEntry['percent'] ?? 0);
+                    $quizAttempts++;
+                }
+            }
+            $moduleMatrix[$modIdStr] = [
+                'id' => $modIdStr,
+                'code' => (string)($mod['code'] ?? ''),
+                'badge_code' => (string)($mod['badge_code'] ?? $modIdStr),
+                'title' => (string)($mod['title'] ?? $modIdStr),
+                'completed_count' => $doneCount,
+                'completion_pct' => $learnersCount > 0 ? round(($doneCount / $learnersCount) * 100, 1) : 0.0,
+                'quiz_attempts' => $quizAttempts,
+                'avg_quiz_pct' => $quizAttempts > 0 ? round($quizPctSum / $quizAttempts, 1) : null,
+            ];
+        }
+
+        $labMatrix = [];
+        foreach ($labs as $labId => $lab) {
+            $labIdStr = (string)$labId;
+            $doneCount = 0;
+            foreach ($learnerProgress as $uProg) {
+                if (in_array($labIdStr, (array)($uProg['completed_labs'] ?? []), true)) {
+                    $doneCount++;
+                }
+            }
+            $labMatrix[$labIdStr] = [
+                'id' => $labIdStr,
+                'code' => (string)($lab['code'] ?? ''),
+                'badge_code' => (string)($lab['badge_code'] ?? $labIdStr),
+                'title' => (string)($lab['title'] ?? $labIdStr),
+                'completed_count' => $doneCount,
+                'completion_pct' => $learnersCount > 0 ? round(($doneCount / $learnersCount) * 100, 1) : 0.0,
+            ];
+        }
+
+        return [
+            'course_slug' => $courseSlug,
+            'learners_count' => $learnersCount,
+            'modules' => $moduleMatrix,
+            'labs' => $labMatrix,
+        ];
+    }
+
+    /**
+     * Exports cohort progression and quiz metrics as an Excel-safe UTF-8 CSV with BOM and semicolon delimiter.
+     */
+    public function exportCohortCsv(array $users, array $allProgress, array $course): string
+    {
+        $courseSlug = (string)($course['slug'] ?? 'postgresql-18');
+        $totalModules = count((array)($course['modules'] ?? []));
+        $totalLabs = count((array)($course['labs'] ?? []));
+        $totalItems = max(1, $totalModules + $totalLabs);
+
+        $headers = [
+            'User_ID', 'Nom', 'Email', 'Entreprise', 'Role', 'Statut',
+            'Modules_Completes', 'Total_Modules', 'Labs_Completes', 'Total_Labs',
+            'Progression_Pct', 'Quiz_Completes', 'Moyenne_Quiz_Pct', 'Temps_LMS_Min', 'Derniere_Connexion',
+        ];
+        $fp = fopen('php://temp', 'r+b');
+        if ($fp === false) {
+            return "\xEF\xBB\xBF" . implode(';', $headers) . "\n";
+        }
+
+        fwrite($fp, "\xEF\xBB\xBF");
+        fputcsv($fp, $headers, ';', '"', '\\');
+
+        foreach ($users as $u) {
+            if (!is_array($u)) {
+                continue;
+            }
+            $uid = (int)($u['id'] ?? 0);
+            if ($uid <= 0) {
+                continue;
+            }
+            $uProg = self::resolveCourseEntry($allProgress, $uid, $courseSlug);
+            $uProg = is_array($uProg) ? $uProg : [];
+            $doneMods = count((array)($uProg['completed_modules'] ?? []));
+            $doneLabs = count((array)($uProg['completed_labs'] ?? []));
+            $completionPct = min(100, (int)round((($doneMods + $doneLabs) / $totalItems) * 100));
+            $quizStats = self::extractQuizStats($uProg);
+            $learningMin = (int)round(((int)($uProg['learning_seconds'] ?? $uProg['time_spent_seconds'] ?? 0)) / 60);
+
+            fputcsv($fp, [
+                $uid,
+                Security::sanitizeCsvCell((string)($u['name'] ?? '')),
+                Security::sanitizeCsvCell((string)($u['email'] ?? '')),
+                Security::sanitizeCsvCell((string)($u['company'] ?? '')),
+                Security::sanitizeCsvCell((string)($u['role'] ?? 'student')),
+                !empty($u['active']) ? 'ACTIF' : 'SUSPENDU',
+                $doneMods,
+                $totalModules,
+                $doneLabs,
+                $totalLabs,
+                $completionPct,
+                $quizStats['count'],
+                $quizStats['avg'],
+                $learningMin,
+                Security::sanitizeCsvCell((string)($u['last_login'] ?? '')),
+            ], ';', '"', '\\');
+        }
+
+        rewind($fp);
+        $csv = (string)stream_get_contents($fp);
+        fclose($fp);
+        return $csv;
+    }
+
+    /**
+     * Generates a complete Qualiopi audit dossier in structured JSON format including integrity verification.
+     */
+    public function exportQualiopiJson(
+        array $users,
+        array $allProgress,
+        array $attendance,
+        array $auditLogs,
+        array $course,
+        array $integrityReport
+    ): string {
+        $courseSlug = (string)($course['slug'] ?? 'postgresql-18');
+        $modules = is_array($course['modules'] ?? null) ? $course['modules'] : [];
+        $labs = is_array($course['labs'] ?? null) ? $course['labs'] : [];
+        $totalItems = max(1, count($modules) + count($labs));
+
+        $learnersPayload = [];
+        foreach ($users as $u) {
+            if (!is_array($u)) {
+                continue;
+            }
+            $uid = (int)($u['id'] ?? 0);
+            if ($uid <= 0) {
+                continue;
+            }
+            $uProg = self::resolveCourseEntry($allProgress, $uid, $courseSlug);
+            $uProg = is_array($uProg) ? $uProg : [];
+            $uAttRaw = self::resolveCourseEntry($attendance, $uid, $courseSlug);
+            $uAtt = is_array($uAttRaw) ? $uAttRaw : [];
+            $signedEntries = array_filter(
+                $uAtt,
+                static fn($entry): bool => is_array($entry) && !empty($entry['signed_at'])
+            );
+            $doneMods = count((array)($uProg['completed_modules'] ?? []));
+            $doneLabs = count((array)($uProg['completed_labs'] ?? []));
+            $quizStats = self::extractQuizStats($uProg);
+
+            $learnersPayload[] = [
+                'user_id' => $uid,
+                'name' => (string)($u['name'] ?? ''),
+                'email' => (string)($u['email'] ?? ''),
+                'company' => (string)($u['company'] ?? ''),
+                'role' => (string)($u['role'] ?? 'student'),
+                'active' => !empty($u['active']),
+                'done_modules' => $doneMods,
+                'done_labs' => $doneLabs,
+                'completion_pct' => min(100, (int)round((($doneMods + $doneLabs) / $totalItems) * 100)),
+                'quiz_count' => $quizStats['count'],
+                'avg_quiz_score' => $quizStats['avg'],
+                'learning_seconds' => (int)($uProg['learning_seconds'] ?? $uProg['time_spent_seconds'] ?? 0),
+                'signed_half_days' => count($signedEntries),
+                'attendance_hours' => count($signedEntries) * 3.5,
+                'attendance_records' => $uAtt,
+            ];
+        }
+
+        $payload = [
+            'schema_version' => '2.0',
+            'generated_at' => date('c'),
+            'provider' => [
+                'company' => 'LightPath SARL',
+                'trainer' => 'Jean-Marie Renouard',
+                'framework' => 'Qualiopi / Datadock',
+            ],
+            'course' => [
+                'slug' => $courseSlug,
+                'title' => (string)($course['title'] ?? $courseSlug),
+                'modules_count' => count($modules),
+                'labs_count' => count($labs),
+            ],
+            'audit_integrity' => $integrityReport,
+            'at_risk_learners' => $this->detectAtRiskLearners($users, $allProgress, $course),
+            'module_completion_matrix' => $this->computeModuleCompletionMatrix($users, $allProgress, $course),
+            'learners' => $learnersPayload,
+            'audit_logs_count' => count($auditLogs),
+            'audit_logs' => array_slice($auditLogs, 0, 200),
+        ];
+
+        $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return $json !== false ? $json : '{}';
+    }
+
+    /**
+     * Collects cryptographic SHA-256 audit hash-chain status metadata for exports and health checks.
+     */
+    public function buildAuditExportMetadata(StorageInterface $storage, bool $includeArchives = true): array
+    {
+        $integrity = method_exists($storage, 'verifyAuditIntegrity')
+            ? $storage->verifyAuditIntegrity($includeArchives)
+            : [
+                'valid' => true,
+                'total_checked' => 0,
+                'chained_entries' => 0,
+                'legacy_unchained' => 0,
+                'broken_links' => [],
+            ];
+
+        return [
+            'exported_at' => date('c'),
+            'include_archives' => $includeArchives,
+            'integrity' => $integrity,
+            'chain_valid' => (bool)($integrity['valid'] ?? true),
+            'total_checked' => (int)($integrity['total_checked'] ?? 0),
+            'chained_entries' => (int)($integrity['chained_entries'] ?? 0),
+            'legacy_unchained' => (int)($integrity['legacy_unchained'] ?? 0),
+            'broken_links_count' => count((array)($integrity['broken_links'] ?? [])),
+        ];
     }
 
     /**
@@ -395,6 +741,23 @@ class AdminService
             'detail' => $securityOk
                 ? 'Variables d\'environnement de signature et PostgreSQL configurées'
                 : 'Mode développement : configurer LMS_CERT_HMAC_SECRET et mot de passe Docker dédié en production',
+        ];
+
+        $auditMeta = $this->buildAuditExportMetadata($storage, true);
+        $chainValid = !empty($auditMeta['chain_valid']);
+        $checks[] = [
+            'component' => 'Chaîne Audit SHA-256',
+            'status' => $chainValid ? 'ok' : 'error',
+            'detail' => $chainValid
+                ? sprintf(
+                    'Chaîne intègre (%d entrée(s) chaînée(s), %d héritée(s))',
+                    (int)$auditMeta['chained_entries'],
+                    (int)$auditMeta['legacy_unchained']
+                )
+                : sprintf(
+                    'Rupture détectée sur %d entrée(s) de la chaîne SHA-256',
+                    (int)$auditMeta['broken_links_count']
+                ),
         ];
 
         $okCount = count(array_filter($checks, static fn(array $c): bool => $c['status'] === 'ok'));

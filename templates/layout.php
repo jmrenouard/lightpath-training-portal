@@ -242,14 +242,18 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
                 <span>✍️ Émargement & Assiduité</span>
                 <span class="nav-badge tabular-nums"><?= count($userAttendance ?? []) ?>/<?= (int)$layoutTotalHalfDays ?></span>
             </a>
-            <a href="index.php?page=flashcards&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'flashcards' ? 'active' : '' ?>">
-                <span>🧠 Cartes SRS & Glossaire</span>
-                <span class="nav-badge tabular-nums"><?= count(\LightPath\LMS\Course\LmsCatalog::getFlashcards()) ?> SRS</span>
-            </a>
-            <a href="index.php?page=notes&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'notes' ? 'active' : '' ?>">
-                <span>📝 Mon Carnet de Notes</span>
-                <span class="nav-badge tabular-nums"><?= count($userProgress['notes'] ?? []) ?></span>
-            </a>
+            <?php if (!isset($featureManager) || $featureManager->isEnabledForCourse('flashcards_srs', $currentCourseSlug)): ?>
+                <a href="index.php?page=flashcards&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'flashcards' ? 'active' : '' ?>">
+                    <span>🧠 Cartes SRS & Glossaire</span>
+                    <span class="nav-badge tabular-nums"><?= count(\LightPath\LMS\Course\LmsCatalog::getFlashcards()) ?> SRS</span>
+                </a>
+            <?php endif; ?>
+            <?php if (!isset($featureManager) || $featureManager->isEnabledForCourse('personal_notes', $currentCourseSlug)): ?>
+                <a href="index.php?page=notes&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'notes' ? 'active' : '' ?>">
+                    <span>📝 Mon Carnet de Notes</span>
+                    <span class="nav-badge tabular-nums"><?= count($userProgress['notes'] ?? []) ?></span>
+                </a>
+            <?php endif; ?>
             <a href="index.php?page=satisfaction&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'satisfaction' ? 'active' : '' ?>">
                 <span>⭐ Satisfaction Qualiopi</span>
                 <span class="nav-badge">Chaud/Froid</span>
@@ -302,7 +306,7 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
                              <?= $shouldOpen ? 'open' : '' ?>>
                         <summary class="sidebar-track-summary" title="<?= Security::e($track['title']) ?>">
                             <span class="nav-track-label">
-                                <span class="track-dot" style="background: <?= Security::e($track['color'] ?? '#00B0F0') ?>;"></span>
+                                <span class="track-dot" data-accent="<?= Security::e($track['color'] ?? '#00B0F0') ?>"></span>
                                 <span class="nav-track-text"><?= Security::e($track['short_title'] ?? $track['title']) ?></span>
                             </span>
                             <span class="nav-badge tabular-nums"><?= $trackDone ?>/<?= count($trackModsList) ?></span>

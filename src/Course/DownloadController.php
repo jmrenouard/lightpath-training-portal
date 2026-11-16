@@ -132,8 +132,8 @@ class DownloadController
 
         if ($disp === 'inline') {
             header('Cache-Control: public, max-age=86400');
-            // Rewrite relative ../assets/ paths and relative documentation links for inline HTML rendering,
-            // then inject the unload -> pagehide compatibility shim.
+            // Emit standalone document CSP allowing trusted inline scripts via SHA-256 hashes
+            // and inline styles solely for compiled HTML frames before prepending the unload shim.
             if (str_starts_with((string)$fileInfo['mime'], 'text/html')) {
                 $html = (string)file_get_contents($fileInfo['path']);
                 $html = (string)preg_replace('/(?:\.\.\/)+assets\//', 'assets/', $html);
@@ -161,6 +161,18 @@ class DownloadController
                         $html
                     );
                 }
+                $inlineHashes = [];
+                if (preg_match_all('/<script\b([^>]*)>(.*?)<\/script>/is', $html, $matches, PREG_SET_ORDER)) {
+                    foreach ($matches as $m) {
+                        if (preg_match('/(?:^|\s)src\s*=/i', $m[1])) {
+                            continue;
+                        }
+                        if (trim($m[2]) !== '') {
+                            $inlineHashes[] = 'sha256-' . base64_encode(hash('sha256', $m[2], true));
+                        }
+                    }
+                }
+                Security::sendStandaloneDocumentCspHeader(array_values(array_unique($inlineHashes)));
                 $shim = Security::renderUnloadShimScript();
                 if (stripos($html, '<head>') !== false) {
                     $html = (string)preg_replace('/<head>/i', '<head>' . $shim, $html, 1);

@@ -8,6 +8,11 @@
 
 Courses are registered declaratively in [config/courses.php](../config/courses.php) and merged at runtime with optional custom courses persisted in `custom_courses.json` (`toggleCustomCourse`, `deleteCustomCourse`).
 
+### Per-Course Feature Overrides (`FeatureManager`)
+While [config/features.php](../config/features.php) defines 10 global modular flags and 4 deployment profiles (`full_enterprise`, `classroom_workshop`, `exam_lockdown`, `static_hosting_nodocker`), administrators can override individual flags **per course slug** (`FeatureManager::setCourseOverrides()`, `FeatureManager::clearCourseOverrides()`, `FeatureManager::isEnabledForCourse()`):
+- Useful when hosting a theoretical/non-Docker course alongside PostgreSQL 18 (`docker_labs => false`, automatically disabling dependent `chaos_engineering` via `'requires' => ['docker_labs']`), or selectively tailoring `personal_notes` and `flashcards_srs` per curriculum.
+- Configured in **Administration -> Système** (`action=admin_save_course_features`) and exportable/importable as JSON (`exportConfigJson()` / `importConfigJson()`).
+
 ### Track Schema (`config/courses.php`)
 Each course entry defines:
 - Top-level metadata (`slug`, `title`, `subtitle`, `duration`, `level`, `icon`, `docker_enabled`, `source_root`, `pgscripts_root`, `description`).
@@ -50,6 +55,7 @@ When pointing `source_root` to a LightPath course repository (e.g., `../training
   - `[!NOTE]` -> `Information Technique`
 - **Inline SQL Workbench Injection:** Code fences tagged `sql` expose an *"Exécuter dans le Lab"* button carrying UTF-8 Base64 payloads decoded safely in `public/assets/js/app.js` using `TextDecoder`.
 - **Quiz QCM Extraction:** `MarkdownParser::extractQuizQuestions()` parses quiz sections inside each module Markdown file so `api_submit_quiz` grades learner answers server-side against canonical keys.
+- **Inline HTML Preview CSP Isolation:** Standalone compiled `.html` course files rendered inside LMS iframes (`?action=course_asset` / `DownloadController::streamFile()`) emit `Security::sendStandaloneDocumentCspHeader()` (`style-src 'self' 'unsafe-inline'` scoped strictly to standalone documents), whereas main LMS portal routes enforce zero-inline-style `style-src 'self'` (`P1-6` resolved).
 - **Mermaid Diagrams (`renderMermaidBlock`):**
   1. Whitespace-normalizes the Mermaid source and computes `substr(hash('sha256', $normalized), 0, 16)`.
   2. Checks for a pre-rendered Retina 2x PNG at `$sourceRoot/assets/mermaid_cache/mermaid_<hash>.png` inside the active course pack and serves it (zoomable in the lightbox modal) via `resolveAssetUrl()` or the `?action=course_asset&course=...&path=...` controller fallback.
@@ -80,7 +86,8 @@ Every practical lab in `04_ateliers_et_tp/` must conform to LightPath's **7 Qual
 ### How `MarkdownParser::splitLabEnonceAndCorrige()` Works
 - **Challenge Spoilers:** Solution blocks preceded by bulleted markers (`**Requête Solution :**`, `**Commandes Solutions :**`, `**Solutions Analytiques :**`, `**Corrigés Techniques :**`, `**Corrigés SQL :**`, etc.) are wrapped in collapsible `<details>` elements in full view and grouped in the Corrigé tab.
 - **Section Split:** The lab splits automatically into **Énoncé** and **Corrigé** at the first `H2` matching `## Corrigé`, `## Commande de Validation`, `## Script de Validation`, `## Validation Automatisée`, or `## Solution` (with optional leading step number), while preserving any `"🌟 Pour Aller Plus Loin"` section inside the Énoncé.
-- **Trainer Solution Lock:** When a trainer activates `lock_solutions` in Classroom Broadcast, [public/index.php](../public/index.php) strips Corrigé tabs and disables `api_run_lab_solution` for non-staff learners.
+- **Trainer Solution Lock:** When a trainer activates `lock_solutions` in Classroom Broadcast (or applies the `exam_lockdown` / `lecture` preset), [public/index.php](../public/index.php) and the modular `LabApiController` / `LearnerController` dispatch strip Corrigé tabs and disable `api_run_lab_solution` for non-staff learners.
+- **34-Lab Readiness & Interactive Workbench:** Every lab (`01..29`, `sql_01..sql_05`) is mapped in `LabSqlRunner::checkLabReadiness()` (`api_lab_readiness` / `php bin/lab-runner.php readiness <uid> <lab_id>`) against its target database (`dvdrental` vs `formation_pg`), required PG18 extensions, container status, and deterministic SQL oracle (`getLabOracles()`), alongside per-user sandbox savepoints (`api_lab_savepoint`), bounded `pgbench` runs (`api_lab_pgbench`), live PG18 diagnostics (`api_lab_pg_diag`), and `Ctrl+Enter` SQL execution.
 
 ---
 

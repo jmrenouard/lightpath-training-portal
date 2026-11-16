@@ -14,13 +14,14 @@
 
 ```mermaid
 flowchart LR
-    Learner["Learner / Trainer / Admin"] -->|"HTTP/HTTPS + CSRF"| Index["public/index.php (Front Controller)"]
-    Index -->|"Auth & RBAC"| Core["src/Core (Auth, Security, FeatureManager, AdminService, Gamification)"]
-    Index -->|"Markdown & Exports"| Course["src/Course (CourseRepository, MarkdownParser, LmsCatalog, DownloadController)"]
-    Index -->|"Labs & Oracles"| Docker["src/Docker (DockerManager, LabSqlRunner, SakilaSeeder)"]
+    Learner["Learner / Trainer / Admin"] -->|"HTTP/HTTPS + CSRF + Same-Origin"| Index["public/index.php (Front Controller)"]
+    Index -->|"Domain Dispatch"| Http["src/Http (AuthController, LearnerController, LabApiController, AdminController)"]
+    Http -->|"Auth & RBAC"| Core["src/Core (Auth, Security, FeatureManager, AdminService, Gamification)"]
+    Http -->|"Markdown & Exports"| Course["src/Course (CourseRepository, MarkdownParser, LmsCatalog, DownloadController)"]
+    Http -->|"Labs & Oracles"| Docker["src/Docker (DockerManager, LabSqlRunner, SakilaSeeder)"]
     Core -->|"StorageInterface"| Persistence["JsonStorage / PdoStorage (storage/data or lms_kv_store)"]
     Course -->|"Reads"| Pack["Course Pack (../training_postgresql)"]
-    Docker -->|"proc_open + Quotas"| Pg["lp_pg18_user_<id> (PostgreSQL 18 + Sakila + pgbench)"]
+    Docker -->|"proc_open + Quotas"| Pg["lp_pg18_user_{id} (PostgreSQL 18 + Sakila + pgbench)"]
 ```
 
 ---
@@ -71,29 +72,31 @@ Each authenticated user can launch an isolated PostgreSQL 18 lab container (`lp_
 
 | Module / Capability | `student` | `trainer` | `admin` | Notes |
 | :--- | :---: | :---: | :---: | :--- |
-| Course catalog, modules, PDF/HTML/MP4 playback | Enrolled | All | All | HTTP `206` / `416` byte-range streaming + `Auth::canAccessCourse()` (`[]` = 0 courses) |
-| Sandboxed SQL workbench, schema explorer, 34 oracles | Own container | Own + Cohort | Own + Cohort | `stripCommentsAndLiterals()` guard + `lms_student` (`statement_timeout=15000`) |
-| Classroom broadcast, `lock_solutions`, `lock_exam` | Read banner | Full control | Full control | Persisted per course slug (`broadcast_message`, `broadcast_level`, `active_track`) |
-| Half-day Attendance (`J1_AM`..`J11_PM`) & OPCO CSV | Sign own slots | Countersign + CSV | Countersign + CSV | Formula-safe `;`-delimited UTF-8 BOM CSV |
-| Trainer Cockpit (`cohort`, `qna`, `docker` tabs) | `403` | Full access | Full access | Lazy-loaded per tab, KPI strip (`tabular-nums`), bulk Docker ops |
-| Admin Control Plane (`users`, `courses`, `audit`, `system`) | `403` | `403` (Hidden) | Full access | CSV import, `enrolled_courses`, monthly archived audit CSV (`category`/`actor`), flags, health |
+| Course catalog, modules, PDF/HTML/MP4 playback | Enrolled | All | All | HTTP `206` / `416` byte-range streaming + `Auth::canAccessCourse()` (`[]` = 0 courses) + standalone HTML frame CSP |
+| Sandboxed SQL workbench, savepoints, `pgbench`, PG18 Diag, 34-lab readiness | Own container | Own + Cohort | Own + Cohort | `stripCommentsAndLiterals()` guard + `lms_student` (`statement_timeout=15000`, `pg_read_all_stats`), `Ctrl+Enter` execution |
+| Classroom broadcast, 1-click presets, `lock_solutions`, `lock_exam` | Read banner | Full control | Full control | Persisted per course slug (`lecture`, `guided_lab`, `exam_lockdown`, `open_review`) |
+| Half-day Attendance (`J1_AM`..`J11_PM`) & OPCO/Cohort/Qualiopi Exports | Sign own slots | Countersign + Exports | Countersign + Exports | Formula-safe `;`-delimited UTF-8 BOM CSV + structured Qualiopi JSON dossier |
+| Trainer Cockpit (`cohort`, `qna`, `docker` partials) | `403` | Full access | Full access | Lazy-loaded per tab (`tab_*.php`), KPI strip (`tabular-nums`), at-risk learners, fleet reaper & chaos heal |
+| Admin Control Plane (`users`, `courses`, `audit`, `system` partials) | `403` | `403` (Hidden) | Full access | Suspend/reset/bulk ops, throttle unlock, SHA-256 audit hash-chain check, 10 flags/4 profiles/per-course overrides, `.admin-split-grid` System Health |
 
 ---
 
 ## 4. Modular Feature Flags ([config/features.php](config/features.php))
 
-Managed at runtime through [FeatureManager.php](src/Core/FeatureManager.php) and **Administration -> Système** (`action=admin_save_features`):
+Managed at runtime through [FeatureManager.php](src/Core/FeatureManager.php) and **Administration -> Système** (`action=admin_save_features`), supporting `requires` dependency enforcement, **4 deployment profiles** (`full_enterprise`, `classroom_workshop`, `exam_lockdown`, `static_hosting_nodocker`), **per-course overrides**, and **JSON config export/import**:
 
-| Flag Key | Default | Category | Controlled Capability |
-| :--- | :---: | :--- | :--- |
-| `self_registration` | `true` | Authentification & Accès | Self-service account creation on login page |
-| `demo_quick_login` | `true` | Authentification & Accès | 1-click Demo role sign-in buttons on login page |
-| `docker_labs` | `true` | Laboratoires & Pratique | Per-user Docker PostgreSQL 18 containers & interactive SQL console |
-| `chaos_engineering` | `true` | Laboratoires & Pratique | Controlled failure injection scenarios (`bloat`, `lock`, `idle_in_tx`, `wal_pressure`) |
-| `gamification` | `true` | Pédagogie & Engagement | XP scoring, 5 DBA grades, and 8 achievement badges |
-| `qna_forum` | `true` | Pédagogie & Engagement | Module/lab Q&A threads and trainer resolution workflow |
-| `scorm_export` | `true` | Conformité & Exports | SCORM 1.2 `imsmanifest.xml` & standalone `.zip` exports |
-| `cold_satisfaction_j60` | `true` | Conformité & Exports | Qualiopi J+60 post-training impact evaluation workflow |
+| Flag Key | Default | Category | Requires | Controlled Capability |
+| :--- | :---: | :--- | :---: | :--- |
+| `self_registration` | `true` | Authentification & Accès | — | Self-service account creation on login page |
+| `demo_quick_login` | `true` | Authentification & Accès | — | 1-click Demo role sign-in buttons on login page |
+| `docker_labs` | `true` | Laboratoires & Pratique | — | Per-user Docker PostgreSQL 18 containers, savepoints, bounded `pgbench`, PG18 diagnostics, readiness & SQL console |
+| `chaos_engineering` | `true` | Laboratoires & Pratique | `docker_labs` | Controlled failure injection scenarios (`bloat`, `lock`, `idle_in_tx`, `wal_pressure`) |
+| `gamification` | `true` | Pédagogie & Engagement | — | XP scoring, 5 DBA grades, and 8 achievement badges |
+| `qna_forum` | `true` | Pédagogie & Engagement | — | Module/lab Q&A threads and trainer resolution workflow |
+| `personal_notes` | `true` | Pédagogie & Engagement | — | Learner personal notes editor (`notes`) and Markdown export (`export_notes_md`) |
+| `flashcards_srs` | `true` | Pédagogie & Engagement | — | Active recall SRS flashcards (`flashcards`) and technical glossary |
+| `scorm_export` | `true` | Conformité & Exports | — | SCORM 1.2 `imsmanifest.xml` & standalone `.zip` exports |
+| `cold_satisfaction_j60` | `true` | Conformité & Exports | — | Qualiopi J+60 post-training impact evaluation workflow |
 
 ---
 
@@ -101,7 +104,7 @@ Managed at runtime through [FeatureManager.php](src/Core/FeatureManager.php) and
 
 | Command | Purpose |
 | :--- | :--- |
-| `php bin/lab-runner.php <cmd> [args] [--json]` | Manage lab containers: `list`, `status <uid>`, `start <uid>`, `stop <uid>`, `restart <uid>`, `reset <uid>`, `seed <uid> [dataset]`, `logs <uid> [tail]`, `stats <uid>`, `oracle <uid> <lab_id>`, `stop-all`, `prune` |
+| `php bin/lab-runner.php <cmd> [args] [--json]` | Manage lab containers: `list`, `fleet`, `status <uid>`, `start <uid>`, `stop <uid>`, `restart <uid>`, `reset <uid>`, `seed <uid> [dataset]`, `logs <uid> [tail]`, `stats <uid>`, `oracle <uid> <lab_id>`, `savepoint <uid> <name\|list\|create\|restore\|delete>`, `restore <uid> <name> [db]`, `bench <uid> [clients] [duration] [db] [--select-only]`, `diag <uid> [db]`, `readiness <uid> <lab_id>`, `reap-idle [secs]`, `heal [course]`, `stop-all`, `prune` |
 | `php bin/sync-course.php <slug> <source-dir>` | Validate source directory and write `storage/courses/<slug>/manifest.json` |
 | `python bin/export_slides_cache.py` | Export 135 DPI Studio 16:9 slide PNGs + speaker notes `manifest.json` for all 34 modules |
 
@@ -155,10 +158,12 @@ git config core.hooksPath .githooks
 | Document | Contents |
 | :--- | :--- |
 | [PROJECT-CONTEXT.md](PROJECT-CONTEXT.md) | Developer/agent onboarding baseline, storage & environment contracts, baseline test guardrails, 9-step GitHub workflow |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Mermaid topology, front controller routing, dual `JsonStorage`/`PdoStorage` concurrency, caching, responsive UI |
-| [docs/SECURITY.md](docs/SECURITY.md) | Threat model, storage-backed throttling, RBAC, HTTP security headers, CSV/XSS/path sanitization, `lms_student` SQL sandbox, container quotas |
-| [docs/ADMIN_AND_TRAINER_GUIDE.md](docs/ADMIN_AND_TRAINER_GUIDE.md) | Role matrix, Trainer cockpit, Admin control plane, Cohort KPIs, CSV bulk import, Feature Flags, System Health, Qualiopi workflows |
-| [docs/DOCKER_LABS_GUIDE.md](docs/DOCKER_LABS_GUIDE.md) | Per-user container topology, WSL2/simulated bridge, timeouts, `SakilaSeeder`, SQL workbench, Schema Inspector, Chaos, `bin/lab-runner.php` |
-| [docs/COURSE_PACK_GUIDE.md](docs/COURSE_PACK_GUIDE.md) | `config/courses.php` registry, course-pack layout, Markdown/alerts/Mermaid rules, 7-pillar labs, `export_slides_cache.py`, `sync-course.php` |
-| [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | Every `api_*`, download/export, authenticated form, and admin action with auth, CSRF, parameter, and JSON contract details |
-| [docs/QUALITY_AUDIT_PONYTAIL.md](docs/QUALITY_AUDIT_PONYTAIL.md) | Iteration 1 `/ponytail-audit` & `/dev-team` 7-axis findings, remediation roadmap, and Iteration 2 QA sign-off ledger |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Mermaid topology, `src/Http/*` controllers & admin partials, dual `JsonStorage`/`PdoStorage` concurrency, caching, strict zero-inline-style UI |
+| [docs/SECURITY.md](docs/SECURITY.md) | Threat model, `style-src 'self'` CSP + standalone doc CSP, `verifySameOriginRequest()`, `isUserActive()`, SHA-256 tamper-evident audit hash chain, SQL sandbox |
+| [docs/ADMIN_AND_TRAINER_GUIDE.md](docs/ADMIN_AND_TRAINER_GUIDE.md) | Role matrix, Trainer cockpit (at-risk learners, matrix, presets, Cohort/Qualiopi exports), Admin control plane (10 flags, 4 profiles, per-course overrides, `.admin-split-grid` health) |
+| [docs/DOCKER_LABS_GUIDE.md](docs/DOCKER_LABS_GUIDE.md) | Per-user container topology, savepoints, bounded `pgbench`, PG18 diagnostics, 34-lab readiness, idle reaper, chaos heal, `bin/lab-runner.php` |
+| [docs/COURSE_PACK_GUIDE.md](docs/COURSE_PACK_GUIDE.md) | `config/courses.php` registry, per-course overrides, course-pack layout, Markdown/alerts/Mermaid rules, 7-pillar labs, `export_slides_cache.py`, `sync-course.php` |
+| [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | Every `api_*`, download/export, authenticated form, and admin action with auth, CSRF, same-origin, parameter, and JSON contract details |
+| [docs/DEPLOYMENT_AND_OPERATIONS.md](docs/DEPLOYMENT_AND_OPERATIONS.md) | Production/workshop runbook: PHP 8.3+ extensions, Nginx/Apache strict CSP compatibility, `JsonStorage` vs `PdoStorage`, cron reaper/heal, audit verification, backup/restore |
+| [docs/DEVELOPER_AND_TESTING_GUIDE.md](docs/DEVELOPER_AND_TESTING_GUIDE.md) | Developer onboarding (`src/Http/*`, `templates/partials/admin/*`), zero-inline-style/strict-English standards, 6-tier PHP & Playwright test pyramid |
+| [docs/QUALITY_AUDIT_PONYTAIL.md](docs/QUALITY_AUDIT_PONYTAIL.md) | Deep 7-axis `/ponytail-audit` & `/dev-team` findings, remediation roadmap, Issue `#39` sign-off ledger, and Issue `#41` Iteration A baseline |

@@ -24,13 +24,13 @@ if ($selectedDocId !== '') {
 <?php if ($selectedDoc !== null && !empty($selectedDoc['source_md_path']) && is_file($selectedDoc['source_md_path'])):
     $renderedDoc = $mdParser->renderMarkdown((string)file_get_contents($selectedDoc['source_md_path']), $currentCourseSlug, false);
 ?>
-<div class="lms-card" style="margin-bottom: 1.75rem; border-color: var(--brand-cyan);">
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-hairline);">
+<div class="lms-card mb-1-75 lms-card--accent-cyan">
+    <div class="d-flex justify-between items-center flex-wrap gap-md mb-1 pb-sm border-bottom-hairline">
         <div>
             <span class="badge-code">LECTEUR DOCUMENTAIRE INTÉGRÉ</span>
-            <h2 style="font-size: 1.35rem; margin: 0.35rem 0 0;"><?= Security::e($selectedDoc['title']) ?></h2>
+            <h2 class="text-xl mt-xs mb-0"><?= Security::e($selectedDoc['title']) ?></h2>
         </div>
-        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <div class="d-flex items-center gap-xs flex-wrap">
             <?= renderDownloadStrip($currentCourseSlug, isset($currentCourse['cheatsheets'][$selectedDocId]) ? 'cheatsheet' : 'referentiel', $selectedDocId, $selectedDoc['downloads'] ?? []) ?>
             <a href="index.php?page=documents&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">✕ Fermer l'aperçu</a>
         </div>
@@ -45,13 +45,13 @@ if ($selectedDocId !== '') {
     $toolMd = "```" . $toolLang . "\n" . (string)file_get_contents($selectedTool['path']) . "\n```";
     $renderedTool = $mdParser->renderMarkdown($toolMd, $currentCourseSlug, false);
 ?>
-<div class="lms-card" style="margin-bottom: 1.75rem; border-color: var(--brand-cyan);">
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-hairline);">
+<div class="lms-card mb-1-75 lms-card--accent-cyan">
+    <div class="d-flex justify-between items-center flex-wrap gap-md mb-1 pb-sm border-bottom-hairline">
         <div>
             <span class="badge-code">APERÇU CODE SOURCE DBA • <?= Security::e($selectedTool['category']) ?></span>
-            <h2 style="font-size: 1.35rem; margin: 0.35rem 0 0;"><code><?= Security::e($selectedTool['filename']) ?></code></h2>
+            <h2 class="text-xl mt-xs mb-0"><code><?= Security::e($selectedTool['filename']) ?></code></h2>
         </div>
-        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <div class="d-flex items-center gap-xs flex-wrap">
             <a href="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=tool&id=<?= urlencode($selectedDocId) ?>&format=raw" class="dl-pill dl-md">⬇ Télécharger <?= Security::e($selectedTool['filename']) ?></a>
             <a href="index.php?page=documents&tab=tools&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">✕ Fermer l'aperçu</a>
         </div>
@@ -74,13 +74,13 @@ if ($selectedDocId !== '') {
     $exMd = ($exExt === 'md') ? $rawExContent : ("```" . $exLang . "\n" . $rawExContent . "\n```");
     $renderedExample = $mdParser->renderMarkdown($exMd, $currentCourseSlug, false);
 ?>
-<div class="lms-card" style="margin-bottom: 1.75rem; border-color: var(--brand-cyan);">
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-hairline);">
+<div class="lms-card mb-1-75 lms-card--accent-cyan">
+    <div class="d-flex justify-between items-center flex-wrap gap-md mb-1 pb-sm border-bottom-hairline">
         <div>
             <span class="badge-code">APERÇU CODE COMPAGNON • <?= Security::e((string)($selectedExample['language'] ?? $selectedExample['category'] ?? 'Exemple')) ?></span>
-            <h2 style="font-size: 1.35rem; margin: 0.35rem 0 0;"><code><?= Security::e((string)$selectedExample['filename']) ?></code></h2>
+            <h2 class="text-xl mt-xs mb-0"><code><?= Security::e((string)$selectedExample['filename']) ?></code></h2>
         </div>
-        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <div class="d-flex items-center gap-xs flex-wrap">
             <a href="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=example&id=<?= urlencode($selectedDocId) ?>&format=raw" class="dl-pill dl-md">⬇ Télécharger <?= Security::e((string)$selectedExample['filename']) ?></a>
             <a href="index.php?page=documents&tab=examples&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">✕ Fermer l'aperçu</a>
         </div>
@@ -91,17 +91,17 @@ if ($selectedDocId !== '') {
 </div>
 <?php endif; ?>
 
-<div class="hero-banner" style="padding: 1.5rem 2rem;">
+<div class="hero-banner p-hero-compact">
     <div>
         <span class="badge-code">CENTRE DOCUMENTAIRE EXHAUSTIF • TOUS FORMATS</span>
-        <h1 style="font-size: 1.65rem; margin: 0.4rem 0 0.25rem;">📥 Bibliothèque & Téléchargements Multi-Formats</h1>
-        <p style="color: var(--text-secondary); margin: 0; font-size: 0.9rem;">
+        <h1 class="text-hero-sm mt-xs mb-xxs">📥 Bibliothèque & Téléchargements Multi-Formats</h1>
+        <p class="text-secondary mb-0 text-sm">
             Téléchargez l'ensemble des livrables de la formation en haute définition :
             Supports <code>.pdf</code>, Présentations Studio <code>.pptx</code> & <code>_slides.pdf</code>, Sources <code>.md</code>, Pages Web <code>.html</code>, Documents Word <code>.docx</code>, Scripts <code>.sql / .py</code> et Exemples <code>pgexamples</code>.
         </p>
     </div>
 
-    <div style="display: flex; flex-wrap: wrap; gap: 0.45rem;">
+    <div class="d-flex flex-wrap gap-xs">
         <a href="index.php?page=documents&tab=all&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $docTab === 'all' ? 'btn-primary' : 'btn-outline' ?>">Tout Voir</a>
         <a href="index.php?page=documents&tab=referentiel&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $docTab === 'referentiel' ? 'btn-primary' : 'btn-outline' ?>">📋 Programme & Qualiopi (<?= count($currentCourse['referentiel'] ?? []) ?>)</a>
         <a href="index.php?page=documents&tab=modules&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $docTab === 'modules' ? 'btn-primary' : 'btn-outline' ?>">📚 Modules (<?= count($currentCourse['modules'] ?? []) ?>)</a>
@@ -114,8 +114,8 @@ if ($selectedDocId !== '') {
 
 <!-- 1. Program, syllabus, booklets & Qualiopi reference -->
 <?php if ($docTab === 'all' || $docTab === 'referentiel'): ?>
-    <h2 style="font-size: 1.3rem; margin-bottom: 0.85rem;">📋 Programme, Syllabus, Guide Formateur, Examen & Référentiel Qualiopi</h2>
-    <div class="lms-table-wrap" style="margin-bottom: 2.25rem;">
+    <h2 class="section-heading-md mb-sm">📋 Programme, Syllabus, Guide Formateur, Examen & Référentiel Qualiopi</h2>
+    <div class="lms-table-wrap mb-xl">
         <table class="lms-table">
             <thead>
                 <tr>
@@ -129,10 +129,10 @@ if ($selectedDocId !== '') {
                     <tr data-searchable="<?= Security::e($doc['category'] . ' ' . $doc['title'] . ' ' . $docId) ?>">
                         <td><span class="badge-code"><?= Security::e($doc['category']) ?></span></td>
                         <td>
-                            <a href="index.php?page=documents&tab=referentiel&id=<?= urlencode($docId) ?>&course=<?= urlencode($currentCourseSlug) ?>" style="font-weight: 700; color: var(--text-primary);">
+                            <a href="index.php?page=documents&tab=referentiel&id=<?= urlencode($docId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="font-bold link-primary">
                                 <?= Security::e($doc['title']) ?>
                             </a>
-                            <div style="font-size: 0.78rem; color: var(--text-muted);"><?= Security::e($docId) ?></div>
+                            <div class="text-xs text-muted"><?= Security::e($docId) ?></div>
                         </td>
                         <td><?= renderDownloadStrip($currentCourseSlug, 'referentiel', $docId, $doc['downloads'] ?? []) ?></td>
                     </tr>
@@ -144,8 +144,8 @@ if ($selectedDocId !== '') {
 
 <!-- 2. Course modules (PDF, Slides PDF, PPTX, MD, HTML, DOCX) -->
 <?php if ($docTab === 'all' || $docTab === 'modules'): ?>
-    <h2 style="font-size: 1.3rem; margin-bottom: 0.85rem;">📚 Supports de Cours & Présentations Studio (<?= count($currentCourse['modules'] ?? []) ?> Modules)</h2>
-    <div class="lms-table-wrap" style="margin-bottom: 2.25rem;">
+    <h2 class="section-heading-md mb-sm">📚 Supports de Cours & Présentations Studio (<?= count($currentCourse['modules'] ?? []) ?> Modules)</h2>
+    <div class="lms-table-wrap mb-xl">
         <table class="lms-table">
             <thead>
                 <tr>
@@ -159,10 +159,10 @@ if ($selectedDocId !== '') {
                     <tr data-searchable="<?= Security::e($mod['badge_code'] . ' ' . $mod['title'] . ' ' . $mId) ?>">
                         <td><span class="badge-code"><?= Security::e($mod['badge_code']) ?></span></td>
                         <td>
-                            <a href="index.php?page=module&id=<?= urlencode($mId) ?>&course=<?= urlencode($currentCourseSlug) ?>" style="font-weight: 700; color: var(--text-primary);">
+                            <a href="index.php?page=module&id=<?= urlencode($mId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="font-bold link-primary">
                                 <?= Security::e($mod['title']) ?>
                             </a>
-                            <div style="font-size: 0.78rem; color: var(--text-muted);"><?= Security::e($mod['track_title']) ?></div>
+                            <div class="text-xs text-muted"><?= Security::e($mod['track_title']) ?></div>
                         </td>
                         <td><?= renderDownloadStrip($currentCourseSlug, 'module', $mId, $mod['downloads'] ?? []) ?></td>
                     </tr>
@@ -174,8 +174,8 @@ if ($selectedDocId !== '') {
 
 <!-- 3. Practice labs & Docker workshops -->
 <?php if ($docTab === 'all' || $docTab === 'labs'): ?>
-    <h2 style="font-size: 1.3rem; margin-bottom: 0.85rem;">🧪 Énoncés & Corrigés des <?= count($currentCourse['labs'] ?? []) ?> Ateliers Pratiques (Labs)</h2>
-    <div class="lms-table-wrap" style="margin-bottom: 2.25rem;">
+    <h2 class="section-heading-md mb-sm">🧪 Énoncés & Corrigés des <?= count($currentCourse['labs'] ?? []) ?> Ateliers Pratiques (Labs)</h2>
+    <div class="lms-table-wrap mb-xl">
         <table class="lms-table">
             <thead>
                 <tr>
@@ -187,12 +187,12 @@ if ($selectedDocId !== '') {
             <tbody>
                 <?php foreach (($currentCourse['labs'] ?? []) as $labId => $lab): ?>
                     <tr data-searchable="<?= Security::e($lab['badge_code'] . ' ' . $lab['title'] . ' ' . $labId) ?>">
-                        <td><span class="badge-code" style="color:#34D399;"><?= Security::e($lab['badge_code']) ?></span></td>
+                        <td><span class="badge-code text-emerald-bright"><?= Security::e($lab['badge_code']) ?></span></td>
                         <td>
-                            <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&course=<?= urlencode($currentCourseSlug) ?>" style="font-weight: 700; color: var(--text-primary);">
+                            <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="font-bold link-primary">
                                 <?= Security::e($lab['title']) ?>
                             </a>
-                            <div style="font-size: 0.78rem; color: var(--text-muted);"><?= Security::e($lab['bloom']) ?></div>
+                            <div class="text-xs text-muted"><?= Security::e($lab['bloom']) ?></div>
                         </td>
                         <td><?= renderDownloadStrip($currentCourseSlug, 'lab', $labId, $lab['downloads'] ?? []) ?></td>
                     </tr>
@@ -204,8 +204,8 @@ if ($selectedDocId !== '') {
 
 <!-- 4. Operational cheatsheets and quick-reference cards -->
 <?php if ($docTab === 'all' || $docTab === 'cheatsheets'): ?>
-    <h2 style="font-size: 1.3rem; margin-bottom: 0.85rem;">📑 Fiches Mémo & Cheatsheets Opérationnelles (<?= count($currentCourse['cheatsheets'] ?? []) ?> Fiches)</h2>
-    <div class="lms-table-wrap" style="margin-bottom: 2.25rem;">
+    <h2 class="section-heading-md mb-sm">📑 Fiches Mémo & Cheatsheets Opérationnelles (<?= count($currentCourse['cheatsheets'] ?? []) ?> Fiches)</h2>
+    <div class="lms-table-wrap mb-xl">
         <table class="lms-table">
             <thead>
                 <tr>
@@ -219,10 +219,10 @@ if ($selectedDocId !== '') {
                     <tr data-searchable="<?= Security::e($cs['title'] . ' ' . $csId) ?>">
                         <td><span class="badge-code"><?= strtoupper(Security::e($cs['type'])) ?></span></td>
                         <td>
-                            <a href="index.php?page=documents&tab=cheatsheets&id=<?= urlencode($csId) ?>&course=<?= urlencode($currentCourseSlug) ?>" style="font-weight: 700; color: var(--text-primary);">
+                            <a href="index.php?page=documents&tab=cheatsheets&id=<?= urlencode($csId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="font-bold link-primary">
                                 <?= Security::e($cs['title']) ?>
                             </a>
-                            <div style="font-size: 0.76rem; color: var(--text-muted);"><?= Security::e($csId) ?></div>
+                            <div class="text-xs text-muted"><?= Security::e($csId) ?></div>
                         </td>
                         <td><?= renderDownloadStrip($currentCourseSlug, 'cheatsheet', $csId, $cs['downloads'] ?? []) ?></td>
                     </tr>
@@ -234,8 +234,8 @@ if ($selectedDocId !== '') {
 
 <!-- 5. Production DBA toolbox pgscripts (Python & SQL) -->
 <?php if ($docTab === 'all' || $docTab === 'tools'): ?>
-    <h2 style="font-size: 1.3rem; margin-bottom: 0.85rem;">🛠️ Boîte à Outils Production DBA (<code>pgscripts</code> Python & 23 Scripts SQL)</h2>
-    <div class="lms-table-wrap" style="margin-bottom: 2.25rem;">
+    <h2 class="section-heading-md mb-sm">🛠️ Boîte à Outils Production DBA (<code>pgscripts</code> Python & 23 Scripts SQL)</h2>
+    <div class="lms-table-wrap mb-xl">
         <table class="lms-table">
             <thead>
                 <tr>
@@ -251,7 +251,7 @@ if ($selectedDocId !== '') {
                     <tr data-searchable="<?= Security::e($tool['filename'] . ' ' . $tool['category']) ?>">
                         <td><span class="badge-code"><?= Security::e($tool['category']) ?></span></td>
                         <td>
-                            <a href="index.php?page=documents&tab=tools&id=<?= urlencode($tId) ?>&course=<?= urlencode($currentCourseSlug) ?>" style="font-weight: 700; color: var(--text-primary);">
+                            <a href="index.php?page=documents&tab=tools&id=<?= urlencode($tId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="font-bold link-primary">
                                 <code><?= Security::e($tool['filename']) ?></code>
                             </a>
                         </td>
@@ -276,7 +276,7 @@ if ($selectedDocId !== '') {
 
 <!-- 6. Companion code examples pgexamples (Python, Go, PHP) -->
 <?php if ($docTab === 'all' || $docTab === 'examples'): ?>
-    <h2 style="font-size: 1.3rem; margin-bottom: 0.85rem;">💻 Exemples de Code Compagnon (<code>pgexamples</code> — Python <code>psycopg3</code>, Go <code>pgx/v5</code>, PHP <code>PDO</code>)</h2>
+    <h2 class="section-heading-md mb-sm">💻 Exemples de Code Compagnon (<code>pgexamples</code> — Python <code>psycopg3</code>, Go <code>pgx/v5</code>, PHP <code>PDO</code>)</h2>
     <div class="lms-table-wrap">
         <table class="lms-table">
             <thead>
@@ -293,7 +293,7 @@ if ($selectedDocId !== '') {
                     <tr data-searchable="<?= Security::e(($ex['filename'] ?? '') . ' ' . ($ex['category'] ?? '') . ' ' . ($ex['language'] ?? '')) ?>">
                         <td><span class="badge-code"><?= Security::e($ex['category'] ?? 'Code') ?></span></td>
                         <td>
-                            <a href="index.php?page=documents&tab=examples&id=<?= urlencode($exId) ?>&course=<?= urlencode($currentCourseSlug) ?>" style="font-weight: 700; color: var(--text-primary);">
+                            <a href="index.php?page=documents&tab=examples&id=<?= urlencode($exId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="font-bold link-primary">
                                 <code><?= Security::e($ex['filename'] ?? $exId) ?></code>
                             </a>
                         </td>

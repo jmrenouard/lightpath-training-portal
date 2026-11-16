@@ -33,6 +33,7 @@ return [
         'category' => 'Laboratoires & Pratique',
         'default' => true,
         'enabled' => true,
+        'requires' => ['docker_labs'],
     ],
     'gamification' => [
         'label' => 'Gamification (XP & Badges)',
@@ -44,6 +45,20 @@ return [
     'qna_forum' => [
         'label' => 'Forum Q&A par module',
         'description' => 'Active les fils de questions/réponses et la modération formateur dans les supports.',
+        'category' => 'Pédagogie & Engagement',
+        'default' => true,
+        'enabled' => true,
+    ],
+    'personal_notes' => [
+        'label' => 'Bloc-notes personnel apprenant',
+        'description' => 'Active la prise de notes personnelle par module et atelier ainsi que l\'export Markdown.',
+        'category' => 'Pédagogie & Engagement',
+        'default' => true,
+        'enabled' => true,
+    ],
+    'flashcards_srs' => [
+        'label' => 'Révision Active (Flashcards SRS)',
+        'description' => 'Active le deck de révision espacée et le suivi du niveau de confiance par carte.',
         'category' => 'Pédagogie & Engagement',
         'default' => true,
         'enabled' => true,

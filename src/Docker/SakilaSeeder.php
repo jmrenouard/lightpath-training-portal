@@ -29,6 +29,12 @@ END $$;
 
 REVOKE pg_execute_server_program, pg_read_server_files, pg_write_server_files FROM lms_student;
 GRANT pg_read_all_stats TO lms_student;
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'pg_stat_scan_tables') THEN
+        EXECUTE 'GRANT pg_stat_scan_tables TO lms_student';
+    END IF;
+END $$;
 GRANT USAGE, CREATE ON SCHEMA public TO lms_student;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO lms_student;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO lms_student;

@@ -150,6 +150,8 @@ class LabSqlRunner
                 $res = $this->docker->runDockerCommand($cmd, 18.0);
             }
 
+            $this->docker->touchContainerActivity($userId);
+
             $duration = round((microtime(true) - $start) * 1000, 1);
 
             return [
@@ -720,5 +722,592 @@ class LabSqlRunner
             'first_command_clue' => $firstCmdClue,
             'validation_tip' => 'Utilisez le bouton « 🏆 Vérifier mon Lab (Oracle Qualiopi 1-Clic) » une fois les objets créés pour valider la pastille VALIDATION_OK.',
         ];
+    }
+
+    /**
+     * Queries live PostgreSQL 18 diagnostics (pg_stat_activity, key pg_settings,
+     * buffer cache hit ratio, and database sizes) or returns simulated telemetry.
+     */
+    public function inspectPgDiagnostics(int $userId, string $dbName = 'formation_pg', bool $allowSharedFallback = false): array
+    {
+        $cleanDb = strtolower(trim($dbName));
+        if (!in_array($cleanDb, self::ALLOWED_DATABASES, true)) {
+            return [
+                'success' => false,
+                'database' => $dbName,
+                'message' => 'Base de données cible non autorisée pour le diagnostic.',
+            ];
+        }
+
+        $target = $this->resolveTargetContainer($userId, $allowSharedFallback);
+        $mode = (string)$target['runtime']['mode'];
+
+        if ($target['error'] !== null) {
+            return [
+                'success' => false,
+                'simulated' => false,
+                'mode' => $mode,
+                'database' => $cleanDb,
+                'container' => null,
+                'message' => $target['error'],
+            ];
+        }
+
+        $targetContainer = (string)$target['container'];
+
+        if ($target['simulated']) {
+            return [
+                'success' => true,
+                'simulated' => true,
+                'mode' => $mode,
+                'container' => $targetContainer,
+                'database' => $cleanDb,
+                'server_version' => 'PostgreSQL 18.0 (Cloud Simulated Sandbox)',
+                'settings' => [
+                    'shared_buffers' => '256MB',
+                    'work_mem' => '8MB',
+                    'max_connections' => '100',
+                    'statement_timeout' => '15s',
+                    'io_method' => 'worker',
+                ],
+                'cache_hit_ratio' => 99.42,
+                'activity' => [
+                    'total_backends' => 6,
+                    'active' => 1,
+                    'idle' => 5,
+                    'idle_in_transaction' => 0,
+                    'waiting_locks' => 0,
+                    'sessions' => [
+                        [
+                            'pid' => 101,
+                            'usename' => 'lms_student',
+                            'datname' => $cleanDb,
+                            'state' => 'active',
+                            'wait_event_type' => '',
+                            'backend_type' => 'client backend',
+                            'query' => 'SELECT name, setting FROM pg_settings WHERE name IN (...);',
+                        ],
+                        [
+                            'pid' => 102,
+                            'usename' => 'postgres',
+                            'datname' => 'dvdrental',
+                            'state' => 'idle',
+                            'wait_event_type' => 'Client',
+                            'backend_type' => 'client backend',
+                            'query' => 'SELECT count(*) FROM public.film;',
+                        ],
+                    ],
+                ],
+                'databases' => [
+                    ['datname' => 'dvdrental', 'size_pretty' => '12 MB', 'size_bytes' => 12582912, 'cache_hit_ratio' => 99.68],
+                    ['datname' => 'formation_pg', 'size_pretty' => '18 MB', 'size_bytes' => 18874368, 'cache_hit_ratio' => 99.42],
+                    ['datname' => 'postgres', 'size_pretty' => '8192 kB', 'size_bytes' => 8388608, 'cache_hit_ratio' => 99.85],
+                ],
+                'extensions' => ['pageinspect', 'pg_stat_statements', 'pgstattuple', 'postgres_fdw'],
+                'message' => "Diagnostics PostgreSQL 18 générés pour {$cleanDb} (Mode Cloud Simulé).",
+            ];
+        }
+
+        $this->docker->touchContainerActivity($userId);
+
+        $diagSql = <<<'SQL'
+SELECT 'DIAG_VER|' || version();
+SELECT 'DIAG_SET|' || name || '|' || current_setting(name)
+FROM pg_settings
+WHERE name IN ('shared_buffers', 'work_mem', 'max_connections', 'statement_timeout', 'io_method')
+ORDER BY name;
+SELECT 'DIAG_DB|' || d.datname || '|' || pg_size_pretty(pg_database_size(d.datname)) || '|' || pg_database_size(d.datname)::text || '|' || COALESCE(round(100.0 * s.blks_hit / NULLIF(s.blks_hit + s.blks_read, 0), 2), 100.00)::text
+FROM pg_database d
+LEFT JOIN pg_stat_database s ON s.datname = d.datname
+WHERE d.datname IN ('formation_pg', 'dvdrental', 'postgres')
+ORDER BY d.datname;
+SELECT 'DIAG_ACTSUM|' || count(*)::text || '|' || count(*) FILTER (WHERE state = 'active')::text || '|' || count(*) FILTER (WHERE state = 'idle')::text || '|' || count(*) FILTER (WHERE state LIKE 'idle in transaction%')::text || '|' || count(*) FILTER (WHERE wait_event_type = 'Lock')::text
+FROM pg_stat_activity;
+SELECT 'DIAG_ACTROW|' || pid::text || '|' || COALESCE(usename, '') || '|' || COALESCE(datname, '') || '|' || COALESCE(state, '') || '|' || COALESCE(wait_event_type, '') || '|' || COALESCE(backend_type, '') || '|' || left(regexp_replace(COALESCE(query, ''), E'[\\r\\n|]+', ' ', 'g'), 100)
+FROM pg_stat_activity
+ORDER BY pid
+LIMIT 15;
+SELECT 'DIAG_EXT|' || extname
+FROM pg_extension
+ORDER BY extname;
+SQL;
+
+        $res = $this->runTargetPsql($targetContainer, $cleanDb, $diagSql, false);
+        if (!$res['success']) {
+            return [
+                'success' => false,
+                'simulated' => false,
+                'mode' => $mode,
+                'container' => $targetContainer,
+                'database' => $cleanDb,
+                'message' => 'Impossible de collecter les diagnostics PostgreSQL 18 : ' . $res['output'],
+                'output' => $res['output'],
+            ];
+        }
+
+        $parsed = $this->parseDiagnosticOutput((string)$res['output'], $cleanDb);
+        return array_merge([
+            'success' => true,
+            'simulated' => false,
+            'mode' => $mode,
+            'container' => $targetContainer,
+            'database' => $cleanDb,
+            'message' => "Diagnostics PostgreSQL 18 collectés sur {$targetContainer} ({$cleanDb}).",
+        ], $parsed);
+    }
+
+    /**
+     * Checks container state, target database, required extensions, and table prerequisites
+     * across all 34 PostgreSQL 18 labs (01..29 and sql_01..sql_05).
+     */
+    public function checkLabReadiness(int $userId, string $labId, bool $allowSharedFallback = false): array
+    {
+        $oracles = $this->getLabOracles();
+        $code = $this->extractLabCode($labId);
+        $oracleFound = isset($oracles[$code]);
+        $oracle = $oracles[$code] ?? $oracles['01'];
+
+        $prereqMap = $this->getLabPrerequisitesMap();
+        $spec = $prereqMap[$code] ?? [
+            'database' => $this->detectTargetDatabase($labId),
+            'extensions' => [],
+            'tables' => [],
+        ];
+        $recommendedDb = (string)$spec['database'];
+        $requiredExtensions = (array)$spec['extensions'];
+        $requiredTables = (array)$spec['tables'];
+
+        $target = $this->resolveTargetContainer($userId, $allowSharedFallback);
+        $mode = (string)$target['runtime']['mode'];
+
+        if ($target['error'] !== null) {
+            $checks = [
+                [
+                    'key' => 'container',
+                    'label' => 'Conteneur PostgreSQL 18',
+                    'ok' => false,
+                    'status' => 'fail',
+                    'detail' => $target['error'],
+                    'remediation' => 'Démarrez votre conteneur personnel depuis le cockpit Docker.',
+                ],
+                [
+                    'key' => 'oracle',
+                    'label' => 'Oracle Qualiopi',
+                    'ok' => $oracleFound,
+                    'status' => $oracleFound ? 'ok' : 'warn',
+                    'detail' => $oracle['bloom'] . ' — ' . $oracle['title'],
+                    'remediation' => '',
+                ],
+            ];
+            return [
+                'success' => false,
+                'simulated' => false,
+                'ready' => false,
+                'mode' => $mode,
+                'lab_id' => $labId,
+                'lab_code' => $code,
+                'bloom' => $oracle['bloom'],
+                'title' => $oracle['title'],
+                'oracle_found' => $oracleFound,
+                'recommended_database' => $recommendedDb,
+                'required_extensions' => $requiredExtensions,
+                'required_tables' => $requiredTables,
+                'container' => null,
+                'container_running' => false,
+                'checks' => $checks,
+                'message' => $target['error'],
+            ];
+        }
+
+        $targetContainer = (string)$target['container'];
+
+        if ($target['simulated']) {
+            $checks = [
+                [
+                    'key' => 'oracle',
+                    'label' => 'Oracle Qualiopi',
+                    'ok' => $oracleFound,
+                    'status' => $oracleFound ? 'ok' : 'warn',
+                    'detail' => $oracle['bloom'] . ' — ' . $oracle['title'],
+                    'remediation' => '',
+                ],
+                [
+                    'key' => 'database',
+                    'label' => 'Base cible recommandée',
+                    'ok' => true,
+                    'status' => 'simulated',
+                    'detail' => "Base attendue : {$recommendedDb}",
+                    'remediation' => '',
+                ],
+                [
+                    'key' => 'extensions',
+                    'label' => 'Extensions PostgreSQL requises',
+                    'ok' => true,
+                    'status' => 'simulated',
+                    'detail' => empty($requiredExtensions)
+                        ? 'Aucune extension supplémentaire requise'
+                        : 'Extensions requises : ' . implode(', ', $requiredExtensions),
+                    'remediation' => empty($requiredExtensions) ? '' : 'CREATE EXTENSION IF NOT EXISTS ' . implode(', ', $requiredExtensions),
+                ],
+                [
+                    'key' => 'tables',
+                    'label' => 'Jeu de données requis',
+                    'ok' => true,
+                    'status' => 'simulated',
+                    'detail' => empty($requiredTables)
+                        ? 'Catalogues système PostgreSQL 18 standard'
+                        : 'Tables requises : ' . implode(', ', $requiredTables),
+                    'remediation' => empty($requiredTables) ? '' : 'Utiliser le bouton Réamorcer Sakila / pgbench si besoin.',
+                ],
+                [
+                    'key' => 'container',
+                    'label' => 'Conteneur PostgreSQL 18',
+                    'ok' => false,
+                    'status' => 'simulated',
+                    'detail' => "Mode Cloud Simulé ({$targetContainer}) : aucun démon Docker local actif.",
+                    'remediation' => 'Activez Docker / WSL2 ou connectez une instance locale sur le port dédié.',
+                ],
+            ];
+
+            return [
+                'success' => true,
+                'simulated' => true,
+                'ready' => false,
+                'mode' => $mode,
+                'lab_id' => $labId,
+                'lab_code' => $code,
+                'bloom' => $oracle['bloom'],
+                'title' => $oracle['title'],
+                'oracle_found' => $oracleFound,
+                'recommended_database' => $recommendedDb,
+                'required_extensions' => $requiredExtensions,
+                'required_tables' => $requiredTables,
+                'container' => $targetContainer,
+                'container_running' => false,
+                'checks' => $checks,
+                'message' => "Prérequis cartographiés pour {$code} (Mode Cloud Simulé — base {$recommendedDb}).",
+            ];
+        }
+
+        $this->docker->touchContainerActivity($userId);
+
+        $probeDbSql = sprintf(
+            "SELECT 'DB_OK|' || count(*)::text FROM pg_database WHERE datname = '%s';\nSELECT 'ROLE_OK|' || count(*)::text FROM pg_roles WHERE rolname = '%s';",
+            $recommendedDb,
+            SakilaSeeder::SANDBOX_ROLE
+        );
+        $dbProbe = $this->runTargetPsql($targetContainer, 'postgres', $probeDbSql, true);
+        $dbExists = preg_match('/DB_OK\|1\b/', (string)$dbProbe['output']) === 1;
+        $roleExists = preg_match('/ROLE_OK\|1\b/', (string)$dbProbe['output']) === 1;
+
+        $installedExts = [];
+        $installedTables = [];
+        if ($dbExists) {
+            $detailSql = "SELECT 'EXT|' || extname FROM pg_extension;\nSELECT 'TBL|' || tablename FROM pg_tables WHERE schemaname = 'public';";
+            $detailProbe = $this->runTargetPsql($targetContainer, $recommendedDb, $detailSql, true);
+            foreach (preg_split('/\r\n|\r|\n/', (string)$detailProbe['output']) ?: [] as $line) {
+                $line = trim($line);
+                if (str_starts_with($line, 'EXT|')) {
+                    $installedExts[] = substr($line, 4);
+                } elseif (str_starts_with($line, 'TBL|')) {
+                    $installedTables[] = substr($line, 4);
+                }
+            }
+        }
+
+        $missingExts = array_values(array_diff($requiredExtensions, $installedExts));
+        $missingTables = array_values(array_diff($requiredTables, $installedTables));
+
+        $checks = [
+            [
+                'key' => 'container',
+                'label' => 'Conteneur PostgreSQL 18',
+                'ok' => true,
+                'status' => 'ok',
+                'detail' => "Conteneur {$targetContainer} actif",
+                'remediation' => '',
+            ],
+            [
+                'key' => 'database',
+                'label' => 'Base cible recommandée',
+                'ok' => $dbExists,
+                'status' => $dbExists ? 'ok' : 'fail',
+                'detail' => $dbExists ? "Base {$recommendedDb} disponible" : "Base {$recommendedDb} absente",
+                'remediation' => $dbExists ? '' : 'Cliquez sur « Réamorcer Sakila / pgbench » pour créer et peupler la base.',
+            ],
+            [
+                'key' => 'sandbox_role',
+                'label' => 'Rôle sandbox lms_student',
+                'ok' => $roleExists,
+                'status' => $roleExists ? 'ok' : 'warn',
+                'detail' => $roleExists ? 'Rôle lms_student + pg_read_all_stats configuré' : 'Rôle lms_student non provisionné',
+                'remediation' => $roleExists ? '' : 'Cliquez sur « Réamorcer Sakila / pgbench » pour configurer les droits.',
+            ],
+            [
+                'key' => 'extensions',
+                'label' => 'Extensions PostgreSQL requises',
+                'ok' => empty($missingExts),
+                'status' => empty($missingExts) ? 'ok' : 'fail',
+                'detail' => empty($requiredExtensions)
+                    ? 'Aucune extension supplémentaire requise'
+                    : (empty($missingExts)
+                        ? 'Installées : ' . implode(', ', $requiredExtensions)
+                        : 'Manquantes : ' . implode(', ', $missingExts)),
+                'remediation' => empty($missingExts) ? '' : 'Exécutez CREATE EXTENSION IF NOT EXISTS pour : ' . implode(', ', $missingExts),
+            ],
+            [
+                'key' => 'tables',
+                'label' => 'Jeu de données requis',
+                'ok' => empty($missingTables),
+                'status' => empty($missingTables) ? 'ok' : 'fail',
+                'detail' => empty($requiredTables)
+                    ? 'Tables standard prêtes'
+                    : (empty($missingTables)
+                        ? 'Tables présentes : ' . implode(', ', $requiredTables)
+                        : 'Tables manquantes : ' . implode(', ', $missingTables)),
+                'remediation' => empty($missingTables) ? '' : 'Réamorcez le jeu de données Sakila / pgbench.',
+            ],
+            [
+                'key' => 'oracle',
+                'label' => 'Oracle Qualiopi',
+                'ok' => $oracleFound,
+                'status' => $oracleFound ? 'ok' : 'warn',
+                'detail' => $oracle['bloom'] . ' — ' . $oracle['title'],
+                'remediation' => '',
+            ],
+        ];
+
+        $allReady = $dbExists && empty($missingExts) && empty($missingTables) && $oracleFound;
+
+        return [
+            'success' => true,
+            'simulated' => false,
+            'ready' => $allReady,
+            'mode' => $mode,
+            'lab_id' => $labId,
+            'lab_code' => $code,
+            'bloom' => $oracle['bloom'],
+            'title' => $oracle['title'],
+            'oracle_found' => $oracleFound,
+            'recommended_database' => $recommendedDb,
+            'required_extensions' => $requiredExtensions,
+            'missing_extensions' => $missingExts,
+            'required_tables' => $requiredTables,
+            'missing_tables' => $missingTables,
+            'container' => $targetContainer,
+            'container_running' => true,
+            'checks' => $checks,
+            'message' => $allReady
+                ? "Lab {$code} prêt sur {$targetContainer} (base {$recommendedDb})."
+                : "Prérequis incomplets pour le lab {$code} sur {$targetContainer}.",
+        ];
+    }
+
+    /**
+     * Resolves the target container while enforcing strict per-user tenant boundaries
+     * unless $allowSharedFallback is explicitly granted for staff or CLI tools.
+     *
+     * @return array{runtime: array, simulated: bool, container: ?string, error: ?string}
+     */
+    private function resolveTargetContainer(int $userId, bool $allowSharedFallback = false): array
+    {
+        $rt = $this->docker->detectRuntime();
+        if (empty($rt['available'])) {
+            return [
+                'runtime' => $rt,
+                'simulated' => true,
+                'container' => $this->docker->getContainerName($userId),
+                'error' => null,
+            ];
+        }
+
+        $status = $this->docker->getUserContainerStatus($userId);
+        if (!empty($status['user_container_running']) || !empty($status['running'])) {
+            return [
+                'runtime' => $rt,
+                'simulated' => false,
+                'container' => (string)$status['container_name'],
+                'error' => null,
+            ];
+        }
+
+        if ($allowSharedFallback && !empty($status['primary_cluster_running'])) {
+            return [
+                'runtime' => $rt,
+                'simulated' => false,
+                'container' => 'pg_formation_primary',
+                'error' => null,
+            ];
+        }
+
+        return [
+            'runtime' => $rt,
+            'simulated' => false,
+            'container' => null,
+            'error' => 'Veuillez démarrer votre conteneur personnel avant cette opération.',
+        ];
+    }
+
+    /**
+     * Executes a read-only diagnostic query via base64-encoded stdin and PGOPTIONS timeout bounds.
+     *
+     * @return array{success: bool, output: string}
+     */
+    private function runTargetPsql(string $targetContainer, string $database, string $sql, bool $asSuperuser = false): array
+    {
+        $pgUser = $asSuperuser ? 'postgres' : SakilaSeeder::SANDBOX_ROLE;
+        $b64 = base64_encode($sql);
+        $cmd = sprintf(
+            'exec %s sh -c "echo %s | base64 -d | PGOPTIONS=\"-c statement_timeout=15000 -c lock_timeout=10000\" psql -X -t -A -U %s -d %s -P pager=off"',
+            $targetContainer,
+            $b64,
+            $pgUser,
+            $database
+        );
+        $res = $this->docker->runDockerCommand($cmd, 15.0);
+
+        if (
+            !$asSuperuser
+            && $res['code'] !== 0
+            && str_contains((string)$res['output'], SakilaSeeder::SANDBOX_ROLE)
+            && str_contains((string)$res['output'], 'does not exist')
+        ) {
+            $roleB64 = base64_encode(SakilaSeeder::getSandboxRoleSql());
+            $this->docker->runDockerCommand(sprintf(
+                'exec %s sh -c "echo %s | base64 -d | psql -X -U postgres -d %s"',
+                $targetContainer,
+                $roleB64,
+                $database
+            ), 8.0);
+            $res = $this->docker->runDockerCommand($cmd, 15.0);
+        }
+
+        return [
+            'success' => $res['code'] === 0 && !preg_match('/^ERROR:/m', (string)$res['output']),
+            'output' => (string)$res['output'],
+        ];
+    }
+
+    private function parseDiagnosticOutput(string $output, string $activeDb): array
+    {
+        $serverVersion = '';
+        $settings = [];
+        $databases = [];
+        $extensions = [];
+        $sessions = [];
+        $summary = [
+            'total_backends' => 0,
+            'active' => 0,
+            'idle' => 0,
+            'idle_in_transaction' => 0,
+            'waiting_locks' => 0,
+        ];
+        $activeHitRatio = 100.0;
+
+        foreach (preg_split('/\r\n|\r|\n/', $output) ?: [] as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+            if (str_starts_with($line, 'DIAG_VER|')) {
+                $serverVersion = substr($line, 9);
+            } elseif (str_starts_with($line, 'DIAG_SET|')) {
+                $parts = explode('|', $line, 3);
+                if (count($parts) === 3) {
+                    $settings[$parts[1]] = $parts[2];
+                }
+            } elseif (str_starts_with($line, 'DIAG_DB|')) {
+                $parts = explode('|', $line, 5);
+                if (count($parts) === 5) {
+                    $ratio = (float)$parts[4];
+                    $databases[] = [
+                        'datname' => $parts[1],
+                        'size_pretty' => $parts[2],
+                        'size_bytes' => (int)$parts[3],
+                        'cache_hit_ratio' => $ratio,
+                    ];
+                    if ($parts[1] === $activeDb) {
+                        $activeHitRatio = $ratio;
+                    }
+                }
+            } elseif (str_starts_with($line, 'DIAG_ACTSUM|')) {
+                $parts = explode('|', $line, 6);
+                if (count($parts) === 6) {
+                    $summary = [
+                        'total_backends' => (int)$parts[1],
+                        'active' => (int)$parts[2],
+                        'idle' => (int)$parts[3],
+                        'idle_in_transaction' => (int)$parts[4],
+                        'waiting_locks' => (int)$parts[5],
+                    ];
+                }
+            } elseif (str_starts_with($line, 'DIAG_ACTROW|')) {
+                $parts = explode('|', $line, 8);
+                if (count($parts) === 8) {
+                    $sessions[] = [
+                        'pid' => (int)$parts[1],
+                        'usename' => $parts[2],
+                        'datname' => $parts[3],
+                        'state' => $parts[4],
+                        'wait_event_type' => $parts[5],
+                        'backend_type' => $parts[6],
+                        'query' => $parts[7],
+                    ];
+                }
+            } elseif (str_starts_with($line, 'DIAG_EXT|')) {
+                $extensions[] = substr($line, 9);
+            }
+        }
+
+        return [
+            'server_version' => $serverVersion !== '' ? $serverVersion : 'PostgreSQL 18',
+            'settings' => $settings,
+            'cache_hit_ratio' => $activeHitRatio,
+            'activity' => array_merge($summary, ['sessions' => $sessions]),
+            'databases' => $databases,
+            'extensions' => $extensions,
+        ];
+    }
+
+    /**
+     * Maps all 34 PostgreSQL 18 curriculum labs (01..29 and sql_01..sql_05)
+     * to their recommended target database, required extensions, and core tables.
+     */
+    private function getLabPrerequisitesMap(): array
+    {
+        $map = [];
+        for ($i = 1; $i <= 29; $i++) {
+            $code = sprintf('%02d', $i);
+            $map[$code] = [
+                'database' => 'formation_pg',
+                'extensions' => [],
+                'tables' => [],
+            ];
+        }
+
+        $map['01']['extensions'] = ['pageinspect'];
+        $map['05']['extensions'] = ['pageinspect'];
+        $map['06']['extensions'] = ['pg_stat_statements'];
+        $map['06']['tables'] = ['pgbench_accounts', 'pgbench_branches'];
+        $map['19']['tables'] = ['pgbench_accounts'];
+        $map['23']['extensions'] = ['pageinspect', 'pgstattuple'];
+        $map['24']['extensions'] = ['pg_stat_statements'];
+        $map['24']['tables'] = ['pgbench_accounts'];
+        $map['25']['extensions'] = ['pgstattuple'];
+        $map['26']['tables'] = ['pgbench_accounts'];
+        $map['27']['extensions'] = ['pg_stat_statements'];
+        $map['27']['tables'] = ['pgbench_accounts'];
+        $map['28']['extensions'] = ['postgres_fdw'];
+
+        for ($i = 1; $i <= 5; $i++) {
+            $code = sprintf('sql_%02d', $i);
+            $map[$code] = [
+                'database' => 'dvdrental',
+                'extensions' => [],
+                'tables' => ['film', 'actor', 'customer', 'rental', 'payment'],
+            ];
+        }
+
+        return $map;
     }
 }

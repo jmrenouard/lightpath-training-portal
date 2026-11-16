@@ -12,6 +12,9 @@ return [
     'version' => '2.0.0',
     'qualiopi_ref' => 'LP-LMS-QUALIOPI-2026',
 
+    // Session inactivity timeout (seconds) aligned with PHP session.gc_maxlifetime
+    'session_idle_ttl' => 7200,
+
     // Storage backend: 'json' (zero-config atomic flat-file default) or 'pdo' (PostgreSQL / MySQL / SQLite)
     'storage_driver' => getenv('LMS_STORAGE_DRIVER') ?: 'json',
     'storage_path' => getenv('LMS_DATA_DIR') ?: (__DIR__ . '/../storage/data'),

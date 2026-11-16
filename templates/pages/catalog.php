@@ -68,8 +68,8 @@ foreach ($allModules as $mId => $mObj) {
     ?>
         <a href="index.php?page=catalog&tab=<?= urlencode($activeTab) ?>&track=<?= urlencode((string)$tKey) ?>&course=<?= urlencode($currentCourseSlug) ?>"
            class="track-filter-pill <?= $selectedTrack === (string)$tKey ? 'active' : '' ?>"
-           style="--pill-accent: <?= Security::e($track['color'] ?? '#00B0F0') ?>;">
-            <span class="track-filter-num" style="color: <?= Security::e($track['color'] ?? '#00B0F0') ?>;">
+           data-accent="<?= Security::e($track['color'] ?? '#00B0F0') ?>">
+            <span class="track-filter-num">
                 <?= Security::e($track['number'] ?? 'Parcours') ?>
             </span>
             <span class="track-filter-name"><?= Security::e($track['short_title'] ?? $track['title']) ?></span>
@@ -95,16 +95,16 @@ foreach ($allModules as $mId => $mObj) {
         $tPct = $tTotal > 0 ? (int)round(($tDone / $tTotal) * 100) : 0;
         $accent = (string)($track['color'] ?? '#00B0F0');
     ?>
-        <section class="catalog-track-section" style="--track-accent: <?= Security::e($accent) ?>;">
+        <section class="catalog-track-section" data-accent="<?= Security::e($accent) ?>">
             <div class="catalog-track-banner">
                 <div class="catalog-track-banner-main">
-                    <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.4rem;">
-                        <span class="track-number-pill" style="background: <?= Security::e($accent) ?>;">
+                    <div class="d-flex items-center gap-sm flex-wrap mb-xs">
+                        <span class="track-number-pill">
                             <?= Security::e($track['number'] ?? 'Parcours') ?>
                         </span>
                         <span class="badge-code"><?= Security::e($track['badge']) ?></span>
                         <?php if (!empty($track['target_audience'])): ?>
-                            <span style="font-size: 0.78rem; color: var(--text-secondary);">
+                            <span class="text-xs text-secondary">
                                 👥 <strong>Public :</strong> <?= Security::e($track['target_audience']) ?>
                             </span>
                         <?php endif; ?>
@@ -124,13 +124,13 @@ foreach ($allModules as $mId => $mObj) {
                 </div>
 
                 <div class="catalog-track-banner-progress">
-                    <div class="tabular-nums" style="font-size: 1.25rem; font-weight: 800; color: var(--brand-cyan-light);">
-                        <?= $tDone ?> / <?= $tTotal ?> <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">modules (<?= $tPct ?>%)</span>
+                    <div class="tabular-nums section-heading-md font-extrabold text-cyan">
+                        <?= $tDone ?> / <?= $tTotal ?> <span class="text-sm font-semibold text-secondary">modules (<?= $tPct ?>%)</span>
                     </div>
-                    <div class="progress-bar-track" style="margin: 0.45rem 0;">
-                        <div class="progress-bar-fill" style="width: <?= $tPct ?>%;"></div>
+                    <div class="progress-bar-track progress-bar-track--my">
+                        <div class="progress-bar-fill" data-progress="<?= $tPct ?>"></div>
                     </div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted);">
+                    <div class="text-xs text-muted">
                         Progression séquentielle étape par étape
                     </div>
                 </div>
@@ -144,10 +144,10 @@ foreach ($allModules as $mId => $mObj) {
             ?>
                 <div class="catalog-phase-block">
                     <div class="catalog-phase-header">
-                        <span class="catalog-phase-badge" style="border-color: <?= Security::e($accent) ?>; color: <?= Security::e($accent) ?>;">
+                        <span class="catalog-phase-badge">
                             <?= Security::e($phase['code']) ?>
                         </span>
-                        <div style="min-width: 0;">
+                        <div class="min-w-0">
                             <h3 class="catalog-phase-title"><?= Security::e($phase['title']) ?></h3>
                             <?php if (!empty($phase['subtitle'])): ?>
                                 <p class="catalog-phase-subtitle"><?= Security::e($phase['subtitle']) ?></p>
@@ -171,31 +171,31 @@ foreach ($allModules as $mId => $mObj) {
                                      data-searchable="<?= Security::e($mod['badge_code'] . ' ' . $mod['title'] . ' ' . $mod['bloom'] . ' ' . $mod['track_title'] . ' ' . ($phase['code'] ?? '')) ?>">
                                 <div>
                                     <div class="card-top-meta">
-                                        <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+                                        <div class="d-flex items-center gap-xs flex-wrap">
                                             <span class="badge-code"><?= Security::e($mod['badge_code']) ?></span>
                                             <span class="badge-phase tabular-nums">
                                                 Étape <?= (int)$mod['track_position'] ?>/<?= (int)$mod['track_total'] ?>
                                             </span>
                                         </div>
-                                        <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+                                        <div class="d-flex items-center gap-xs flex-wrap">
                                             <?php if ($quizScore !== null): ?>
-                                                <span class="badge-code tabular-nums" style="background: rgba(56, 189, 248, 0.14);">Quiz <?= (int)$quizScore['percentage'] ?>%</span>
+                                                <span class="badge-code badge-cyan-soft tabular-nums">Quiz <?= (int)$quizScore['percentage'] ?>%</span>
                                             <?php endif; ?>
                                             <?php if ($isDone): ?>
                                                 <span class="badge-completed">✔ Validé</span>
                                             <?php else: ?>
-                                                <span style="font-size: 0.75rem; color: var(--text-muted);">⏱ <?= Security::e($mod['duration']) ?></span>
+                                                <span class="text-xs text-muted">⏱ <?= Security::e($mod['duration']) ?></span>
                                             <?php endif; ?>
                                         </div>
                                     </div>
 
-                                    <h4 style="font-size: 1.04rem; margin: 0 0 0.4rem; line-height: 1.35;">
-                                        <a href="index.php?page=module&id=<?= urlencode($mId) ?>&course=<?= urlencode($currentCourseSlug) ?>" style="color: var(--text-primary);">
+                                    <h4 class="card-heading-sm">
+                                        <a href="index.php?page=module&id=<?= urlencode($mId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="link-primary">
                                             <?= Security::e($mod['title']) ?>
                                         </a>
                                     </h4>
 
-                                    <p style="font-size: 0.81rem; color: var(--text-secondary); margin-bottom: 0.65rem;">
+                                    <p class="card-desc-sm">
                                         <strong>Compétence Bloom :</strong> <?= Security::e($mod['bloom']) ?>
                                     </p>
 
@@ -203,15 +203,15 @@ foreach ($allModules as $mId => $mObj) {
                                         <div class="coupled-lab-strip">
                                             <span>🧪 <strong>Atelier couplé :</strong> <?= Security::e($mod['linked_lab_title'] ?? ('Lab ' . $mod['code'])) ?></span>
                                             <?php if ($isLabDone): ?>
-                                                <span class="badge-completed" style="font-size: 0.66rem;">✔ Lab Validé</span>
+                                                <span class="badge-completed text-2xs">✔ Lab Validé</span>
                                             <?php endif; ?>
                                         </div>
                                     <?php endif; ?>
                                 </div>
 
                                 <div>
-                                    <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem;">
-                                        <a href="index.php?page=module&id=<?= urlencode($mId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-primary btn-sm" style="flex: 1;">
+                                    <div class="d-flex gap-xs flex-wrap mt-xs">
+                                        <a href="index.php?page=module&id=<?= urlencode($mId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-primary btn-sm flex-1">
                                             📖 Cours & Quiz
                                         </a>
                                         <a href="index.php?page=module&id=<?= urlencode($mId) ?>&mode=slides&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline-cyan btn-sm" title="Suivre le cours sous forme de Diaporama 16:9">

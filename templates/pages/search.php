@@ -31,13 +31,13 @@ $searchGlossaryCount = count(\LightPath\LMS\Course\LmsCatalog::getGlossary());
 </div>
 
 <?php if ($searchQuery !== ''): ?>
-    <h2 style="font-size: 1.2rem; margin-bottom: 1rem;" class="tabular-nums">
+    <h2 class="section-heading-md mb-1 tabular-nums">
         Résultats pour « <?= Security::e($searchQuery) ?> » (<?= count($results) ?> correspondance<?= count($results) > 1 ? 's' : '' ?>)
     </h2>
 
     <?php if (empty($results)): ?>
         <div class="lms-card">
-            <p style="margin: 0; color: var(--text-secondary);">Aucun résultat trouvé pour ce terme. Essayez un mot-clé SQL ou un concept PostgreSQL 18 (<code>VACUUM</code>, <code>BRIN</code>, <code>WAL</code>, <code>Patroni</code>, <code>sysctl</code>).</p>
+            <p class="mb-0 text-secondary">Aucun résultat trouvé pour ce terme. Essayez un mot-clé SQL ou un concept PostgreSQL 18 (<code>VACUUM</code>, <code>BRIN</code>, <code>WAL</code>, <code>Patroni</code>, <code>sysctl</code>).</p>
         </div>
     <?php else: ?>
         <div class="card-grid">
@@ -48,16 +48,16 @@ $searchGlossaryCount = count(\LightPath\LMS\Course\LmsCatalog::getGlossary());
                             <span class="badge-code"><?= Security::e($r['badge']) ?></span>
                             <span class="badge-phase"><?= strtoupper(Security::e($r['type'])) ?></span>
                         </div>
-                        <h3 style="font-size: 1.05rem; margin-bottom: 0.4rem;">
-                            <a href="index.php<?= Security::e($r['url']) ?>" style="color: var(--text-primary);">
+                        <h3 class="section-heading-sm mb-xs">
+                            <a href="index.php<?= Security::e($r['url']) ?>" class="link-primary">
                                 <?= Security::formatInlineText($r['title']) ?>
                             </a>
                         </h3>
-                        <p style="font-size: 0.84rem; color: var(--text-secondary); margin-bottom: 0.85rem;">
+                        <p class="text-sm text-secondary mb-sm">
                             <?= Security::formatInlineText($r['snippet']) ?>
                         </p>
                     </div>
-                    <a href="index.php<?= Security::e($r['url']) ?>" class="btn btn-outline btn-sm" style="width: 100%;">
+                    <a href="index.php<?= Security::e($r['url']) ?>" class="btn btn-outline btn-sm w-100">
                         Ouvrir la ressource →
                     </a>
                 </article>

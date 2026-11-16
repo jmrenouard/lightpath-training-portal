@@ -56,7 +56,7 @@ $dockerLabsEnabled = !isset($featureManager) || $featureManager->isEnabled('dock
         <div class="kpi-label">Votre Progression Globale</div>
         <div class="kpi-value tabular-nums text-cyan hero-kpi-pct"><?= $globalCompletionPct ?>%</div>
         <div class="progress-bar-track">
-            <div class="progress-bar-fill" style="width: <?= $globalCompletionPct ?>%;"></div>
+            <div class="progress-bar-fill" data-progress="<?= (int)$globalCompletionPct ?>"></div>
         </div>
         <div class="kpi-sub tabular-nums mt-xs">
             <strong><?= $doneModules ?></strong>/<?= $totalModules ?> Modules • <strong><?= $doneLabs ?></strong>/<?= $totalLabs ?> Labs
@@ -79,15 +79,15 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
     $lvMode = (string)($lastVisited['mode'] ?? ($lvType === 'lab' ? 'enonce' : 'reader'));
     $lvUrl = 'index.php?page=' . urlencode($lvType) . '&id=' . urlencode($lvId) . '&mode=' . urlencode($lvMode) . '&course=' . urlencode($currentCourseSlug);
 ?>
-<div class="lms-card" style="margin-bottom: 1.5rem; padding: 1rem 1.35rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; border-color: var(--brand-cyan);">
-    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+<div class="lms-card mb-lg p-card-resume lms-card--accent-cyan d-flex flex-row justify-between items-center flex-wrap gap-md">
+    <div class="d-flex items-center gap-sm flex-wrap">
         <span class="badge-code">▶️ REPRENDRE VOTRE ÉTUDE</span>
         <strong><?= Security::e($lvTitle) ?></strong>
-        <span style="font-size: 0.8rem; color: var(--text-muted);">
+        <span class="text-sm text-muted">
             (<?= $lvType === 'lab' ? 'Atelier Pratique Docker' : 'Module de Cours' ?>)
         </span>
     </div>
-    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+    <div class="d-flex gap-xs flex-wrap">
         <a href="<?= Security::e($lvUrl) ?>" class="btn btn-primary btn-sm">
             ▶ Reprendre immédiatement →
         </a>
@@ -101,12 +101,12 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
 <div class="kpi-grid">
     <div class="kpi-card">
         <div class="kpi-label">📚 Modules Validés</div>
-        <div class="kpi-value tabular-nums"><?= $doneModules ?> <span style="font-size: 1rem; color: var(--text-muted);">/ <?= $totalModules ?></span></div>
+        <div class="kpi-value tabular-nums"><?= $doneModules ?> <span class="kpi-denom">/ <?= $totalModules ?></span></div>
         <div class="kpi-sub">Cours interactifs, Diaporamas 16:9, PDF & PPTX</div>
     </div>
     <div class="kpi-card">
         <div class="kpi-label">🧪 Ateliers Pratiques (Labs)</div>
-        <div class="kpi-value tabular-nums"><?= $doneLabs ?> <span style="font-size: 1rem; color: var(--text-muted);">/ <?= $totalLabs ?></span></div>
+        <div class="kpi-value tabular-nums"><?= $doneLabs ?> <span class="kpi-denom">/ <?= $totalLabs ?></span></div>
         <div class="kpi-sub">Validés sur conteneurs Docker & Base Sakila</div>
     </div>
     <div class="kpi-card">
@@ -234,10 +234,10 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
             $trackPct = $trackTotal > 0 ? (int)round(($trackDone / $trackTotal) * 100) : 0;
             $accentColor = (string)($track['color'] ?? '#00B0F0');
         ?>
-            <div class="track-roadmap-card" style="--track-accent: <?= Security::e($accentColor) ?>;">
+            <div class="track-roadmap-card" data-accent="<?= Security::e($accentColor) ?>">
                 <div class="track-roadmap-header">
-                    <div style="display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap;">
-                        <span class="track-number-pill" style="background: <?= Security::e($accentColor) ?>;">
+                    <div class="d-flex items-center gap-xs flex-wrap">
+                        <span class="track-number-pill">
                             <?= Security::e($track['number'] ?? 'Parcours') ?>
                         </span>
                         <span class="badge-code"><?= Security::e($track['badge']) ?></span>
@@ -308,14 +308,14 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
                 <?php endif; ?>
 
                 <div class="track-roadmap-footer">
-                    <div class="progress-bar-track" style="margin-bottom: 0.75rem;">
-                        <div class="progress-bar-fill" style="width: <?= $trackPct ?>%;"></div>
+                    <div class="progress-bar-track mb-sm">
+                        <div class="progress-bar-fill" data-progress="<?= $trackPct ?>"></div>
                     </div>
-                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                        <a href="index.php?page=catalog&track=<?= urlencode((string)$tKey) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm" style="flex: 1;">
+                    <div class="d-flex gap-xs flex-wrap">
+                        <a href="index.php?page=catalog&track=<?= urlencode((string)$tKey) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm flex-1">
                             🗺️ Détail du <?= Security::e($track['number'] ?? 'Parcours') ?>
                         </a>
-                        <a href="index.php?page=module&id=<?= urlencode($resumeModId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-primary btn-sm" style="flex: 1;">
+                        <a href="index.php?page=module&id=<?= urlencode($resumeModId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-primary btn-sm flex-1">
                             ▶ <?= $trackDone > 0 ? 'Continuer le Parcours' : 'Démarrer le Parcours' ?>
                         </a>
                         <a href="index.php?page=module&id=<?= urlencode($resumeModId) ?>&mode=slides&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline-cyan btn-sm" title="Suivre ce parcours en Mode Diaporama 16:9">
@@ -361,7 +361,7 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
             </button>
         </div>
     </div>
-    <div id="docker-action-feedback" class="flash-banner flash-success mt-1 mb-0" hidden></div>
+    <div id="docker-action-feedback" class="flash-banner flash-success mt-1 mb-0" hidden aria-live="polite"></div>
 </section>
 <?php endif; ?>
 
@@ -380,29 +380,29 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
         <article class="lms-card <?= $isDone ? 'is-completed' : '' ?>" data-searchable="<?= Security::e($mod['badge_code'] . ' ' . $mod['title'] . ' ' . $mod['bloom']) ?>">
             <div>
                 <div class="card-top-meta">
-                    <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+                    <div class="d-flex items-center gap-xs flex-wrap">
                         <span class="badge-code"><?= Security::e($mod['badge_code']) ?></span>
                         <span class="badge-phase"><?= Security::e($mod['phase_code'] ?? '') ?> • Étape <?= (int)$mod['track_position'] ?>/<?= (int)$mod['track_total'] ?></span>
                     </div>
                     <?php if ($isDone): ?>
                         <span class="badge-completed">✔ Terminé</span>
                     <?php else: ?>
-                        <span style="font-size: 0.75rem; color: var(--text-muted);">⏱ <?= Security::e($mod['duration']) ?></span>
+                        <span class="text-xs text-muted">⏱ <?= Security::e($mod['duration']) ?></span>
                     <?php endif; ?>
                 </div>
-                <h3 style="font-size: 1.05rem; margin-bottom: 0.4rem;">
-                    <a href="index.php?page=module&id=<?= urlencode($mId) ?>&course=<?= urlencode($currentCourseSlug) ?>" style="color: var(--text-primary);">
+                <h3 class="section-heading-sm mb-xs">
+                    <a href="index.php?page=module&id=<?= urlencode($mId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="link-primary">
                         <?= Security::e($mod['title']) ?>
                     </a>
                 </h3>
-                <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                <p class="card-desc-sm">
                     <?= Security::e($mod['bloom']) ?>
                 </p>
             </div>
 
             <div>
-                <div style="display: flex; gap: 0.45rem; flex-wrap: wrap;">
-                    <a href="index.php?page=module&id=<?= urlencode($mId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-primary btn-sm" style="flex: 1;">
+                <div class="d-flex gap-xs flex-wrap">
+                    <a href="index.php?page=module&id=<?= urlencode($mId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-primary btn-sm flex-1">
                         📖 Cours
                     </a>
                     <a href="index.php?page=module&id=<?= urlencode($mId) ?>&mode=slides&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline-cyan btn-sm" title="Suivre sous forme de Slides 16:9">

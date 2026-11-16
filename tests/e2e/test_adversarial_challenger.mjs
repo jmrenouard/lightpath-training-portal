@@ -233,6 +233,8 @@ async function runAdversarialCampaign() {
             { path: 'index.php?page=module&id=module_01_introduction_postgresql_18&mode=slides', label: 'Module 01 (Mode Diaporama 16:9)' },
             { path: 'index.php?page=lab&id=lab_01_introduction_setup_postgresql_18&mode=enonce', label: 'Lab 01 (Mode Énoncé)' },
             { path: 'index.php?page=lab&id=lab_01_introduction_setup_postgresql_18&mode=corrige', label: 'Lab 01 (Mode Corrigé)' },
+            { path: 'index.php?page=admin&tab=audit', label: 'Admin (Journal Audit SHA-256)' },
+            { path: 'index.php?page=admin&tab=system', label: 'Admin (Système & Feature Flags)' },
         ];
 
         for (const vp of viewports) {
@@ -243,6 +245,7 @@ async function runAdversarialCampaign() {
                     const winW = window.innerWidth;
                     const scrollW = document.documentElement.scrollWidth;
                     const culprits = [];
+                    const inlineStyles = document.querySelectorAll('[style]').length;
                     
                     // Helper checking whether an element is inside a legitimate scrollable container (pre, .lms-table-wrap)
                     const isInsideScrollContainer = (el) => {
@@ -275,12 +278,13 @@ async function runAdversarialCampaign() {
                         scrollW,
                         winW,
                         pageOverflow: scrollW > winW,
-                        culprits
+                        culprits,
+                        inlineStyles
                     };
                 }`);
                 assert(
-                    !check.pageOverflow && check.culprits.length === 0,
-                    `[${vp.name} ${vp.width}x${vp.height}] Zéro débordement page & éléments sur ${v.label} (scrollW=${check.scrollW} <= ${check.winW})`,
+                    !check.pageOverflow && check.culprits.length === 0 && check.inlineStyles === 0,
+                    `[${vp.name} ${vp.width}x${vp.height}] Zéro débordement & 0 style= inline sur ${v.label} (scrollW=${check.scrollW} <= ${check.winW}, styles=${check.inlineStyles})`,
                     check.culprits.length > 0 ? JSON.stringify(check.culprits[0]) : ''
                 );
             }
@@ -334,7 +338,7 @@ async function runAdversarialCampaign() {
             const badge = document.querySelector('.badge-completed')?.textContent || '';
             const cta = Array.from(document.querySelectorAll('.lms-card a.btn-primary')).find(a => a.textContent.includes('Parcours Recommandé'));
             const href = cta ? cta.getAttribute('href') : '';
-            const title = (card?.querySelector('span[style*="font-weight: 700"]')?.textContent || '').trim();
+            const title = (card?.querySelector('span.text-cyan.font-bold')?.textContent || '').trim();
             return { pct, badge, href, title };
         }`);
         assert(resA.pct < 45, `Score faible calculé : ${resA.pct}% (< 45%)`);
@@ -408,7 +412,7 @@ async function runAdversarialCampaign() {
             const pct = parseInt(document.querySelector('.kpi-value')?.textContent || '0', 10);
             const cta = Array.from(document.querySelectorAll('.lms-card a.btn-primary')).find(a => a.textContent.includes('Parcours Recommandé'));
             const href = cta ? cta.getAttribute('href') : '';
-            const title = (document.querySelector('.lms-card span[style*="font-weight: 700"]')?.textContent || '').trim();
+            const title = (document.querySelector('.lms-card span.text-cyan.font-bold')?.textContent || '').trim();
             return { pct, href, title };
         }`);
         assert(resB.pct >= 45 && resB.pct < 75, `Score intermédiaire calculé : ${resB.pct}% (attendu 45% à 74%)`);
@@ -451,7 +455,7 @@ async function runAdversarialCampaign() {
             const pct = parseInt(document.querySelector('.kpi-value')?.textContent || '0', 10);
             const cta = Array.from(document.querySelectorAll('.lms-card a.btn-primary')).find(a => a.textContent.includes('Parcours Recommandé'));
             const href = cta ? cta.getAttribute('href') : '';
-            const title = (document.querySelector('.lms-card span[style*="font-weight: 700"]')?.textContent || '').trim();
+            const title = (document.querySelector('.lms-card span.text-cyan.font-bold')?.textContent || '').trim();
             return { pct, href, title };
         }`);
         assert(resC.pct === 100, `Score parfait calculé : ${resC.pct}% (100%)`);
