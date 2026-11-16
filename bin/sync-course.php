@@ -24,8 +24,9 @@ if (!$sourceDir || !is_dir((string)$sourceDir)) {
 }
 
 $targetDir = __DIR__ . '/../storage/courses/' . $slug;
-if (!is_dir($targetDir)) {
-    mkdir($targetDir, 0775, true);
+if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
+    fwrite(STDERR, "[ERROR] Failed to create target directory: {$targetDir}\n");
+    exit(1);
 }
 
 $manifest = [
@@ -34,5 +35,9 @@ $manifest = [
     'source_dir' => $sourceDir,
 ];
 
-file_put_contents($targetDir . '/manifest.json', json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+$jsonPayload = json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+if ($jsonPayload === false || file_put_contents($targetDir . '/manifest.json', $jsonPayload, LOCK_EX) === false) {
+    fwrite(STDERR, "[ERROR] Failed to write course manifest to {$targetDir}/manifest.json\n");
+    exit(1);
+}
 echo "[OK] Course manifest '{$slug}' synchronized to {$targetDir}/manifest.json\n";

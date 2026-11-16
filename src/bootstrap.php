@@ -25,21 +25,29 @@ spl_autoload_register(static function (string $class): void {
     }
 });
 
-if (session_status() === PHP_SESSION_NONE && PHP_SAPI !== 'cli') {
-    @ini_set('session.use_strict_mode', '1');
-    @ini_set('session.use_only_cookies', '1');
+(static function (): void {
+    $appCfgFile = __DIR__ . '/../config/app.php';
+    $appCfg = is_file($appCfgFile) ? require $appCfgFile : [];
+    $idleTtl = is_array($appCfg) ? max(300, (int)($appCfg['session_idle_ttl'] ?? 7200)) : 7200;
 
-    // Enable Secure cookie flag when served over HTTPS or TLS reverse proxy
-    $isSecure = \LightPath\LMS\Core\Security::isHttpsRequest();
+    @ini_set('session.gc_maxlifetime', (string)$idleTtl);
 
-    session_set_cookie_params([
-        'lifetime' => 86400 * 7,
-        'path' => '/',
-        'httponly' => true,
-        'samesite' => 'Lax',
-        'secure' => $isSecure,
-    ]);
-    session_start();
-}
+    if (session_status() === PHP_SESSION_NONE && PHP_SAPI !== 'cli') {
+        @ini_set('session.use_strict_mode', '1');
+        @ini_set('session.use_only_cookies', '1');
+
+        // Enable Secure cookie flag when served over HTTPS or TLS reverse proxy
+        $isSecure = \LightPath\LMS\Core\Security::isHttpsRequest();
+
+        session_set_cookie_params([
+            'lifetime' => $idleTtl,
+            'path' => '/',
+            'httponly' => true,
+            'samesite' => 'Lax',
+            'secure' => $isSecure,
+        ]);
+        session_start();
+    }
+})();
 
 \LightPath\LMS\Core\Security::sendSecurityHeaders();

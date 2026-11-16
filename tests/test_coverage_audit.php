@@ -6,12 +6,12 @@ declare(strict_types=1);
  * LightPath Training Portal (LMS PHP 8.3)
  *
  * Verifies:
- *   1. Reflection-based public API test coverage = 100% across src/Core, src/Course, src/Docker
+ *   1. Reflection-based public API test coverage = 100% across src/Core, src/Course, src/Docker, src/Http
  *   2. Zero third-party brand leaks (e.g., prohibited training vendor names) across codebase
  *   3. Zero external CDN dependencies in templates/, public/, and docs/
- *   4. Zero inline on*= HTML event handler attributes in templates/
+ *   4. Zero inline on*= HTML event handlers and zero inline style= attributes across src/ & templates/
  *   5. 100% English technical comments across config/, src/, bin/ (incl. .py), public/ (.php/.js/.css), templates/, tests/ (incl. .mjs)
- *   6. Strict SHA-256 CSP on script-src without 'unsafe-inline' in src/Core/Security.php
+ *   6. Strict SHA-256 CSP on script-src and style-src 'self' without 'unsafe-inline' in Security::sendSecurityHeaders()
  */
 
 require_once __DIR__ . '/../src/bootstrap.php';
@@ -24,7 +24,7 @@ echo " LIGHTPATH LMS — COVERAGE, SECURITY & GOVERNANCE STATIC AUDIT\n";
 echo "========================================================================\n\n";
 
 // ----------------------------------------------------------------------------
-// 1. Public API Reflection Coverage Audit (src/Core, src/Course, src/Docker)
+// 1. Public API Reflection Coverage Audit (src/Core, src/Course, src/Docker, src/Http)
 // ----------------------------------------------------------------------------
 $testCorpus = '';
 foreach (glob($repoRoot . '/tests/*.php') ?: [] as $testFile) {
@@ -35,7 +35,7 @@ $totalPublicMethods = 0;
 $coveredPublicMethods = 0;
 $uncoveredMethods = [];
 
-foreach (['src/Core', 'src/Course', 'src/Docker'] as $relDir) {
+foreach (['src/Core', 'src/Course', 'src/Docker', 'src/Http'] as $relDir) {
     $files = glob($repoRoot . '/' . $relDir . '/*.php') ?: [];
     sort($files);
     foreach ($files as $file) {
@@ -179,7 +179,7 @@ if (!empty($cdnHits)) {
 }
 
 // ----------------------------------------------------------------------------
-// 4. Inline HTML Event Handler Audit (on*= attributes in templates/)
+// 4. Inline HTML Event Handler (on*=) & Inline style= Attribute Audit
 // ----------------------------------------------------------------------------
 $inlineHandlerHits = [];
 foreach ($collectFiles($repoRoot, ['templates'], ['php', 'html']) as $path) {
@@ -193,9 +193,105 @@ foreach ($collectFiles($repoRoot, ['templates'], ['php', 'html']) as $path) {
     }
 }
 
-echo sprintf("[4/6] Inline on*= HTML Event Attributes in templates/: %d\n", count($inlineHandlerHits));
+$inlineStyleHits = [];
+foreach ($collectFiles($repoRoot, ['src', 'templates'], ['php', 'html']) as $path) {
+    $content = (string)file_get_contents($path);
+    if (preg_match_all('/\bstyle\s*=/i', $content, $matches, PREG_OFFSET_CAPTURE)) {
+        foreach ($matches[0] as [$matchText, $offset]) {
+            $lineNo = substr_count(substr($content, 0, $offset), "\n") + 1;
+            $rel = str_replace('\\', '/', str_replace($repoRoot . DIRECTORY_SEPARATOR, '', $path));
+            $inlineStyleHits[] = "{$rel}:L{$lineNo} ({$matchText})";
+        }
+    }
+}
+
+// Validate all HTML pattern="..." attributes against ES v-mode character class rules.
+$invalidPatternHits = [];
+foreach ($collectFiles($repoRoot, ['templates'], ['php', 'html']) as $path) {
+    $content = (string)file_get_contents($path);
+    $rel = str_replace('\\', '/', str_replace($repoRoot . DIRECTORY_SEPARATOR, '', $path));
+    if (!preg_match_all('/\bpattern\s*=\s*"([^"]*)"/i', $content, $matches, PREG_OFFSET_CAPTURE)) {
+        continue;
+    }
+    foreach ($matches[1] as [$patVal, $offset]) {
+        if (str_contains($patVal, '<?')) {
+            continue;
+        }
+        $lineNo = substr_count(substr($content, 0, $offset), "\n") + 1;
+        $len = strlen($patVal);
+        $inClass = false;
+        $classJustOpened = false;
+        $prevWasRangeEnd = false;
+        $prevChar = null;
+        $hasBadHyphen = false;
+
+        for ($idx = 0; $idx < $len; $idx++) {
+            $ch = $patVal[$idx];
+            if ($ch === '\\') {
+                $idx++;
+                if ($inClass) {
+                    $classJustOpened = false;
+                    $prevWasRangeEnd = false;
+                    $prevChar = null;
+                }
+                continue;
+            }
+            if (!$inClass) {
+                if ($ch === '[') {
+                    $inClass = true;
+                    $classJustOpened = true;
+                    $prevWasRangeEnd = false;
+                    $prevChar = null;
+                    if (($idx + 1) < $len && $patVal[$idx + 1] === '^') {
+                        $idx++;
+                    }
+                }
+                continue;
+            }
+            if ($ch === ']') {
+                $inClass = false;
+                $classJustOpened = false;
+                $prevWasRangeEnd = false;
+                $prevChar = null;
+                continue;
+            }
+            if ($ch === '-') {
+                $nextChar = ($idx + 1) < $len ? $patVal[$idx + 1] : '';
+                if ($classJustOpened || $nextChar === ']' || $nextChar === '-' || $nextChar === '' || $nextChar === '\\' || $prevChar === null || $prevWasRangeEnd || ord($prevChar) > ord($nextChar)) {
+                    $hasBadHyphen = true;
+                    break;
+                }
+                $idx++;
+                $prevChar = null;
+                $prevWasRangeEnd = true;
+                $classJustOpened = false;
+                continue;
+            }
+            $prevChar = $ch;
+            $prevWasRangeEnd = false;
+            $classJustOpened = false;
+        }
+
+        if ($hasBadHyphen || $inClass) {
+            $invalidPatternHits[] = "{$rel}:L{$lineNo} (pattern=\"{$patVal}\")";
+        }
+    }
+}
+
+echo sprintf(
+    "[4/6] Inline on*= Event Attributes (templates/): %d | Inline style= Attributes (src/ & templates/): %d | Invalid ES v-mode HTML pattern= Attributes: %d\n",
+    count($inlineHandlerHits),
+    count($inlineStyleHits),
+    count($invalidPatternHits)
+);
 if (!empty($inlineHandlerHits)) {
     $failures[] = "Inline on*= attributes detected: " . implode(', ', $inlineHandlerHits);
+}
+if (!empty($inlineStyleHits)) {
+    $failures[] = "Inline style= attributes detected: " . implode(', ', array_slice($inlineStyleHits, 0, 20));
+}
+if (!empty($invalidPatternHits)) {
+    $failures[] = "Invalid HTML pattern= attributes for ES v-mode detected: " . implode(', ', $invalidPatternHits);
 }
 
 // ----------------------------------------------------------------------------
@@ -282,20 +378,34 @@ if (!empty($frenchCommentHits)) {
 }
 
 // ----------------------------------------------------------------------------
-// 6. Strict SHA-256 CSP Check on src/Core/Security.php (No 'unsafe-inline' in script-src)
+// 6. Strict CSP Check on src/Core/Security.php (No 'unsafe-inline' in script-src or sendSecurityHeaders style-src)
 // ----------------------------------------------------------------------------
 $secFile = $repoRoot . '/src/Core/Security.php';
 $secSource = is_file($secFile) ? (string)file_get_contents($secFile) : '';
 $scriptSrcDirective = preg_match('/script-src\s+([^;\r\n"]+)/', $secSource, $secCspMatch) ? $secCspMatch[0] : '';
-$cspStrictOk = $scriptSrcDirective !== ''
+$scriptSrcStrictOk = $scriptSrcDirective !== ''
     && !str_contains($scriptSrcDirective, 'unsafe-inline')
     && str_contains($scriptSrcDirective, 'sha256-');
+$sendSecHeadersBody = '';
+if (class_exists(\LightPath\LMS\Core\Security::class)) {
+    $rmSec = new ReflectionMethod(\LightPath\LMS\Core\Security::class, 'sendSecurityHeaders');
+    $secLines = preg_split('/\r?\n/', $secSource) ?: [];
+    $slice = array_slice($secLines, $rmSec->getStartLine() - 1, ($rmSec->getEndLine() - $rmSec->getStartLine()) + 1);
+    $sendSecHeadersBody = implode("\n", $slice);
+}
+$styleSrcStrictOk = $sendSecHeadersBody !== ''
+    && str_contains($sendSecHeadersBody, "style-src 'self'")
+    && !str_contains($sendSecHeadersBody, 'unsafe-inline');
+$cspStrictOk = $scriptSrcStrictOk && $styleSrcStrictOk && empty($inlineStyleHits);
 echo sprintf(
-    "[6/6] Strict Security CSP script-src (0 'unsafe-inline'): %s\n",
+    "[6/6] Strict Security CSP script-src & style-src 'self' (0 'unsafe-inline', 0 style=): %s\n",
     $cspStrictOk ? 'PASS' : 'FAIL'
 );
-if (!$cspStrictOk) {
+if (!$scriptSrcStrictOk) {
     $failures[] = "Security.php script-src CSP is missing strict sha256 hash or allows 'unsafe-inline'.";
+}
+if (!$styleSrcStrictOk) {
+    $failures[] = "Security::sendSecurityHeaders() must enforce style-src 'self' with zero 'unsafe-inline'.";
 }
 
 echo "\n========================================================================\n";
@@ -307,5 +417,5 @@ if (!empty($failures)) {
     exit(1);
 }
 
-echo "AUDIT PASSED - 100% API Coverage, Strict CSP, Zero Brand/CDN/Inline-JS/French-Comment Leaks.\n";
+echo "AUDIT PASSED - 100% API Coverage, Strict CSP (script-src + style-src), Zero Inline-Style/Brand/CDN/Inline-JS/French-Comment Leaks.\n";
 exit(0);

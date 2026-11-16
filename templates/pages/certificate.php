@@ -77,44 +77,42 @@ $verifyUrl = $baseUrl . '/index.php?page=verify&code=' . urlencode($certCode);
     </div>
 </div>
 
-<div class="certificate-sheet" style="padding: clamp(1rem, 4vw, 3rem);">
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; border-bottom: 2px solid var(--border-hairline); padding-bottom: 1.5rem; margin-bottom: 2rem;">
-        <div style="display: flex; align-items: center; gap: 1rem;">
+<div class="certificate-sheet cert-print-frame">
+    <div class="cert-header-bar">
+        <div class="d-flex items-center gap-md">
             <img src="assets/img/lightpath_logo_white_text.png"
                  data-dark-src="assets/img/lightpath_logo_white_text.png"
                  data-light-src="assets/img/lightpath_logo_dark_text.png"
                  alt="LightPath SARL"
-                 class="theme-aware-logo"
-                 style="height: 48px;"/>
+                 class="theme-aware-logo cert-logo-img"/>
             <div>
-                <div style="font-weight: 800; font-size: 1.2rem;"><?= Security::e($appConfig['company']) ?></div>
-                <div style="font-size: 0.82rem; color: var(--text-secondary);">Organisme de Formation Professionnelle • Réf. <?= Security::e($appConfig['qualiopi_ref']) ?></div>
+                <div class="font-extrabold text-lg"><?= Security::e($appConfig['company']) ?></div>
+                <div class="text-sm text-secondary">Organisme de Formation Professionnelle • Réf. <?= Security::e($appConfig['qualiopi_ref']) ?></div>
             </div>
         </div>
         <img src="assets/img/postgresql_elephant_dark.png"
              data-dark-src="assets/img/postgresql_elephant_dark.png"
              data-light-src="assets/img/postgresql_elephant_light.png"
              alt="PostgreSQL 18"
-             class="theme-aware-logo"
-             style="height: 48px;"/>
+             class="theme-aware-logo cert-logo-img"/>
     </div>
 
-    <div style="text-align: center; margin-bottom: 2rem;">
-        <div class="badge-code" style="font-size: 0.82rem;">ATTESTATION D'ACQUISITION DE COMPÉTENCES PROFESSIONNELLES • DURÉE : <?= Security::e(strtoupper($activeTrackDuration)) ?></div>
-        <h2 style="font-size: 1.85rem; margin: 0.75rem 0 0.35rem;"><?= Security::e($activeTrackTitle) ?></h2>
-        <p style="color: var(--text-secondary); margin: 0;">
-            Délivrée à <strong style="color: var(--text-primary); font-size: 1.15rem;"><?= Security::e($currentUser['name']) ?></strong>
+    <div class="text-center mb-2">
+        <div class="badge-code text-sm">ATTESTATION D'ACQUISITION DE COMPÉTENCES PROFESSIONNELLES • DURÉE : <?= Security::e(strtoupper($activeTrackDuration)) ?></div>
+        <h2 class="text-2xl mt-sm mb-xs"><?= Security::e($activeTrackTitle) ?></h2>
+        <p class="text-secondary mb-0">
+            Délivrée à <strong class="text-primary text-lg"><?= Security::e($currentUser['name']) ?></strong>
             (<?= Security::e($currentUser['email']) ?><?= !empty($currentUser['company']) ? ' — ' . Security::e($currentUser['company']) : '' ?>)
         </p>
-        <div style="margin-top: 0.5rem;">
+        <div class="mt-xs">
             <span class="badge-completed tabular-nums">Réf. Certificat : <?= Security::e($certCode) ?><?= !empty($userBestExam['mention']) ? ' • ' . Security::e((string)$userBestExam['mention']) : '' ?></span>
         </div>
     </div>
 
-    <div class="kpi-grid" style="margin-bottom: 2rem;">
+    <div class="kpi-grid mb-2">
         <div class="kpi-card">
             <div class="kpi-label">Taux d'Accomplissement</div>
-            <div class="kpi-value tabular-nums" style="color: var(--brand-cyan-light);"><?= $filteredCompletionPct ?>%</div>
+            <div class="kpi-value tabular-nums text-cyan"><?= $filteredCompletionPct ?>%</div>
             <div class="kpi-sub">Progression certifiée LMS (<?= Security::e($activeTrackDuration) ?>)</div>
         </div>
         <div class="kpi-card">
@@ -134,7 +132,7 @@ $verifyUrl = $baseUrl . '/index.php?page=verify&code=' . urlencode($certCode);
         </div>
     </div>
 
-    <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">📊 Détail des Modules, Compétences Bloom & Évaluations Formatives</h3>
+    <h3 class="section-heading-sm mb-sm">📊 Détail des Modules, Compétences Bloom & Évaluations Formatives</h3>
     <div class="lms-table-wrap">
         <table class="lms-table">
             <thead>
@@ -157,33 +155,33 @@ $verifyUrl = $baseUrl . '/index.php?page=verify&code=' . urlencode($certCode);
                         <td><span class="badge-code"><?= Security::e($mod['badge_code']) ?></span></td>
                         <td>
                             <strong><?= Security::e($mod['title']) ?></strong>
-                            <div style="font-size: 0.76rem; color: var(--text-muted);"><?= Security::e($mod['bloom']) ?></div>
+                            <div class="text-xs text-muted"><?= Security::e($mod['bloom']) ?></div>
                         </td>
-                        <td><?= $mDone ? '<span class="badge-completed">✔ Validé</span>' : '<span style="color:var(--text-muted);">En cours</span>' ?></td>
+                        <td><?= $mDone ? '<span class="badge-completed">✔ Validé</span>' : '<span class="text-muted">En cours</span>' ?></td>
                         <td class="tabular-nums"><?= $qRes ? ((int)$qRes['percentage'] . '%') : '—' ?></td>
-                        <td><?= $lDone ? '<span class="badge-completed">✔ Oracle OK</span>' : '<span style="color:var(--text-muted);">—</span>' ?></td>
+                        <td><?= $lDone ? '<span class="badge-completed">✔ Oracle OK</span>' : '<span class="text-muted">—</span>' ?></td>
                     </tr>
                 <?php endforeach; ?>
             </tbody>
         </table>
     </div>
 
-    <div style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1.25rem; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-hairline); font-size: 0.85rem;">
+    <div class="cert-footer-bar">
         <div>
             <strong>Date d'émission :</strong> <?= date('d/m/Y') ?><br/>
             <strong>Vérification :</strong> <?= Security::e($appConfig['website']) ?> | <?= Security::e($appConfig['contact_email']) ?><br/>
-            <a href="index.php?page=verify&code=<?= urlencode($certCode) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="no-print" style="display: inline-block; margin-top: 0.45rem; color: var(--brand-cyan-light); font-weight: 600;">
+            <a href="index.php?page=verify&code=<?= urlencode($certCode) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="no-print d-inline-block mt-xs text-cyan font-semibold">
                 🔍 Vérifier l'authenticité de ce certificat en ligne
             </a>
         </div>
-        <div style="display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap;">
-            <div style="text-align: center;">
+        <div class="d-flex items-center gap-lg flex-wrap">
+            <div class="text-center">
                 <?= \LightPath\LMS\Core\Security::renderVerificationQrSvg($verifyUrl, $certCode) ?>
             </div>
-            <div style="text-align: right;">
+            <div class="text-right">
                 <strong>Le Formateur & Responsable Pédagogique :</strong><br/>
                 <?= Security::e($appConfig['trainer_name']) ?><br/>
-                <span style="color: var(--text-secondary); font-size: 0.78rem;"><?= Security::e($appConfig['trainer_title']) ?></span>
+                <span class="text-secondary text-xs"><?= Security::e($appConfig['trainer_title']) ?></span>
             </div>
         </div>
     </div>

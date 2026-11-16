@@ -194,13 +194,16 @@ $t->assertGreaterThanOrEqual(34, count($oracleCatalog), "Catalogue des 34 Oracle
 
 // 7. PHP Syntax Integrity Checks Across All Files & Templates
 echo "\n--- 7. Tests Intégrité Syntaxique PHP (Linting de tous les composants & vues) ---\n";
-$phpFiles = array_merge(
+$phpFiles = array_values(array_unique(array_merge(
     glob(__DIR__ . '/../public/*.php') ?: [],
+    glob(__DIR__ . '/../src/*.php') ?: [],
     glob(__DIR__ . '/../src/**/*.php') ?: [],
+    glob(__DIR__ . '/../src/Http/*.php') ?: [],
     glob(__DIR__ . '/../templates/*.php') ?: [],
     glob(__DIR__ . '/../templates/pages/*.php') ?: [],
+    glob(__DIR__ . '/../templates/partials/admin/*.php') ?: [],
     glob(__DIR__ . '/../bin/*.php') ?: []
-);
+)));
 foreach ($phpFiles as $pf) {
     $out = [];
     $code = 0;
@@ -371,10 +374,29 @@ $certTpl = (string)file_get_contents(__DIR__ . '/../templates/pages/certificate.
 $appCfgCode = (string)file_get_contents(__DIR__ . '/../config/app.php');
 $e2eRunnerCode = (string)file_get_contents(__DIR__ . '/e2e/run_playwright_campaign.mjs');
 
-$t->assertTrue(str_contains($loginTpl, 'minmax(min(100%, 340px), 1fr)') && str_contains($cssContent, '@media (max-width: 640px)'), "RCA-LMS-27 : Grille responsive mobile 375px sans débordement dans login.php et @media (max-width: 640px) dans app.css");
-$t->assertTrue(str_contains($cssContent, 'minmax(min(100%, 330px), 1fr)') && str_contains($cssContent, '.reader-grid > *') && str_contains($certTpl, 'clamp(1rem, 4vw, 3rem)'), "RCA-LMS-27 : Protection anti-débordement mobile sur .card-grid, .reader-grid > * et certificate.php");
+$adminPartialsCorpus = '';
+foreach (glob(__DIR__ . '/../templates/partials/admin/*.php') ?: [] as $adminPartialFile) {
+    $adminPartialsCorpus .= (string)file_get_contents($adminPartialFile) . "\n";
+}
+$adminAllTpl = $adminTpl . "\n" . $adminPartialsCorpus;
+
+$t->assertTrue(
+    str_contains($loginTpl, 'login-split-grid')
+    && !preg_match('/\bstyle\s*=/i', $loginTpl)
+    && str_contains($cssContent, 'minmax(min(100%, 340px), 1fr)')
+    && str_contains($cssContent, '@media (max-width: 640px)'),
+    "RCA-LMS-27 : Grille responsive mobile 375px (.login-split-grid / minmax 340px) dans app.css avec 0 style= dans login.php"
+);
+$t->assertTrue(
+    str_contains($cssContent, 'minmax(min(100%, 330px), 1fr)')
+    && str_contains($cssContent, '.reader-grid > *')
+    && str_contains($certTpl, 'cert-print-frame')
+    && !preg_match('/\bstyle\s*=/i', $certTpl)
+    && str_contains($cssContent, 'clamp(1rem, 4vw, 3rem)'),
+    "RCA-LMS-27 : Protection anti-débordement mobile sur .card-grid, .reader-grid > * et .cert-print-frame (0 style= dans certificate.php)"
+);
 $t->assertTrue(str_contains($loginTpl, 'autocomplete="username"') && str_contains($loginTpl, 'autocomplete="current-password"') && str_contains($loginTpl, 'autocomplete="new-password"'), "RCA-LMS-28 : Attributs autocomplete W3C présents sur les formulaires de connexion et d'inscription (login.php)");
-$t->assertTrue(str_contains($profileTpl, 'autocomplete="new-password"') && str_contains($adminTpl, 'autocomplete="new-password"'), "RCA-LMS-28 : Attributs autocomplete=\"new-password\" présents dans profile.php et admin.php (zéro avertissement DOM Chromium)");
+$t->assertTrue(str_contains($profileTpl, 'autocomplete="new-password"') && str_contains($adminAllTpl, 'autocomplete="new-password"'), "RCA-LMS-28 : Attributs autocomplete=\"new-password\" présents dans profile.php et templates admin (zéro avertissement DOM Chromium)");
 
 $mcpConfigFile = __DIR__ . '/../config/playwright-mcp.config.json';
 $mcpCfg = is_file($mcpConfigFile) ? json_decode((string)file_get_contents($mcpConfigFile), true) : null;
@@ -824,10 +846,11 @@ $t->assertTrue($pdoAdapter->getUserColdSatisfaction(3, 'postgresql-18') !== null
 // =========================================================================
 echo "\n--- 17. Tests Contrats RCA-164 / RCA-LMS-34 (12 Constats Revue Ponytail-Review) ---\n";
 
-// 17.1 Item 1: Bulk Cohort CSV Import in admin.php & public/index.php
+// 17.1 Item 1: Bulk Cohort CSV Import in admin templates & public/index.php
 $adminTpl = (string)file_get_contents(__DIR__ . '/../templates/pages/admin.php');
+$adminUsersPartial = (string)file_get_contents(__DIR__ . '/../templates/partials/admin/tab_users.php');
 $indexCode = (string)file_get_contents(__DIR__ . '/../public/index.php');
-$t->assertTrue(str_contains($adminTpl, 'name="csv_content"'), "RCA-164 (Item 1) : admin.php soumet le champ textarea sous le nom name=\"csv_content\"");
+$t->assertTrue(str_contains($adminTpl . "\n" . $adminUsersPartial, 'name="csv_content"'), "RCA-164 (Item 1) : templates admin soumettent le champ textarea sous le nom name=\"csv_content\"");
 $t->assertTrue(str_contains($indexCode, "\$_POST['csv_content'] ?? (\$_POST['csv_payload'] ?? '')"), "RCA-164 (Item 1) : public/index.php lit avec repli \$_POST['csv_content'] ?? \$_POST['csv_payload']");
 
 // 17.2 Item 2: Public Unauthenticated Access to Certificate Verification ?page=verify
@@ -1703,7 +1726,7 @@ try {
         "Section 22: DownloadController::resolveRelativeCourseAsset() rejects path traversal"
     );
 
-    // Verify README.md, PROJECT-CONTEXT.md and all 7 docs/*.md files exist without vendor leaks or external CDNs
+    // Verify README.md, PROJECT-CONTEXT.md and all 9 docs/*.md files exist without vendor leaks or external CDNs
     $s22RequiredDocs = [
         __DIR__ . '/../README.md',
         __DIR__ . '/../PROJECT-CONTEXT.md',
@@ -1711,6 +1734,8 @@ try {
         __DIR__ . '/../docs/API_REFERENCE.md',
         __DIR__ . '/../docs/ARCHITECTURE.md',
         __DIR__ . '/../docs/COURSE_PACK_GUIDE.md',
+        __DIR__ . '/../docs/DEPLOYMENT_AND_OPERATIONS.md',
+        __DIR__ . '/../docs/DEVELOPER_AND_TESTING_GUIDE.md',
         __DIR__ . '/../docs/DOCKER_LABS_GUIDE.md',
         __DIR__ . '/../docs/QUALITY_AUDIT_PONYTAIL.md',
         __DIR__ . '/../docs/SECURITY.md',
@@ -2035,6 +2060,742 @@ PHP;
         @rmdir($dir);
     };
     $s23Cleanup($s23Root);
+}
+
+// ============================================================================
+// 24. Deep 7-Axis Behavioral & Unit Suite (Security, Auth, Audit Chain,
+//     FeatureManager, Docker Savepoints/pgbench/Fleet, Lab Readiness, AdminService,
+//     and Direct Http Controller Invocation)
+// ============================================================================
+echo "\n--- 24. Deep 7-Axis Behavioral & Unit Suite ---\n";
+$s24Root = sys_get_temp_dir() . '/lp_sec24_' . bin2hex(random_bytes(4));
+$s24Data = $s24Root . '/data';
+$s24Cache = $s24Root . '/cache';
+@mkdir($s24Data, 0775, true);
+@mkdir($s24Cache, 0775, true);
+
+$s24PrevSim = getenv('LMS_DOCKER_FORCE_SIMULATED');
+$s24SavedSession = $_SESSION ?? [];
+$s24SavedServer = $_SERVER;
+
+try {
+    putenv('LMS_DOCKER_FORCE_SIMULATED=1');
+    $s24RepoRoot = realpath(__DIR__ . '/..') ?: dirname(__DIR__);
+    $s24Storage = new JsonStorage($s24Data);
+    $s24Auth = new Auth($s24Storage);
+    $s24Fm = new \LightPath\LMS\Core\FeatureManager($s24Storage);
+    $s24AdminSvc = new \LightPath\LMS\Core\AdminService();
+    $s24CoursesCfg = require __DIR__ . '/../config/courses.php';
+    $s24CourseRepo = new CourseRepository($s24CoursesCfg, [], $s24Cache);
+    $s24Downloader = new DownloadController($s24CourseRepo);
+    $s24Parser = new MarkdownParser(null, $s24Cache);
+    $s24Docker = new DockerManager($s24Storage, [], $s24Data . '/docker_status_cache.json');
+    $s24SqlRunner = new LabSqlRunner($s24Docker);
+
+    // 24.1 Security: standalone document CSP & Same-Origin request validation
+    Security::sendStandaloneDocumentCspHeader();
+    Security::sendStandaloneDocumentCspHeader(['sha256-fIvSulwFNp3RteiAZGkbvt+fvUeVJoTUB439YMvw0EA=']);
+    $s24BuildCsp = new ReflectionMethod(Security::class, 'buildCspPolicy');
+    $s24PortalPolicy = (string)$s24BuildCsp->invoke(null, "style-src 'self'");
+    $s24StandalonePolicy = (string)$s24BuildCsp->invoke(
+        null,
+        "style-src 'self' 'unsafe-inline'",
+        [
+            'sha256-fIvSulwFNp3RteiAZGkbvt+fvUeVJoTUB439YMvw0EA=',
+            'sha256-Y+Iy31+SIVnkv2t35OtFkyF8C43lr3XQSadODH27V58=',
+            "sha256-bad; script-src 'unsafe-inline'",
+        ]
+    );
+    $s24SecCode = (string)file_get_contents(__DIR__ . '/../src/Core/Security.php');
+    $t->assertTrue(
+        str_contains($s24SecCode, 'buildCspPolicy("style-src \'self\'")')
+        && str_contains($s24SecCode, 'buildCspPolicy("style-src \'self\' \'unsafe-inline\'")')
+        && str_contains($s24PortalPolicy, "style-src 'self'")
+        && !str_contains($s24PortalPolicy, 'unsafe-inline')
+        && str_contains($s24StandalonePolicy, "'sha256-fIvSulwFNp3RteiAZGkbvt+fvUeVJoTUB439YMvw0EA='")
+        && substr_count($s24StandalonePolicy, 'sha256-Y+Iy31+SIVnkv2t35OtFkyF8C43lr3XQSadODH27V58=') === 1
+        && !str_contains($s24StandalonePolicy, 'sha256-bad'),
+        "Section 24: Security separates strict portal style-src 'self' and validates standalone extra script SHA-256 hashes"
+    );
+    $t->assertTrue(
+        Security::verifySameOriginRequest(['HTTP_HOST' => '127.0.0.1:8080']),
+        "Section 24: Security::verifySameOriginRequest() allows CLI/requests without Origin or Referer"
+    );
+    $t->assertTrue(
+        Security::verifySameOriginRequest(['HTTP_HOST' => '127.0.0.1:8080', 'HTTP_ORIGIN' => 'http://127.0.0.1:8080']),
+        "Section 24: Security::verifySameOriginRequest() accepts matching Origin host and port"
+    );
+    $t->assertTrue(
+        Security::verifySameOriginRequest(['HTTP_HOST' => '127.0.0.1:8080', 'HTTP_REFERER' => 'http://127.0.0.1:8080/index.php?page=admin']),
+        "Section 24: Security::verifySameOriginRequest() accepts matching Referer host and port"
+    );
+    $t->assertFalse(
+        Security::verifySameOriginRequest(['HTTP_HOST' => '127.0.0.1:8080', 'HTTP_ORIGIN' => 'https://evil.example']),
+        "Section 24: Security::verifySameOriginRequest() rejects cross-origin Origin header"
+    );
+    $t->assertFalse(
+        Security::verifySameOriginRequest(['HTTP_HOST' => '127.0.0.1:8080', 'HTTP_ORIGIN' => 'http://127.0.0.1:9999']),
+        "Section 24: Security::verifySameOriginRequest() rejects Origin port mismatch"
+    );
+    $t->assertFalse(
+        Security::verifySameOriginRequest(['HTTP_HOST' => '127.0.0.1:8080', 'HTTP_ORIGIN' => 'null']),
+        "Section 24: Security::verifySameOriginRequest() rejects opaque 'null' Origin"
+    );
+
+    // 24.2 Auth & JsonStorage user lifecycle: isUserActive, setUserActive, adminResetUserPassword, throttles
+    $t->assertFalse(Auth::isUserActive(['active' => false]), "Section 24: Auth::isUserActive() returns false for boolean false");
+    $t->assertFalse(Auth::isUserActive(['active' => 0]), "Section 24: Auth::isUserActive() returns false for integer 0");
+    $t->assertFalse(Auth::isUserActive(['active' => '0']), "Section 24: Auth::isUserActive() returns false for string '0'");
+    $t->assertTrue(Auth::isUserActive(['active' => true]) && Auth::isUserActive([]), "Section 24: Auth::isUserActive() defaults to true and accepts active=true");
+
+    $t->assertFalse($s24Storage->setUserActive(1, false), "Section 24: JsonStorage::setUserActive() protects super-admin #1 from deactivation");
+    $s24ToggleStudent = $s24Auth->registerUser('User Lifecycle', 'lifecycle.s24@lightpath.fr', 'LifePass2026!', 'student', 'LightPath');
+    $s24LifeId = (int)($s24ToggleStudent['id'] ?? 0);
+    $t->assertTrue($s24LifeId > 0 && $s24Storage->setUserActive($s24LifeId, false), "Section 24: JsonStorage::setUserActive() suspends target student");
+    $t->assertNull($s24Auth->verifyCredentials('lifecycle.s24@lightpath.fr', 'LifePass2026!'), "Section 24: Auth::verifyCredentials() rejects suspended user");
+
+    $_SESSION['user_id'] = $s24LifeId;
+    $_SESSION['last_activity'] = time();
+    $t->assertNull($s24Auth->currentUser(), "Section 24: Auth::currentUser() logs out suspended session user");
+    $t->assertTrue(empty($_SESSION['user_id']), "Section 24: Auth::currentUser() clears session user_id on deactivation");
+
+    $t->assertTrue($s24Storage->setUserActive($s24LifeId, true), "Section 24: JsonStorage::setUserActive() reactivates target student");
+    $s24NewHash = password_hash('AdminReset2026!', PASSWORD_BCRYPT);
+    $t->assertTrue($s24Storage->adminResetUserPassword($s24LifeId, $s24NewHash), "Section 24: JsonStorage::adminResetUserPassword() updates password hash");
+    $t->assertTrue(
+        $s24Auth->verifyCredentials('lifecycle.s24@lightpath.fr', 'AdminReset2026!') !== null,
+        "Section 24: Reactivated user authenticates with admin-reset password"
+    );
+
+    for ($s24i = 0; $s24i < 5; $s24i++) {
+        $s24Auth->recordFailedLogin('locked.s24@lightpath.fr', '192.0.2.88');
+    }
+    $s24Throttles = $s24Storage->listLoginThrottles();
+    $t->assertTrue(
+        isset($s24Throttles['locked.s24@lightpath.fr|192.0.2.88'])
+        && !empty($s24Throttles['locked.s24@lightpath.fr|192.0.2.88']['locked']),
+        "Section 24: JsonStorage::listLoginThrottles() reports locked account bucket"
+    );
+    $s24Storage->clearLoginThrottle('locked.s24@lightpath.fr', '192.0.2.88');
+    $s24Auth->recordFailedLogin('prefix.s24@lightpath.fr', '192.0.2.99');
+    $s24Storage->clearLoginThrottle('prefix.s24@lightpath.fr');
+    $s24Storage->clearLoginThrottle('', '192.0.2.88');
+    $s24Storage->clearLoginThrottle('', '192.0.2.99');
+    $s24ThrottlesAfter = $s24Storage->listLoginThrottles();
+    $t->assertTrue(
+        !isset($s24ThrottlesAfter['locked.s24@lightpath.fr|192.0.2.88'])
+        && !isset($s24ThrottlesAfter['prefix.s24@lightpath.fr|192.0.2.99']),
+        "Section 24: JsonStorage::clearLoginThrottle() supports both 2-arg and 1-arg email/key removal"
+    );
+
+    // 24.3 JsonStorage SHA-256 audit hash chain & verifyAuditIntegrity() across archives
+    $s24ChainStorage = new JsonStorage($s24Root . '/chain_data');
+    $s24ChainSeed = [];
+    for ($s24k = 1; $s24k <= 998; $s24k++) {
+        $s24ChainSeed[] = [
+            'timestamp' => '2026-02-10 09:00:00',
+            'actor' => 'legacy@lightpath.fr',
+            'action' => 'LEGACY_EVENT',
+            'details' => 'Pre-chain legacy entry #' . $s24k,
+        ];
+    }
+    file_put_contents($s24Root . '/chain_data/audit_logs.json', json_encode($s24ChainSeed, JSON_PRETTY_PRINT));
+    for ($s24m = 1; $s24m <= 5; $s24m++) {
+        $s24ChainStorage->logAuditEvent('audit.qa@lightpath.fr', 'CHAIN_EVENT', 'Chained event #' . $s24m);
+    }
+    $s24IntegrityOk = $s24ChainStorage->verifyAuditIntegrity(true);
+    $t->assertTrue(
+        ($s24IntegrityOk['valid'] ?? false) === true
+        && (int)($s24IntegrityOk['legacy_unchained'] ?? 0) === 998
+        && (int)($s24IntegrityOk['chained_entries'] ?? 0) === 5
+        && empty($s24IntegrityOk['broken_links']),
+        "Section 24: JsonStorage::verifyAuditIntegrity(true) validates SHA-256 chain across archives while tolerating legacy entries"
+    );
+
+    // Tamper with an active chained entry and verify detection
+    $s24ActiveRaw = json_decode((string)file_get_contents($s24Root . '/chain_data/audit_logs.json'), true);
+    $s24ActiveRaw[0]['details'] = 'TAMPERED_PAYLOAD';
+    file_put_contents($s24Root . '/chain_data/audit_logs.json', json_encode($s24ActiveRaw, JSON_PRETTY_PRINT));
+    $s24IntegrityBroken = $s24ChainStorage->verifyAuditIntegrity(false);
+    $t->assertTrue(
+        ($s24IntegrityBroken['valid'] ?? true) === false && count($s24IntegrityBroken['broken_links'] ?? []) >= 1,
+        "Section 24: JsonStorage::verifyAuditIntegrity() detects modified audit entry payload"
+    );
+
+    // 24.4 FeatureManager: 10 categorized flags, dependency enforcement, 4 profiles, course overrides, JSON import/export
+    $s24FmDefs = $s24Fm->getDefinitions();
+    $t->assertEquals(10, count($s24FmDefs), "Section 24: FeatureManager exposes 10 categorized feature flags");
+    $s24Fm->updateFlags([
+        'self_registration' => '1',
+        'demo_quick_login' => '1',
+        'docker_labs' => '0',
+        'chaos_engineering' => '1',
+        'gamification' => '1',
+        'qna_forum' => '1',
+        'personal_notes' => '1',
+        'flashcards_srs' => '1',
+        'scorm_export' => '1',
+        'cold_satisfaction_j60' => '1',
+    ], 'qa24@lightpath.fr');
+    $t->assertFalse($s24Fm->isEnabled('chaos_engineering'), "Section 24: FeatureManager enforces requires=['docker_labs'] on chaos_engineering");
+
+    $s24Profiles = $s24Fm->getProfiles();
+    $t->assertEquals(4, count($s24Profiles), "Section 24: FeatureManager::getProfiles() returns 4 deployment profiles");
+    $t->assertFalse($s24Fm->applyProfile('nonexistent_profile', 'qa24@lightpath.fr'), "Section 24: FeatureManager::applyProfile() rejects unknown profile");
+    $t->assertTrue($s24Fm->applyProfile('exam_lockdown', 'qa24@lightpath.fr'), "Section 24: FeatureManager::applyProfile('exam_lockdown') succeeds");
+    $t->assertFalse($s24Fm->isEnabled('docker_labs') || $s24Fm->isEnabled('qna_forum'), "Section 24: exam_lockdown profile disables docker_labs and qna_forum");
+    $t->assertTrue($s24Fm->applyProfile('full_enterprise', 'qa24@lightpath.fr'), "Section 24: FeatureManager::applyProfile('full_enterprise') restores all 10 flags");
+
+    $s24Storage->saveCourseFeatureOverrides('postgresql-18', ['flashcards_srs' => '0', 'qna_forum' => 'inherit']);
+    $s24RawCourseOv = $s24Storage->getCourseFeatureOverrides('postgresql-18');
+    $t->assertTrue(
+        ($s24RawCourseOv['flashcards_srs'] ?? true) === false && !array_key_exists('qna_forum', $s24RawCourseOv),
+        "Section 24: JsonStorage::saveCourseFeatureOverrides() & getCourseFeatureOverrides() normalize and skip 'inherit'"
+    );
+    $s24Storage->saveCourseFeatureOverrides('postgresql-18', []);
+
+    $s24Fm->setCourseOverrides('postgresql-18', ['personal_notes' => '0', 'flashcards_srs' => 'inherit'], 'qa24@lightpath.fr');
+    $s24Overrides = $s24Fm->getCourseOverrides('postgresql-18');
+    $t->assertTrue(
+        ($s24Overrides['personal_notes'] ?? true) === false && !array_key_exists('flashcards_srs', $s24Overrides),
+        "Section 24: FeatureManager::setCourseOverrides() & getCourseOverrides() persist course-specific overrides and skip 'inherit'"
+    );
+    $t->assertFalse($s24Fm->isEnabledForCourse('personal_notes', 'postgresql-18'), "Section 24: FeatureManager::isEnabledForCourse() applies course override");
+    $t->assertTrue($s24Fm->isEnabled('personal_notes'), "Section 24: Global personal_notes flag remains enabled despite course override");
+    $s24Fm->clearCourseOverrides('postgresql-18', 'qa24@lightpath.fr');
+    $t->assertTrue($s24Fm->isEnabledForCourse('personal_notes', 'postgresql-18'), "Section 24: FeatureManager::clearCourseOverrides() restores inherited flag state");
+
+    $s24ExportedJson = $s24Fm->exportConfigJson();
+    $s24ExportedArr = json_decode($s24ExportedJson, true);
+    $t->assertTrue(
+        is_array($s24ExportedArr) && ($s24ExportedArr['schema'] ?? '') === 'lightpath-lms-features-v1' && count($s24ExportedArr['flags'] ?? []) === 10,
+        "Section 24: FeatureManager::exportConfigJson() produces valid schema JSON with 10 flags"
+    );
+    $t->assertFalse($s24Fm->importConfigJson('{invalid json'), "Section 24: FeatureManager::importConfigJson() rejects malformed JSON");
+    $t->assertTrue(
+        $s24Fm->importConfigJson('{"flags":{"docker_labs":true,"personal_notes":false}}', 'qa24@lightpath.fr')
+        && !$s24Fm->isEnabled('personal_notes'),
+        "Section 24: FeatureManager::importConfigJson() applies imported flag overrides"
+    );
+    $s24Fm->applyProfile('full_enterprise', 'qa24@lightpath.fr');
+
+    // 24.5 DockerManager: savepoints, max 5 limit, tenant isolation, pgbench clamping, fleet summary, idle reaper, chaos heal
+    $s24Sp1 = $s24Docker->createSavepoint(2, 'cp_one', 'formation_pg');
+    $t->assertTrue(($s24Sp1['success'] ?? false) === true && ($s24Sp1['savepoint']['name'] ?? '') === 'cp_one', "Section 24: DockerManager::createSavepoint() creates simulated savepoint");
+    $s24SpBad = $s24Docker->createSavepoint(2, '../bad!name', 'formation_pg');
+    $t->assertFalse($s24SpBad['success'] ?? true, "Section 24: DockerManager::createSavepoint() rejects invalid savepoint name");
+
+    foreach (['cp_two', 'cp_three', 'cp_four', 'cp_five'] as $spName) {
+        $s24Docker->createSavepoint(2, $spName, 'formation_pg');
+    }
+    $s24SpSixth = $s24Docker->createSavepoint(2, 'cp_six', 'formation_pg');
+    $t->assertFalse($s24SpSixth['success'] ?? true, "Section 24: DockerManager::createSavepoint() enforces max 5 savepoints per user");
+
+    $s24SpList = $s24Docker->listSavepoints(2);
+    $t->assertEquals(5, (int)($s24SpList['count'] ?? 0), "Section 24: DockerManager::listSavepoints() returns 5 savepoints");
+    $s24SpRestore = $s24Docker->restoreSavepoint(2, 'cp_one', 'formation_pg');
+    $t->assertTrue(($s24SpRestore['success'] ?? false) === true, "Section 24: DockerManager::restoreSavepoint() restores existing savepoint");
+    $s24SpDel = $s24Docker->deleteSavepoint(2, 'cp_five');
+    $t->assertTrue(($s24SpDel['success'] ?? false) === true && (int)($s24SpDel['count'] ?? -1) === 4, "Section 24: DockerManager::deleteSavepoint() removes savepoint");
+
+    $s24DockerDeny = new class($s24Storage, [], $s24Data . '/docker_deny_cache.json') extends DockerManager {
+        public function detectRuntime(bool $forceRefresh = false): array
+        {
+            return ['available' => true, 'mode' => 'native', 'prefix' => '', 'version' => 'MockDocker 27.0'];
+        }
+        public function getUserContainerStatus(int $userId): array
+        {
+            return [
+                'container_name' => $this->getContainerName($userId),
+                'port' => $this->getUserPort($userId),
+                'status' => 'not_created',
+                'running' => false,
+                'user_container_running' => false,
+                'primary_cluster_running' => true,
+            ];
+        }
+    };
+    $s24SpDeny = $s24DockerDeny->createSavepoint(2, 'cp_denied', 'formation_pg', false);
+    $t->assertFalse($s24SpDeny['success'] ?? true, "Section 24: DockerManager::createSavepoint(..., false) enforces tenant isolation when user container is down");
+
+    $s24Bench = $s24Docker->runPgbenchBenchmark(2, 99, 99, true, 'dvdrental');
+    $t->assertTrue(
+        ($s24Bench['success'] ?? false) === true
+        && (int)($s24Bench['clients'] ?? 0) === 8
+        && (int)($s24Bench['duration_seconds'] ?? 0) === 5
+        && (float)($s24Bench['tps'] ?? 0) > 0,
+        "Section 24: DockerManager::runPgbenchBenchmark() clamps clients=8, duration=5 and returns TPS metrics"
+    );
+
+    // Non-simulated pgbench must normalize empty runtime prefix to 'docker' via runDockerCommand().
+    $s24DockerEmptyPrefix = new class($s24Storage, [], $s24Data . '/docker_prefix_cache.json') extends DockerManager {
+        public array $capturedCmds = [];
+        public function detectRuntime(bool $forceRefresh = false): array
+        {
+            return ['available' => true, 'mode' => 'native', 'prefix' => '', 'version' => 'MockDocker 27.0'];
+        }
+        public function getUserContainerStatus(int $userId): array
+        {
+            return [
+                'container_name' => $this->getContainerName($userId),
+                'port' => $this->getUserPort($userId),
+                'status' => 'Up 10 minutes',
+                'running' => true,
+                'user_container_running' => true,
+                'primary_cluster_running' => true,
+            ];
+        }
+        public function execCommandWithTimeout(string $cmd, float $timeoutSeconds = 4.0): array
+        {
+            $this->capturedCmds[] = $cmd;
+            return [
+                'code' => 0,
+                'output' => "tps = 987.65 (without initial connection time)\nlatency average = 2.025 ms\nnumber of transactions actually processed: 1975",
+                'timed_out' => false,
+            ];
+        }
+    };
+    $s24PrefixBench = $s24DockerEmptyPrefix->runPgbenchBenchmark(2, 2, 2, true, 'dvdrental');
+    $t->assertTrue(
+        ($s24PrefixBench['success'] ?? false) === true
+        && (float)($s24PrefixBench['tps'] ?? 0.0) === 987.65
+        && !empty($s24DockerEmptyPrefix->capturedCmds)
+        && str_starts_with($s24DockerEmptyPrefix->capturedCmds[0], 'docker exec lp_pg18_user_2 pgbench ')
+        && !str_starts_with($s24DockerEmptyPrefix->capturedCmds[0], 'exec '),
+        "Section 24: DockerManager::runPgbenchBenchmark() normalizes empty runtime prefix to 'docker' via runDockerCommand()"
+    );
+
+    $s24Docker->touchContainerActivity(2);
+    $s24Fleet = $s24Docker->getFleetSummary();
+    $t->assertTrue(
+        isset($s24Fleet['runtime_mode'], $s24Fleet['max_containers'], $s24Fleet['tracked_sessions'])
+        && (int)$s24Fleet['tracked_sessions'] >= 1,
+        "Section 24: DockerManager::getFleetSummary() reports runtime telemetry and tracked sessions"
+    );
+
+    // Seed stale activity timestamp in status cache to verify idle reaper behavior
+    $s24CachePath = $s24Data . '/docker_status_cache.json';
+    $s24CacheJson = is_file($s24CachePath) ? json_decode((string)file_get_contents($s24CachePath), true) : [];
+    if (!is_array($s24CacheJson)) {
+        $s24CacheJson = ['users' => []];
+    }
+    $s24CacheJson['users']['99'] = [
+        'container_name' => 'lp_pg18_user_99',
+        'running' => true,
+        'status' => 'Up 3 hours',
+        'last_activity_at' => time() - 7200,
+    ];
+    file_put_contents($s24CachePath, json_encode($s24CacheJson, JSON_PRETTY_PRINT));
+    $s24ReapRes = $s24Docker->reapIdleContainers(3600);
+    $t->assertTrue(
+        ($s24ReapRes['success'] ?? false) === true && in_array('lp_pg18_user_99', $s24ReapRes['reaped'] ?? [], true),
+        "Section 24: DockerManager::reapIdleContainers() stops stale idle simulated containers"
+    );
+
+    $s24HealRes = $s24Docker->healChaosScenario('postgresql-18');
+    $t->assertTrue(
+        ($s24HealRes['success'] ?? false) === true && in_array('chaos_orders', $s24HealRes['cleaned_tables'] ?? [], true),
+        "Section 24: DockerManager::healChaosScenario() returns cleaned chaos tables and logs audit event"
+    );
+
+    // 24.6 LabSqlRunner: inspectPgDiagnostics & checkLabReadiness across all 34 labs
+    $s24DiagRes = $s24SqlRunner->inspectPgDiagnostics(2, 'formation_pg');
+    $t->assertTrue(
+        ($s24DiagRes['success'] ?? false) === true
+        && ($s24DiagRes['settings']['io_method'] ?? '') === 'worker'
+        && (float)($s24DiagRes['cache_hit_ratio'] ?? 0) > 90.0
+        && !empty($s24DiagRes['activity']['sessions']),
+        "Section 24: LabSqlRunner::inspectPgDiagnostics() returns PG18 settings, hit ratio and backend sessions"
+    );
+
+    $s24PgCourse = $s24CourseRepo->getCourse('postgresql-18');
+    $s24AllLabs = is_array($s24PgCourse['labs'] ?? null) ? $s24PgCourse['labs'] : [];
+    $s24ReadyCount = 0;
+    $s24Sql02Db = '';
+    $s24Lab20Db = '';
+    foreach ($s24AllLabs as $s24LabKey => $s24LabInfo) {
+        $s24Readiness = $s24SqlRunner->checkLabReadiness(2, (string)$s24LabKey, false);
+        if (
+            ($s24Readiness['success'] ?? false) === true
+            && ($s24Readiness['simulated'] ?? false) === true
+            && ($s24Readiness['ready'] ?? true) === false
+            && ($s24Readiness['oracle_found'] ?? false) === true
+            && count($s24Readiness['checks'] ?? []) >= 5
+            && !empty($s24Readiness['recommended_database'])
+        ) {
+            $s24ReadyCount++;
+        }
+        if ((string)$s24LabKey === 'lab_sql_02_manipulation_dml_transactions') {
+            $s24Sql02Db = (string)($s24Readiness['recommended_database'] ?? '');
+        } elseif ((string)$s24LabKey === 'lab_20_tuning_systeme_linux_postgresql') {
+            $s24Lab20Db = (string)($s24Readiness['recommended_database'] ?? '');
+        }
+    }
+    $t->assertEquals(34, $s24ReadyCount, "Section 24: LabSqlRunner::checkLabReadiness() maps all 34 labs (01..29, sql_01..05)");
+    $t->assertEquals('dvdrental', $s24Sql02Db, "Section 24: LabSqlRunner::checkLabReadiness() maps SQL lab to dvdrental");
+    $t->assertEquals('formation_pg', $s24Lab20Db, "Section 24: LabSqlRunner::checkLabReadiness() maps DBA lab to formation_pg");
+    $s24RunnerDeny = new LabSqlRunner($s24DockerDeny);
+    $s24ReadinessDeny = $s24RunnerDeny->checkLabReadiness(2, 'lab_01_introduction_setup_postgresql_18', false);
+    $t->assertFalse($s24ReadinessDeny['success'] ?? true, "Section 24: LabSqlRunner::checkLabReadiness(..., false) enforces tenant isolation when user container is down");
+
+    // 24.7 AdminService: detectAtRiskLearners, computeModuleCompletionMatrix, exportCohortCsv, exportQualiopiJson, buildAuditExportMetadata, 7-component health
+    $s24RiskProg = [
+        '3:postgresql-18' => [
+            'completed_modules' => array_slice(array_keys($s24PgCourse['modules'] ?? []), 0, 20),
+            'completed_labs' => [],
+            'quiz_scores' => ['module_01_introduction_postgresql_18' => ['score' => 3, 'total' => 3, 'percentage' => 100]],
+            'learning_seconds' => 1800,
+        ],
+        $s24LifeId . ':postgresql-18' => [
+            'completed_modules' => [],
+            'completed_labs' => [],
+            'quiz_scores' => [],
+            'learning_seconds' => 0,
+        ],
+    ];
+    $s24AllUsers = $s24Storage->getUsers();
+    $s24AtRisk = $s24AdminSvc->detectAtRiskLearners($s24AllUsers, $s24RiskProg, $s24PgCourse, 20);
+    $s24RiskIds = array_column($s24AtRisk, 'user_id');
+    $t->assertTrue(
+        in_array($s24LifeId, $s24RiskIds, true) && !in_array(3, $s24RiskIds, true) && !in_array(1, $s24RiskIds, true),
+        "Section 24: AdminService::detectAtRiskLearners() identifies low-progress active learners only"
+    );
+
+    $s24Matrix = $s24AdminSvc->computeModuleCompletionMatrix($s24AllUsers, $s24RiskProg, $s24PgCourse);
+    $t->assertTrue(
+        count($s24Matrix['modules'] ?? []) === 34
+        && count($s24Matrix['labs'] ?? []) === 34
+        && (int)($s24Matrix['modules']['module_01_introduction_postgresql_18']['completed_count'] ?? 0) >= 1,
+        "Section 24: AdminService::computeModuleCompletionMatrix() covers all 34 modules and 34 labs"
+    );
+
+    $s24CohortCsv = $s24AdminSvc->exportCohortCsv($s24AllUsers, $s24RiskProg, $s24PgCourse);
+    $t->assertTrue(
+        str_starts_with($s24CohortCsv, "\xEF\xBB\xBF")
+        && str_contains($s24CohortCsv, 'User_ID;Nom;Email;Entreprise;Role;Statut'),
+        "Section 24: AdminService::exportCohortCsv() emits UTF-8 BOM and semicolon-delimited headers"
+    );
+
+    $s24AuditMeta = $s24AdminSvc->buildAuditExportMetadata($s24Storage, true);
+    $t->assertTrue(
+        isset($s24AuditMeta['chain_valid'], $s24AuditMeta['total_checked'], $s24AuditMeta['chained_entries'])
+        && $s24AuditMeta['chain_valid'] === true,
+        "Section 24: AdminService::buildAuditExportMetadata() reports valid SHA-256 chain status"
+    );
+
+    $s24QualiopiJson = $s24AdminSvc->exportQualiopiJson(
+        $s24AllUsers,
+        $s24RiskProg,
+        $s24Storage->getAllAttendance(),
+        $s24Storage->getAuditLogs(100, true),
+        $s24PgCourse,
+        $s24Storage->verifyAuditIntegrity(true)
+    );
+    $s24QualiopiArr = json_decode($s24QualiopiJson, true);
+    $t->assertTrue(
+        is_array($s24QualiopiArr)
+        && ($s24QualiopiArr['schema_version'] ?? '') === '2.0'
+        && isset($s24QualiopiArr['audit_integrity'], $s24QualiopiArr['at_risk_learners'], $s24QualiopiArr['module_completion_matrix']),
+        "Section 24: AdminService::exportQualiopiJson() emits valid v2.0 dossier JSON with integrity report"
+    );
+
+    $s24HealthCfg = require __DIR__ . '/../config/app.php';
+    $s24HealthCfg['storage_path'] = $s24Data;
+    $s24Health7 = $s24AdminSvc->getSystemHealthReport($s24HealthCfg, $s24Storage, $s24Docker, $s24CourseRepo);
+    $t->assertEquals(7, (int)($s24Health7['summary']['total'] ?? 0), "Section 24: AdminService::getSystemHealthReport() returns 7 diagnostic checks");
+
+    // 24.8 Direct instantiation & behavioral invocation of all 4 src/Http controllers
+    $s24AuthCtrl = new \LightPath\LMS\Http\AuthController($s24Auth, $s24Fm);
+    $s24LearnerCtrl = new \LightPath\LMS\Http\LearnerController($s24Storage, $s24Auth, $s24Fm, $s24CourseRepo, $s24Downloader, $s24Parser);
+    $s24LabApiCtrl = new \LightPath\LMS\Http\LabApiController($s24Storage, $s24Auth, $s24Fm, $s24CourseRepo, $s24Docker, $s24SqlRunner);
+    $s24AdminCtrl = new \LightPath\LMS\Http\AdminController($s24Storage, $s24Auth, $s24Fm, $s24AdminSvc, $s24CourseRepo, $s24Docker, $s24Parser);
+
+    $s24SlugRef = 'nonexistent-course';
+    $s24CourseRef = null;
+    $s24StudentUser = $s24Storage->getUserById(3);
+    $s24AdminUser = $s24Storage->getUserById(1);
+    $s24AuthCtrl->enforceCourseAccess($s24StudentUser, $s24CourseRepo, $s24SlugRef, $s24CourseRef, '', 'dashboard');
+    $t->assertEquals('postgresql-18', $s24SlugRef, "Section 24: AuthController::enforceCourseAccess() resolves fallback enrolled course");
+
+    $t->assertFalse($s24LearnerCtrl->handleApiAction('api_unknown_xyz', [], $s24StudentUser, 'postgresql-18'), "Section 24: LearnerController::handleApiAction() returns false for non-learner action");
+    $t->assertFalse($s24LearnerCtrl->handlePostAction('unknown_post_xyz', [], $s24StudentUser, 'postgresql-18'), "Section 24: LearnerController::handlePostAction() returns false for non-learner action");
+    $t->assertFalse($s24LabApiCtrl->handleAction('api_unknown_xyz', [], $s24StudentUser, 'postgresql-18'), "Section 24: LabApiController::handleAction() returns false for unknown action");
+    $t->assertFalse($s24AdminCtrl->handleExportAction('export_unknown_xyz', [], $s24AdminUser, $s24PgCourse, 'postgresql-18'), "Section 24: AdminController::handleExportAction() returns false for unknown export");
+    $t->assertFalse($s24AdminCtrl->handleStaffAction('unknown_staff_xyz', [], $s24AdminUser, 'postgresql-18'), "Section 24: AdminController::handleStaffAction() returns false for unknown action");
+    $t->assertFalse($s24AdminCtrl->handleAdminAction('unknown_admin_xyz', [], $s24AdminUser, 'postgresql-18', $s24CoursesCfg), "Section 24: AdminController::handleAdminAction() returns false for unknown action");
+
+    // Subprocess harness invoking every never-returning & exiting HTTP controller method cleanly
+    $s24RunnerPath = $s24Root . '/http_ctrl_runner.php';
+    $s24RunnerCode = <<<'PHP'
+<?php
+declare(strict_types=1);
+
+$repoRoot = $argv[1];
+$dataDir = $argv[2];
+$cacheDir = $argv[3];
+$case = $argv[4];
+
+putenv('LMS_DATA_DIR=' . $dataDir);
+putenv('LMS_DOCKER_FORCE_SIMULATED=1');
+require $repoRoot . '/src/bootstrap.php';
+
+$coursesCfg = require $repoRoot . '/config/courses.php';
+$storage = new \LightPath\LMS\Core\JsonStorage($dataDir);
+$auth = new \LightPath\LMS\Core\Auth($storage);
+$fm = new \LightPath\LMS\Core\FeatureManager($storage);
+$adminSvc = new \LightPath\LMS\Core\AdminService();
+$courseRepo = new \LightPath\LMS\Course\CourseRepository($coursesCfg, $storage->getCustomCourses(), $cacheDir);
+$downloader = new \LightPath\LMS\Course\DownloadController($courseRepo);
+$mdParser = new \LightPath\LMS\Course\MarkdownParser(null, $cacheDir);
+$docker = new \LightPath\LMS\Docker\DockerManager($storage, [], $dataDir . '/docker_status_cache.json');
+$sqlRunner = new \LightPath\LMS\Docker\LabSqlRunner($docker);
+
+$authCtrl = new \LightPath\LMS\Http\AuthController($auth, $fm);
+$learnerCtrl = new \LightPath\LMS\Http\LearnerController($storage, $auth, $fm, $courseRepo, $downloader, $mdParser);
+$labApiCtrl = new \LightPath\LMS\Http\LabApiController($storage, $auth, $fm, $courseRepo, $docker, $sqlRunner);
+$adminCtrl = new \LightPath\LMS\Http\AdminController($storage, $auth, $fm, $adminSvc, $courseRepo, $docker, $mdParser);
+
+$adminUser = $storage->getUserById(1);
+$studentUser = $storage->getUserById(3);
+$pgCourse = $courseRepo->getCourse('postgresql-18') ?? [];
+$csrf = \LightPath\LMS\Core\Security::getCsrfToken();
+
+if (!in_array($case, ['download_md', 'scorm_zip'], true)) {
+    register_shutdown_function(static function (): void {
+        echo "\n__META__:" . json_encode([
+            'code' => http_response_code(),
+            'flash_success' => $_SESSION['flash_success'] ?? null,
+            'flash_error' => $_SESSION['flash_error'] ?? null,
+        ]);
+    });
+}
+
+switch ($case) {
+    case 'auth_login_ok':
+        $authCtrl->handleLoginPost(['csrf_token' => $csrf, 'email' => 'stagiaire@lightpath.fr', 'password' => 'Stagiaire2026!'], ['REMOTE_ADDR' => '127.0.0.1']);
+        break;
+    case 'auth_register_ok':
+        $authCtrl->handleRegisterPost(['csrf_token' => $csrf, 'name' => 'Reg Child', 'email' => 'reg.child.s24@lightpath.fr', 'company' => 'LP', 'password' => 'RegPass2026!'], ['REMOTE_ADDR' => '127.0.0.1']);
+        break;
+    case 'auth_logout':
+        $_SESSION['user_id'] = 3;
+        $authCtrl->handleLogout();
+        break;
+    case 'download_md':
+        $learnerCtrl->handleDownload(['type' => 'module', 'id' => 'module_01_introduction_postgresql_18', 'format' => 'md'], $studentUser, 'postgresql-18');
+        break;
+    case 'course_asset_missing':
+        $learnerCtrl->handleCourseAsset(['path' => '../../etc/passwd'], 'postgresql-18');
+        break;
+    case 'export_notes':
+        $storage->saveUserNote(3, 'postgresql-18', 'module_01_introduction_postgresql_18', 'Controller export test note');
+        $learnerCtrl->handleExportNotesMarkdown($studentUser, $pgCourse, 'postgresql-18');
+        break;
+    case 'scorm_manifest':
+        $learnerCtrl->handleExportScormManifest($pgCourse, 'postgresql-18');
+        break;
+    case 'scorm_zip':
+        $learnerCtrl->handleExportScormZip($pgCourse, 'postgresql-18');
+        break;
+    case 'quiz_submit':
+        $mod01 = $courseRepo->getModule('postgresql-18', 'module_01_introduction_postgresql_18');
+        $quiz = $mdParser->parseModuleFile($mod01['source_md_path'], 'postgresql-18')['quiz'] ?? [];
+        $ans = [];
+        foreach ($quiz as $qItem) {
+            $ans[(string)$qItem['index']] = (string)$qItem['correct'];
+        }
+        $learnerCtrl->completeQuizSubmission($quiz, ['answers' => $ans], 'module_01_introduction_postgresql_18', $studentUser, 'postgresql-18');
+        break;
+    case 'learner_api_note':
+        $learnerCtrl->handleApiAction('api_save_note', ['item_id' => 'module_01_introduction_postgresql_18', 'note' => 'API note'], $studentUser, 'postgresql-18');
+        break;
+    case 'learner_post_diag':
+        $learnerCtrl->handlePostAction('submit_diagnostic', ['answers' => []], $studentUser, 'postgresql-18');
+        break;
+    case 'lab_api_savepoint':
+        $labApiCtrl->handleAction('api_lab_savepoint', ['op' => 'create', 'name' => 'ctrl_sp', 'db' => 'formation_pg'], $studentUser, 'postgresql-18');
+        break;
+    case 'admin_export_cohort':
+        $adminCtrl->handleExportAction('export_cohort_csv', [], $adminUser, $pgCourse, 'postgresql-18');
+        break;
+    case 'admin_staff_preset':
+        $adminCtrl->handleStaffAction('admin_apply_classroom_preset', ['preset' => 'guided_lab'], $adminUser, 'postgresql-18');
+        break;
+    case 'admin_toggle_active':
+        $adminCtrl->handleAdminAction('admin_toggle_user_active', ['user_id' => '3', 'active' => '0'], $adminUser, 'postgresql-18', $coursesCfg);
+        break;
+    case 'admin_self_update_guard':
+        $secAdmin = $storage->getUserByEmail('sec.ctrl.s24@lightpath.fr');
+        $secId = (string)(int)($secAdmin['id'] ?? 0);
+        $adminCtrl->handleAdminAction('admin_update_user', [
+            'user_id' => $secId,
+            'name' => 'Secondary Ctrl S24',
+            'company' => 'LightPath',
+            'role' => 'student',
+        ], $secAdmin, 'postgresql-18', $coursesCfg);
+        break;
+    case 'admin_self_delete_guard':
+        $secAdmin = $storage->getUserByEmail('sec.ctrl.s24@lightpath.fr');
+        $secId = (string)(int)($secAdmin['id'] ?? 0);
+        $adminCtrl->handleAdminAction('admin_delete_user', ['user_id' => $secId], $secAdmin, 'postgresql-18', $coursesCfg);
+        break;
+}
+PHP;
+    file_put_contents($s24RunnerPath, $s24RunnerCode);
+
+    $s24ExecCase = static function (string $case) use ($s24RunnerPath, $s24RepoRoot, $s24Data, $s24Cache): array {
+        $proc = proc_open(
+            [PHP_BINARY, $s24RunnerPath, $s24RepoRoot, $s24Data, $s24Cache, $case],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes
+        );
+        if (!is_resource($proc)) {
+            return ['code' => -1, 'out' => '', 'err' => 'proc_open failed', 'meta' => []];
+        }
+        fclose($pipes[0]);
+        $out = (string)stream_get_contents($pipes[1]);
+        $err = (string)stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $code = proc_close($proc);
+        $meta = [];
+        if (preg_match('/\n__META__:(\{.*\})\s*$/s', $out, $m)) {
+            $meta = json_decode($m[1], true) ?: [];
+            $out = trim(substr($out, 0, -strlen($m[0])));
+        }
+        return ['code' => $code, 'out' => $out, 'err' => $err, 'meta' => $meta];
+    };
+
+    $rLogin = $s24ExecCase('auth_login_ok');
+    $t->assertTrue(
+        $rLogin['code'] === 0 && str_contains((string)($rLogin['meta']['flash_success'] ?? ''), 'Bienvenue'),
+        "Section 24: AuthController::handleLoginPost() authenticates student in isolated execution"
+    );
+
+    $rReg = $s24ExecCase('auth_register_ok');
+    $t->assertTrue(
+        $rReg['code'] === 0 && $s24Storage->getUserByEmail('reg.child.s24@lightpath.fr') !== null,
+        "Section 24: AuthController::handleRegisterPost() registers new learner account"
+    );
+
+    $rLogout = $s24ExecCase('auth_logout');
+    $t->assertEquals(0, $rLogout['code'], "Section 24: AuthController::handleLogout() clears session cleanly");
+
+    $rDl = $s24ExecCase('download_md');
+    $t->assertTrue($rDl['code'] === 0 && str_contains($rDl['out'], 'Module 01'), "Section 24: LearnerController::handleDownload() streams module Markdown");
+
+    $rAsset = $s24ExecCase('course_asset_missing');
+    $t->assertEquals(404, (int)($rAsset['meta']['code'] ?? 0), "Section 24: LearnerController::handleCourseAsset() rejects traversal with 404");
+
+    $rNotes = $s24ExecCase('export_notes');
+    $t->assertTrue($rNotes['code'] === 0 && str_contains($rNotes['out'], 'Controller export test note'), "Section 24: LearnerController::handleExportNotesMarkdown() exports saved notes");
+
+    $rManifest = $s24ExecCase('scorm_manifest');
+    $t->assertTrue($rManifest['code'] === 0 && str_contains($rManifest['out'], '<manifest '), "Section 24: LearnerController::handleExportScormManifest() outputs SCORM XML");
+
+    $rZip = $s24ExecCase('scorm_zip');
+    $t->assertTrue($rZip['code'] === 0 && str_starts_with($rZip['out'], "PK\x03\x04"), "Section 24: LearnerController::handleExportScormZip() emits valid PKZIP package");
+
+    $rQuiz = $s24ExecCase('quiz_submit');
+    $rQuizJson = json_decode($rQuiz['out'], true);
+    $t->assertTrue(
+        is_array($rQuizJson) && ($rQuizJson['success'] ?? false) === true && (int)($rQuizJson['quiz_result']['percentage'] ?? 0) === 100,
+        "Section 24: LearnerController::completeQuizSubmission() grades MCQs server-side"
+    );
+
+    $rApiNote = $s24ExecCase('learner_api_note');
+    $rApiNoteJson = json_decode($rApiNote['out'], true);
+    $t->assertTrue(is_array($rApiNoteJson) && ($rApiNoteJson['success'] ?? false) === true, "Section 24: LearnerController::handleApiAction() handles api_save_note");
+
+    $rPostDiag = $s24ExecCase('learner_post_diag');
+    $t->assertTrue(
+        $rPostDiag['code'] === 0 && str_contains((string)($rPostDiag['meta']['flash_success'] ?? ''), 'Positionnement'),
+        "Section 24: LearnerController::handlePostAction() handles submit_diagnostic"
+    );
+
+    $rLabSp = $s24ExecCase('lab_api_savepoint');
+    $rLabSpJson = json_decode($rLabSp['out'], true);
+    $t->assertTrue(
+        $rLabSp['err'] === '' && is_array($rLabSpJson) && ($rLabSpJson['success'] ?? false) === true && ($rLabSpJson['name'] ?? '') === 'ctrl_sp',
+        "Section 24: LabApiController::handleAction() handles api_lab_savepoint cleanly with scalar name"
+    );
+
+    $rCohortCsv = $s24ExecCase('admin_export_cohort');
+    $t->assertTrue(
+        str_starts_with($rCohortCsv['out'], "\xEF\xBB\xBF") && str_contains($rCohortCsv['out'], 'User_ID;Nom;Email'),
+        "Section 24: AdminController::handleExportAction() streams export_cohort_csv"
+    );
+
+    $rPreset = $s24ExecCase('admin_staff_preset');
+    $t->assertTrue(
+        $rPreset['code'] === 0 && ($s24Storage->getClassroomState('postgresql-18')['lock_exam'] ?? false) === true,
+        "Section 24: AdminController::handleStaffAction() applies guided_lab classroom preset"
+    );
+
+    $rToggleActive = $s24ExecCase('admin_toggle_active');
+    $s24StudentAfterToggle = $s24Storage->getUserById(3);
+    $t->assertTrue(
+        $rToggleActive['code'] === 0 && ($s24StudentAfterToggle['active'] ?? true) === false,
+        "Section 24: AdminController::handleAdminAction() toggles user active state via admin_toggle_user_active"
+    );
+
+    // Non-#1 admin self-lockout protection in AdminController::handleAdminAction().
+    $s24SecCtrlUser = $s24Auth->registerUser('Secondary Ctrl S24', 'sec.ctrl.s24@lightpath.fr', 'SecCtrl2026!', 'admin', 'LightPath');
+    $s24SecCtrlId = (int)($s24SecCtrlUser['id'] ?? 0);
+    $rSelfUpdate = $s24ExecCase('admin_self_update_guard');
+    $s24FreshStorage = new JsonStorage($s24Data);
+    $s24SecAfterSelfUpdate = $s24FreshStorage->getUserById($s24SecCtrlId);
+    $t->assertTrue(
+        $rSelfUpdate['code'] === 0
+        && is_array($s24SecAfterSelfUpdate)
+        && ($s24SecAfterSelfUpdate['role'] ?? '') === 'admin'
+        && ($s24SecAfterSelfUpdate['active'] ?? false) === true,
+        "Section 24: AdminController::handleAdminAction() blocks non-#1 admin self-demotion/self-deactivation on admin_update_user"
+    );
+
+    $rSelfDelete = $s24ExecCase('admin_self_delete_guard');
+    $s24FreshStorage2 = new JsonStorage($s24Data);
+    $t->assertTrue(
+        $rSelfDelete['code'] === 0
+        && str_contains((string)($rSelfDelete['meta']['flash_error'] ?? ''), 'ne peuvent pas être supprimés')
+        && $s24FreshStorage2->getUserById($s24SecCtrlId) !== null,
+        "Section 24: AdminController::handleAdminAction() blocks non-#1 admin self-deletion on admin_delete_user"
+    );
+
+    // Verify tab_audit.php category dropdown matches emitted audit log prefixes cleanly.
+    $s24AuditTabHtml = (string)file_get_contents(__DIR__ . '/../templates/partials/admin/tab_audit.php');
+    $t->assertTrue(
+        str_contains($s24AuditTabHtml, 'value="CLASSROOM_"')
+        && str_contains($s24AuditTabHtml, 'value="CHAOS_"')
+        && str_contains($s24AuditTabHtml, 'value="ATTENDANCE_"')
+        && str_contains($s24AuditTabHtml, 'value="TRAINER_"')
+        && !str_contains($s24AuditTabHtml, 'value="FEATURE_"')
+        && !str_contains($s24AuditTabHtml, 'value="SECURITY_"'),
+        "Section 24: Admin audit filter dropdown exposes emitted prefixes (CLASSROOM_, CHAOS_, ATTENDANCE_, TRAINER_)"
+    );
+} finally {
+    if ($s24PrevSim === false) {
+        putenv('LMS_DOCKER_FORCE_SIMULATED');
+    } else {
+        putenv('LMS_DOCKER_FORCE_SIMULATED=' . $s24PrevSim);
+    }
+    $_SESSION = $s24SavedSession;
+    $_SERVER = $s24SavedServer;
+
+    $s24Cleanup = static function (string $dir) use (&$s24Cleanup): void {
+        if (!is_dir($dir)) {
+            return;
+        }
+        foreach (scandir($dir) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $full = $dir . '/' . $entry;
+            is_dir($full) ? $s24Cleanup($full) : @unlink($full);
+        }
+        @rmdir($dir);
+    };
+    $s24Cleanup($s24Root);
 }
 
 exit($t->summary());

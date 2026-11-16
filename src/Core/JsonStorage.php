@@ -235,6 +235,39 @@ class JsonStorage implements StorageInterface
         });
     }
 
+    public function setUserActive(int $userId, bool $active): bool
+    {
+        if ($userId <= 0 || ($userId === 1 && !$active)) {
+            return false; // Protect primary super-admin account from deactivation
+        }
+        return (bool)$this->mutateFile('users', [], static function (array $users) use ($userId, $active): array {
+            foreach ($users as $idx => $existing) {
+                if ((int)($existing['id'] ?? 0) === $userId) {
+                    $users[$idx]['active'] = $active;
+                    return [$users, true];
+                }
+            }
+            return [null, false];
+        });
+    }
+
+    public function adminResetUserPassword(int $userId, string $passwordHash): bool
+    {
+        if ($userId <= 0 || trim($passwordHash) === '') {
+            return false;
+        }
+        return (bool)$this->mutateFile('users', [], static function (array $users) use ($userId, $passwordHash): array {
+            foreach ($users as $idx => $existing) {
+                if ((int)($existing['id'] ?? 0) === $userId) {
+                    $users[$idx]['password_hash'] = $passwordHash;
+                    $users[$idx]['password_updated_at'] = date('Y-m-d H:i:s');
+                    return [$users, true];
+                }
+            }
+            return [null, false];
+        });
+    }
+
     public function getAllProgress(): array
     {
         return $this->readFile('progress', []);
@@ -336,40 +369,198 @@ class JsonStorage implements StorageInterface
         });
     }
 
+    /**
+     * Computes a deterministic SHA-256 hash over an audit entry payload (excluding entry_hash).
+     */
+    protected static function computeAuditEntryHash(array $entry): string
+    {
+        $payload = $entry;
+        unset($payload['entry_hash']);
+        ksort($payload, SORT_STRING);
+        $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($encoded === false) {
+            $encoded = serialize($payload);
+        }
+        return hash('sha256', $encoded);
+    }
+
     public function logAuditEvent(string $actor, string $action, string $details): void
     {
-        $overflow = (array)$this->mutateFile('audit_logs', [], static function (array $logs) use ($actor, $action, $details): array {
-            array_unshift($logs, [
+        $genesisHash = str_repeat('0', 64);
+
+        $this->mutateFile('audit_logs', [], function (array $logs) use ($actor, $action, $details, $genesisHash): array {
+            $prevHash = $genesisHash;
+            if (!empty($logs)) {
+                $headHash = is_array($logs[0]) ? ($logs[0]['entry_hash'] ?? null) : null;
+                if (is_string($headHash) && $headHash !== '') {
+                    $prevHash = $headHash;
+                }
+            } else {
+                $archiveKeys = $this->listAuditArchiveKeys();
+                if (!empty($archiveKeys)) {
+                    $latestArchive = $this->readFile($archiveKeys[0], []);
+                    if (!empty($latestArchive)) {
+                        $lastArchived = end($latestArchive);
+                        if (is_array($lastArchived) && is_string($lastArchived['entry_hash'] ?? null) && $lastArchived['entry_hash'] !== '') {
+                            $prevHash = $lastArchived['entry_hash'];
+                        }
+                    }
+                }
+            }
+
+            $entry = [
                 'timestamp' => date('Y-m-d H:i:s'),
                 'actor' => $actor,
                 'action' => $action,
                 'details' => $details,
-            ]);
-            $archived = [];
-            if (count($logs) > 1000) {
-                $archived = array_slice($logs, 1000);
-                $logs = array_slice($logs, 0, 1000);
-            }
-            return [$logs, $archived];
-        });
+                'prev_hash' => $prevHash,
+            ];
+            $entry['entry_hash'] = self::computeAuditEntryHash($entry);
 
-        // Archive evicted audit entries into monthly files instead of dropping them.
-        if (!empty($overflow)) {
-            $byMonth = [];
-            foreach ($overflow as $entry) {
-                $ts = (string)($entry['timestamp'] ?? '');
-                $ym = preg_match('/^(\d{4})-(\d{2})/', $ts, $m) ? ($m[1] . $m[2]) : date('Ym');
-                $byMonth[$ym][] = $entry;
+            array_unshift($logs, $entry);
+
+            // Archive evicted audit entries atomically into monthly files instead of dropping them.
+            if (count($logs) > 1000) {
+                $overflow = array_reverse(array_slice($logs, 1000));
+                $logs = array_slice($logs, 0, 1000);
+
+                $byMonth = [];
+                foreach ($overflow as $evicted) {
+                    $ts = (string)($evicted['timestamp'] ?? '');
+                    $ym = preg_match('/^(\d{4})-(\d{2})/', $ts, $m) ? ($m[1] . $m[2]) : date('Ym');
+                    $byMonth[$ym][] = $evicted;
+                }
+                foreach ($byMonth as $ym => $entries) {
+                    $this->mutateFile('audit_logs_' . $ym, [], static function (array $existing) use ($entries): array {
+                        foreach ($entries as $archivedEntry) {
+                            $existing[] = $archivedEntry;
+                        }
+                        return [$existing, null];
+                    });
+                }
             }
-            foreach ($byMonth as $ym => $entries) {
-                $this->mutateFile('audit_logs_' . $ym, [], static function (array $existing) use ($entries): array {
-                    foreach ($entries as $entry) {
-                        $existing[] = $entry;
+
+            return [$logs, null];
+        });
+    }
+
+    /**
+     * Builds a structured break descriptor for verifyAuditIntegrity() violation reports.
+     */
+    private static function buildAuditBreakRecord(
+        array $item,
+        array $entry,
+        string $reason,
+        string $expectedPrevHash,
+        string $actualPrevHash
+    ): array {
+        return [
+            'index' => $item['index'],
+            'source' => $item['source'],
+            'timestamp' => (string)($entry['timestamp'] ?? ''),
+            'actor' => (string)($entry['actor'] ?? ''),
+            'action' => (string)($entry['action'] ?? ''),
+            'reason' => $reason,
+            'expected_prev_hash' => $expectedPrevHash,
+            'actual_prev_hash' => $actualPrevHash,
+        ];
+    }
+
+    /**
+     * Verifies the cryptographic SHA-256 hash chain across active audit logs and optional monthly archives.
+     * Pre-chain legacy entries without hash fields are tolerated and counted separately.
+     */
+    public function verifyAuditIntegrity(bool $includeArchives = false): array
+    {
+        $activeNewestFirst = $this->readFile('audit_logs', []);
+        $archiveKeys = $this->listAuditArchiveKeys();
+
+        $entries = [];
+        if ($includeArchives && !empty($archiveKeys)) {
+            $ascArchives = $archiveKeys;
+            sort($ascArchives, SORT_STRING);
+            foreach ($ascArchives as $archiveKey) {
+                $archivedList = $this->readFile($archiveKey, []);
+                foreach ($archivedList as $idx => $entry) {
+                    if (is_array($entry)) {
+                        $entries[] = ['source' => $archiveKey, 'index' => $idx, 'entry' => $entry];
                     }
-                    return [$existing, null];
-                });
+                }
             }
         }
+
+        // Active audit logs are stored newest-first; reverse to verify chronologically oldest -> newest.
+        $activeOldestFirst = array_reverse($activeNewestFirst);
+        foreach ($activeOldestFirst as $idx => $entry) {
+            if (is_array($entry)) {
+                $entries[] = ['source' => 'audit_logs', 'index' => $idx, 'entry' => $entry];
+            }
+        }
+
+        $genesisHash = str_repeat('0', 64);
+        $totalChecked = 0;
+        $chainedEntries = 0;
+        $legacyUnchained = 0;
+        $brokenLinks = [];
+        $expectedPrevHash = null;
+        $seenChained = false;
+
+        // Only allow a non-genesis starting prev_hash when checking active-only with rotated archives.
+        $mayStartMidChain = !$includeArchives && (!empty($archiveKeys) || count($activeNewestFirst) >= 1000);
+
+        foreach ($entries as $item) {
+            $entry = $item['entry'];
+            $totalChecked++;
+
+            $hasEntryHash = array_key_exists('entry_hash', $entry);
+            $hasPrevHash = array_key_exists('prev_hash', $entry);
+
+            if (!$hasEntryHash && !$hasPrevHash) {
+                if ($seenChained) {
+                    $brokenLinks[] = self::buildAuditBreakRecord($item, $entry, 'unchained_entry_after_chain_start', (string)$expectedPrevHash, '');
+                } else {
+                    $legacyUnchained++;
+                }
+                continue;
+            }
+
+            $chainedEntries++;
+            $seenChained = true;
+
+            $actualPrevHash = is_string($entry['prev_hash'] ?? null) ? (string)$entry['prev_hash'] : '';
+            $actualEntryHash = is_string($entry['entry_hash'] ?? null) ? (string)$entry['entry_hash'] : '';
+
+            if (!$hasEntryHash || !$hasPrevHash || $actualEntryHash === '' || $actualPrevHash === '') {
+                $brokenLinks[] = self::buildAuditBreakRecord($item, $entry, 'missing_hash_fields', (string)($expectedPrevHash ?? $genesisHash), $actualPrevHash);
+                $expectedPrevHash = $actualEntryHash !== '' ? $actualEntryHash : self::computeAuditEntryHash($entry);
+                continue;
+            }
+
+            $computedHash = self::computeAuditEntryHash($entry);
+            if (!hash_equals($computedHash, $actualEntryHash)) {
+                $brokenLinks[] = self::buildAuditBreakRecord($item, $entry, 'entry_hash_mismatch', (string)($expectedPrevHash ?? $genesisHash), $actualPrevHash);
+            }
+
+            if ($expectedPrevHash === null) {
+                if (!$mayStartMidChain && !hash_equals($genesisHash, $actualPrevHash)) {
+                    $brokenLinks[] = self::buildAuditBreakRecord($item, $entry, 'invalid_genesis_prev_hash', $genesisHash, $actualPrevHash);
+                } elseif ($mayStartMidChain && !preg_match('/^[a-f0-9]{64}$/', $actualPrevHash)) {
+                    $brokenLinks[] = self::buildAuditBreakRecord($item, $entry, 'malformed_prev_hash', 'sha256_hex_64', $actualPrevHash);
+                }
+            } elseif (!hash_equals($expectedPrevHash, $actualPrevHash)) {
+                $brokenLinks[] = self::buildAuditBreakRecord($item, $entry, 'prev_hash_mismatch', $expectedPrevHash, $actualPrevHash);
+            }
+
+            $expectedPrevHash = preg_match('/^[a-f0-9]{64}$/', $actualEntryHash) ? $actualEntryHash : $computedHash;
+        }
+
+        return [
+            'valid' => empty($brokenLinks),
+            'total_checked' => $totalChecked,
+            'chained_entries' => $chainedEntries,
+            'legacy_unchained' => $legacyUnchained,
+            'broken_links' => $brokenLinks,
+        ];
     }
 
     protected function listAuditArchiveKeys(): array
@@ -1142,6 +1333,43 @@ class JsonStorage implements StorageInterface
         return (isset($all[$key]) && is_array($all[$key])) ? $all[$key] : null;
     }
 
+    public function listLoginThrottles(): array
+    {
+        $all = $this->readFile('login_throttle', []);
+        $now = time();
+        $result = [];
+        foreach ($all as $key => $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            $keyStr = (string)$key;
+            $firstAt = (int)($entry['first_at'] ?? 0);
+            $count = (int)($entry['count'] ?? 0);
+            $age = $now - $firstAt;
+            if ($age > 3600) {
+                continue;
+            }
+            $isIpBucket = str_starts_with($keyStr, 'ip|');
+            $parts = explode('|', $keyStr, 2);
+            $emailPart = $isIpBucket ? '' : ($parts[0] ?? '');
+            $ipPart = $isIpBucket ? substr($keyStr, 3) : ($parts[1] ?? '');
+            $limit = $isIpBucket ? 25 : 5;
+            $locked = ($age <= 300) && ($count >= $limit);
+            $result[$keyStr] = [
+                'key' => $keyStr,
+                'type' => $isIpBucket ? 'ip' : 'account',
+                'email' => $emailPart,
+                'ip' => $ipPart,
+                'count' => $count,
+                'first_at' => $firstAt,
+                'updated_at' => (int)($entry['updated_at'] ?? $firstAt),
+                'locked' => $locked,
+                'remaining_seconds' => $locked ? max(0, 300 - $age) : 0,
+            ];
+        }
+        return $result;
+    }
+
     public function recordLoginFailure(string $key, int $windowSeconds = 300): array
     {
         $window = max(1, $windowSeconds);
@@ -1168,14 +1396,38 @@ class JsonStorage implements StorageInterface
         });
     }
 
-    public function clearLoginThrottle(string $key): void
+    public function clearLoginThrottle(string $emailOrKey, string $ip = ''): void
     {
-        $this->mutateFile('login_throttle', [], static function (array $all) use ($key): array {
-            if (!isset($all[$key])) {
-                return [null, null];
+        $this->mutateFile('login_throttle', [], static function (array $all) use ($emailOrKey, $ip): array {
+            $trimmed = trim($emailOrKey);
+            $removed = false;
+
+            if ($ip !== '') {
+                $targetKey = $trimmed === ''
+                    ? ('ip|' . $ip)
+                    : (strtolower($trimmed) . '|' . $ip);
+                if (isset($all[$targetKey])) {
+                    unset($all[$targetKey]);
+                    $removed = true;
+                }
             }
-            unset($all[$key]);
-            return [$all, null];
+
+            if ($trimmed !== '' && isset($all[$trimmed])) {
+                unset($all[$trimmed]);
+                $removed = true;
+            }
+
+            if ($trimmed !== '' && $ip === '' && !str_contains($trimmed, '|')) {
+                $prefix = strtolower($trimmed) . '|';
+                foreach (array_keys($all) as $k) {
+                    if (str_starts_with((string)$k, $prefix)) {
+                        unset($all[$k]);
+                        $removed = true;
+                    }
+                }
+            }
+
+            return [$removed ? $all : null, null];
         });
     }
 
@@ -1193,6 +1445,47 @@ class JsonStorage implements StorageInterface
             }
             $merged = array_merge($current, $clean);
             return [$merged, $merged];
+        });
+    }
+
+    public function getCourseFeatureOverrides(string $courseSlug): array
+    {
+        $slug = trim($courseSlug);
+        if ($slug === '') {
+            return [];
+        }
+        $all = $this->readFile('course_feature_overrides', []);
+        $overrides = $all[$slug] ?? [];
+        if (!is_array($overrides)) {
+            return [];
+        }
+        $normalized = [];
+        foreach ($overrides as $flag => $val) {
+            $normalized[(string)$flag] = filter_var($val, FILTER_VALIDATE_BOOLEAN);
+        }
+        return $normalized;
+    }
+
+    public function saveCourseFeatureOverrides(string $courseSlug, array $overrides): void
+    {
+        $slug = trim($courseSlug);
+        if ($slug === '') {
+            return;
+        }
+        $this->mutateFile('course_feature_overrides', [], static function (array $all) use ($slug, $overrides): array {
+            $clean = [];
+            foreach ($overrides as $flag => $val) {
+                if ($val === null || $val === '' || $val === 'inherit') {
+                    continue;
+                }
+                $clean[(string)$flag] = filter_var($val, FILTER_VALIDATE_BOOLEAN);
+            }
+            if (empty($clean)) {
+                unset($all[$slug]);
+            } else {
+                $all[$slug] = $clean;
+            }
+            return [$all, null];
         });
     }
 

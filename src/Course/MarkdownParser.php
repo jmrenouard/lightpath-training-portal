@@ -510,7 +510,7 @@ class MarkdownParser
         $codeBuffer = [];
         $inTable = false;
         $tableRows = [];
-        $listStack = []; // Pile de listes actives : ['tag' => 'ul'|'ol', 'indent' => int]
+        $listStack = []; // Active list stack: ['tag' => 'ul'|'ol', 'indent' => int]
         $inBlockquote = false;
         $blockquoteLines = [];
         $sqlCounter = 0;

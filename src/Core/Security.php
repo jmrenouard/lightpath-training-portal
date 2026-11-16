@@ -15,6 +15,23 @@ class Security
             || (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
     }
 
+    private static function buildCspPolicy(string $styleDirective, array $extraScriptHashes = []): string
+    {
+        $shimHash = base64_encode(hash('sha256', self::UNLOAD_SHIM_JS, true));
+        $extraTokens = [];
+        foreach ($extraScriptHashes as $hashToken) {
+            $trimmed = trim((string)$hashToken);
+            if (preg_match('/\Asha256-[A-Za-z0-9+\/=]+\z/', $trimmed) && $trimmed !== ('sha256-' . $shimHash)) {
+                $quoted = "'{$trimmed}'";
+                if (!in_array($quoted, $extraTokens, true)) {
+                    $extraTokens[] = $quoted;
+                }
+            }
+        }
+        $extraScriptSuffix = !empty($extraTokens) ? (' ' . implode(' ', $extraTokens)) : '';
+        return "default-src 'self'; script-src 'self' 'sha256-{$shimHash}'{$extraScriptSuffix}; {$styleDirective}; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'";
+    }
+
     public static function sendSecurityHeaders(): void
     {
         if (PHP_SAPI === 'cli' || headers_sent()) {
@@ -25,11 +42,68 @@ class Security
         header('Referrer-Policy: strict-origin-when-cross-origin');
         header('Permissions-Policy: unload=*, fullscreen=(self)');
         header('Cross-Origin-Opener-Policy: same-origin');
-        $shimHash = base64_encode(hash('sha256', self::UNLOAD_SHIM_JS, true));
-        header("Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-{$shimHash}'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'");
+        header('Content-Security-Policy: ' . self::buildCspPolicy("style-src 'self'"));
         if (self::isHttpsRequest()) {
             header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
         }
+    }
+
+    /**
+     * Emits a relaxed style-src CSP strictly for standalone compiled HTML course documents
+     * streamed inline inside portal frames while keeping script-src SHA-256 locked.
+     * Additional validated sha256 hashes may be supplied for trusted static inline scripts.
+     */
+    public static function sendStandaloneDocumentCspHeader(array $extraScriptHashes = []): void
+    {
+        if (PHP_SAPI === 'cli' || headers_sent()) {
+            return;
+        }
+        $policy = empty($extraScriptHashes)
+            ? self::buildCspPolicy("style-src 'self' 'unsafe-inline'")
+            : self::buildCspPolicy("style-src 'self' 'unsafe-inline'", $extraScriptHashes);
+        header('Content-Security-Policy: ' . $policy, true);
+    }
+
+    /**
+     * Verifies that HTTP requests with Origin or Referer headers match the server host.
+     * Returns true when both headers are absent (CLI, curl, or automated test harnesses).
+     */
+    public static function verifySameOriginRequest(?array $server = null): bool
+    {
+        $srv = $server ?? $_SERVER;
+        $origin = trim((string)($srv['HTTP_ORIGIN'] ?? ''));
+        $referer = trim((string)($srv['HTTP_REFERER'] ?? ''));
+
+        if ($origin === '' && $referer === '') {
+            return true;
+        }
+
+        $candidate = $origin !== '' ? $origin : $referer;
+        $parsedCandidate = parse_url($candidate);
+        if (!is_array($parsedCandidate) || empty($parsedCandidate['host'])) {
+            return false;
+        }
+        $candidateHost = strtolower((string)$parsedCandidate['host']);
+        $candidatePort = isset($parsedCandidate['port']) ? (int)$parsedCandidate['port'] : null;
+
+        $rawHost = trim((string)($srv['HTTP_HOST'] ?? $srv['SERVER_NAME'] ?? ''));
+        if ($rawHost === '') {
+            return false;
+        }
+        $parsedHost = parse_url('http://' . $rawHost);
+        if (!is_array($parsedHost) || empty($parsedHost['host'])) {
+            return false;
+        }
+        $expectedHost = strtolower((string)$parsedHost['host']);
+        $expectedPort = isset($parsedHost['port']) ? (int)$parsedHost['port'] : null;
+
+        if ($candidateHost !== $expectedHost) {
+            return false;
+        }
+        if ($expectedPort !== null && $candidatePort !== null && $candidatePort !== $expectedPort) {
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -170,7 +244,7 @@ class Security
      * Generates a 100% offline deterministic 2D matrix SVG QR code (zero CDN)
      * from the certificate identifier and Qualiopi verification URL.
      */
-    public static function renderVerificationQrSvg(string $verifyUrl, string $certificateId = '', int $size = 116): string
+    public static function renderVerificationQrSvg(string $verifyUrl, string $certificateId = '', int $size = 140): string
     {
         $seed = hash('sha256', $certificateId . '|' . $verifyUrl, true);
         $gridSize = 21;
@@ -226,7 +300,7 @@ class Security
         $viewBox = $gridSize + 4;
         $safeCert = self::e($certificateId !== '' ? $certificateId : 'LP-PG18-CERT');
         return sprintf(
-            '<svg class="lms-qr-verify-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %1$d %1$d" width="%2$d" height="%2$d" role="img" aria-label="QR Code de vérification %3$s" style="background:#FFFFFF;border-radius:8px;padding:4px;border:1px solid #38BDF8;display:block;"><title>Vérification Certificat %3$s</title><rect width="%1$d" height="%1$d" fill="#FFFFFF"/>%4$s</svg>',
+            '<svg class="lms-qr-verify-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %1$d %1$d" width="%2$d" height="%2$d" role="img" aria-label="QR Code de vérification %3$s"><title>Vérification Certificat %3$s</title><rect width="%1$d" height="%1$d" fill="#FFFFFF"/>%4$s</svg>',
             $viewBox,
             $size,
             $safeCert,

@@ -261,20 +261,30 @@ async function main() {
             (loginHttp.headers.get('permissions-policy') || '').includes('unload=*'),
             'En-tête Permissions-Policy: unload=* actif'
         );
+        const loginCspHeader = loginHttp.headers.get('content-security-policy') || '';
+        const scriptSrcDir = (loginCspHeader.match(/script-src\s+([^;]+)/i) || [''])[0];
+        const styleSrcDir = (loginCspHeader.match(/style-src\s+([^;]+)/i) || [''])[0];
+        assert(
+            scriptSrcDir.includes("'sha256-") && !scriptSrcDir.includes('unsafe-inline') && styleSrcDir.includes("'self'") && !styleSrcDir.includes('unsafe-inline'),
+            'Strict CSP header active: SHA-256 script-src and style-src self (0 unsafe-inline)'
+        );
 
         await mcp.callTool('browser_resize', { width: 375, height: 812 });
         await mcp.callTool('browser_navigate', { url: `${baseUrl}/index.php?page=login` });
         const loginMobileMetrics = await mcp.evaluateJson(`() => {
-            const card = document.querySelector('form#login-form')?.closest('div[style*="grid"]');
+            const card = document.querySelector('form#login-form')?.closest('.login-split-grid, .login-form-col');
             return {
                 scrollWidth: document.documentElement.scrollWidth,
                 innerWidth: window.innerWidth,
-                cardRight: card ? Math.round(card.getBoundingClientRect().right) : 0
+                cardRight: card ? Math.round(card.getBoundingClientRect().right) : 0,
+                inlineStyles: document.querySelectorAll('[style]').length
             };
         }`);
         assert(
-            loginMobileMetrics.scrollWidth <= loginMobileMetrics.innerWidth && loginMobileMetrics.cardRight <= loginMobileMetrics.innerWidth,
-            `Page Login responsive sur Mobile 375x812 sans troncature (cardRight=${loginMobileMetrics.cardRight} <= ${loginMobileMetrics.innerWidth})`
+            loginMobileMetrics.scrollWidth <= loginMobileMetrics.innerWidth
+            && loginMobileMetrics.cardRight <= loginMobileMetrics.innerWidth
+            && loginMobileMetrics.inlineStyles === 0,
+            `Page Login responsive sur Mobile 375x812 sans troncature ni style= inline (cardRight=${loginMobileMetrics.cardRight} <= ${loginMobileMetrics.innerWidth})`
         );
 
         await mcp.callTool('browser_resize', { width: 1440, height: 900 });
@@ -358,6 +368,7 @@ async function main() {
                 'index.php?page=admin&tab=docker',
                 'index.php?page=admin&tab=courses',
                 'index.php?page=admin&tab=audit',
+                'index.php?page=admin&tab=system',
                 'index.php?page=profile'
             ];
             const out = [];
@@ -368,7 +379,9 @@ async function main() {
                 const imgsNoAlt = doc.querySelectorAll('img:not([alt])').length;
                 const btnsNoLabel = Array.from(doc.querySelectorAll('button')).filter(b => !b.textContent.trim() && !b.getAttribute('aria-label') && !b.getAttribute('title')).length;
                 const passNoAuto = doc.querySelectorAll('input[type="password"]:not([autocomplete])').length;
-                out.push({ page: p, status: r.status, imgsNoAlt, btnsNoLabel, passNoAuto });
+                const inlineStyles = doc.querySelectorAll('[style]').length;
+                const inlineHandlers = doc.querySelectorAll('[onclick],[onchange],[onsubmit],[oninput],[onkeydown]').length;
+                out.push({ page: p, status: r.status, imgsNoAlt, btnsNoLabel, passNoAuto, inlineStyles, inlineHandlers });
             }
             return out;
         }`);
@@ -377,11 +390,15 @@ async function main() {
         const totalImgsNoAlt = routesAudit.reduce((acc, r) => acc + r.imgsNoAlt, 0);
         const totalBtnsNoLabel = routesAudit.reduce((acc, r) => acc + r.btnsNoLabel, 0);
         const totalPassNoAuto = routesAudit.reduce((acc, r) => acc + r.passNoAuto, 0);
+        const totalInlineStyles = routesAudit.reduce((acc, r) => acc + r.inlineStyles, 0);
+        const totalInlineHandlers = routesAudit.reduce((acc, r) => acc + r.inlineHandlers, 0);
 
-        assert(all200 && routesAudit.length === 18, '18 / 18 routes applicatives LMS répondent en HTTP 200 OK');
-        assert(totalImgsNoAlt === 0, '0 image sans attribut alt sur les 18 vues du portail');
-        assert(totalBtnsNoLabel === 0, '0 bouton sans libellé accessible sur les 18 vues du portail');
-        assert(totalPassNoAuto === 0, '0 champ mot de passe sans attribut autocomplete sur les 18 vues du portail');
+        assert(all200 && routesAudit.length === 19, '19 / 19 routes applicatives LMS répondent en HTTP 200 OK');
+        assert(totalImgsNoAlt === 0, '0 image sans attribut alt sur les 19 vues du portail');
+        assert(totalBtnsNoLabel === 0, '0 bouton sans libellé accessible sur les 19 vues du portail');
+        assert(totalPassNoAuto === 0, '0 champ mot de passe sans attribut autocomplete sur les 19 vues du portail');
+        assert(totalInlineStyles === 0, '0 inline style= attribute across all 19 portal routes (strict style-src CSP)');
+        assert(totalInlineHandlers === 0, '0 inline on*= event handler attribute across all 19 portal routes');
 
         // 4. Interactive Journeys: Module 01, 58-Slide Viewer, Sidebars, Dark/Light Theme
         console.log('\n--- 4. Tests Interactifs : Diaporama 16:9 (58 Slides), Sidebars, Thème & Lightbox ---');
@@ -443,6 +460,68 @@ async function main() {
         assert(slidesAudit.leftCollapsed && slidesAudit.rightCollapsed, 'Réduction/extension en 1 clic des barres verticales gauche et droite fonctionnelle');
         assert(slidesAudit.isLight && slidesAudit.lightLogo.includes('lightpath_logo_dark_text.png'), 'Bascule Thème Sombre / Clair et permutation automatique des logos transparents');
 
+        // Verify standalone html_preview iframe CSP (0 console errors) and savepoint v-mode HTML pattern validity.
+        await mcp.callTool('browser_navigate', {
+            url: `${baseUrl}/index.php?page=module&id=module_01_introduction_postgresql_18&mode=html_preview`,
+        });
+        const previewAudit = await mcp.evaluateJson(`async () => {
+            const iframe = document.querySelector('iframe.preview-iframe-full');
+            if (!iframe) return { hasIframe: false };
+            const src = iframe.getAttribute('src') || '';
+            const res = await fetch('${baseUrl}/' + src);
+            const csp = res.headers.get('content-security-policy') || '';
+            return {
+                hasIframe: true,
+                status: res.status,
+                hasMermaidHash: csp.includes("'sha256-fIvSulwFNp3RteiAZGkbvt+fvUeVJoTUB439YMvw0EA='"),
+                noUnsafeInlineScript: !/script-src[^;]*unsafe-inline/i.test(csp),
+            };
+        }`);
+        const previewConsole = await mcp.callTool('browser_console_messages', { level: 'debug' });
+        assert(
+            previewAudit.hasIframe
+            && previewAudit.status === 200
+            && previewAudit.hasMermaidHash
+            && previewAudit.noUnsafeInlineScript
+            && previewConsole.text.includes('Errors: 0')
+            && !previewConsole.text.includes('Content Security Policy'),
+            'Module 01 html_preview iframe emits Mermaid SHA-256 CSP without script unsafe-inline and zero console errors',
+            JSON.stringify(previewAudit)
+        );
+
+        await mcp.callTool('browser_navigate', {
+            url: `${baseUrl}/index.php?page=lab&id=lab_01_introduction_setup_postgresql_18`,
+        });
+        const savepointPatternAudit = await mcp.evaluateJson(`() => {
+            const inp = document.getElementById('lab-savepoint-name');
+            if (!inp) return { found: false };
+            const pat = inp.getAttribute('pattern') || '';
+            let vModeOk = false;
+            let vModeErr = '';
+            try {
+                const re = new RegExp('^(?:' + pat + ')$', 'v');
+                vModeOk = re.test('checkpoint_1') && !re.test('../bad');
+            } catch (e) {
+                vModeErr = String(e);
+            }
+            return {
+                found: true,
+                valid: inp.checkValidity(),
+                vModeOk,
+                vModeErr,
+            };
+        }`);
+        const labConsole = await mcp.callTool('browser_console_messages', { level: 'debug' });
+        assert(
+            savepointPatternAudit.found
+            && savepointPatternAudit.valid
+            && savepointPatternAudit.vModeOk
+            && labConsole.text.includes('Errors: 0')
+            && !labConsole.text.includes('Invalid character in character class'),
+            'Lab #lab-savepoint-name pattern passes checkValidity() and ES v-mode compilation with zero console errors',
+            savepointPatternAudit.vModeErr || ''
+        );
+
         // 5. Multi-Viewport Responsive Audit (Mobile 375x812, Tablet 768x1024, Desktop 1440x900) + Bounding Boxes + 255-char unspaced string
         console.log('\n--- 5. Audit Responsive Multi-Viewports & Bounding Boxes (375x812, 768x1024, 1440x900) ---');
         const viewports = [
@@ -460,6 +539,7 @@ async function main() {
             'index.php?page=certificate',
             'index.php?page=admin&tab=users',
             'index.php?page=admin&tab=docker',
+            'index.php?page=admin&tab=system',
             'index.php?page=profile',
         ];
 
@@ -468,7 +548,7 @@ async function main() {
             for (const targetPage of responsivePages) {
                 await mcp.callTool('browser_navigate', { url: `${baseUrl}/${targetPage}` });
                 const metrics = await mcp.evaluateJson(`() => {
-                    const selectors = '.app-content, .hero-banner, .lms-card, .lms-table-wrap, .toc-box, .docker-cockpit, .catalog-track-banner, .topbar-search';
+                    const selectors = '.app-content, .hero-banner, .lms-card, .lms-table-wrap, .toc-box, .docker-cockpit, .catalog-track-banner, .topbar-search, .admin-split-grid';
                     let maxRight = 0;
                     let culprit = '';
                     for (const el of document.querySelectorAll(selectors)) {

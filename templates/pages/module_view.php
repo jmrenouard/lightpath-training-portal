@@ -69,10 +69,10 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
 ?>
 
 <!-- Clear module header, track position & quick actions -->
-<div class="hero-banner" style="padding: 1.25rem 1.65rem;">
-    <div style="flex: 1; min-width: 0;">
+<div class="hero-banner p-hero-reader">
+    <div class="flex-1 min-w-0">
         <!-- Breadcrumb & track position -->
-        <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
+        <div class="d-flex items-center gap-xs flex-wrap mb-xs">
             <a href="index.php?page=catalog&track=<?= urlencode($trackId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="badge-code" title="Voir tous les modules de ce parcours">
                 ← <?= Security::e($mod['track_number'] ?? 'Parcours') ?> (<?= Security::e($mod['track_short_title'] ?? '') ?>)
             </a>
@@ -80,22 +80,22 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
             <span class="badge-phase tabular-nums">
                 <?= Security::e($mod['phase_code'] ?? 'ÉTAPE') ?> • 📍 Étape <?= (int)($mod['track_position'] ?? 1) ?> / <?= (int)($mod['track_total'] ?? 20) ?>
             </span>
-            <span style="font-size: 0.78rem; color: var(--text-secondary);">⏱ <?= Security::e($mod['duration']) ?></span>
+            <span class="text-xs text-secondary">⏱ <?= Security::e($mod['duration']) ?></span>
         </div>
 
-        <h1 style="font-size: 1.42rem; margin-bottom: 0.3rem;"><?= Security::e($mod['title']) ?></h1>
-        <p style="color: var(--text-secondary); margin: 0 0 0.65rem; font-size: 0.85rem;">
+        <h1 class="section-heading-lg mb-xxs"><?= Security::e($mod['title']) ?></h1>
+        <p class="text-secondary mb-sm text-sm">
             <strong>Compétence Opérationnelle :</strong> <?= Security::e($mod['bloom']) ?>
         </p>
 
         <!-- Direct multi-format downloads -->
-        <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
-            <span style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted);">📥 Supports :</span>
+        <div class="d-flex items-center gap-xs flex-wrap">
+            <span class="text-xxs font-bold text-uppercase text-muted">📥 Supports :</span>
             <?= renderDownloadStrip($currentCourseSlug, 'module', $moduleId, $mod['downloads'] ?? [], true) ?>
         </div>
     </div>
 
-    <div style="display: flex; flex-direction: column; gap: 0.45rem; min-width: 235px;">
+    <div class="hero-actions-col">
         <button type="button"
                 class="btn <?= $isDone ? 'btn-emerald' : 'btn-primary' ?> btn-sm btn-toggle-complete"
                 data-type="module"
@@ -155,7 +155,7 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
         <?php endif; ?>
     </div>
 
-    <div style="display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center;">
+    <div class="d-flex gap-xs flex-wrap items-center">
         <button type="button"
                 class="btn btn-outline btn-sm btn-toggle-right-panel"
                 title="Réduire / Afficher la barre verticale de droite (Alt+D)">
@@ -185,7 +185,7 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
     <div id="lms-slide-deck-wrapper" class="slide-deck-wrapper">
         <!-- Slide deck top toolbar -->
         <div class="slide-deck-toolbar">
-            <div style="display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap;">
+            <div class="d-flex items-center gap-xs flex-wrap">
                 <button type="button" id="btn-slide-engine-html" class="btn btn-sm btn-primary" aria-pressed="true">
                     🖥️ Diaporama Studio 16:9 (<?= $totalSlides ?> slides)
                 </button>
@@ -221,7 +221,7 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
 
         <!-- Slide deck progress bar -->
         <div class="slide-progress-track">
-            <div id="slide-progress-fill" class="slide-progress-fill" style="width: <?= $totalSlides > 0 ? round(100 / $totalSlides, 1) : 100 ?>%;"></div>
+            <div id="slide-progress-fill" class="slide-progress-fill" data-progress="<?= $totalSlides > 0 ? round(100 / $totalSlides, 1) : 100 ?>"></div>
         </div>
 
         <!-- 16:9 main stage (Column 1) + Slide outline sidebar (Column 2) -->
@@ -254,7 +254,7 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                                     <div class="lms-studio-caption-main">
                                         <span class="lms-slide-badge"><?= Security::formatInlineText($s['badge']) ?></span>
                                         <strong class="lms-studio-caption-title"><?= Security::formatInlineText($s['title']) ?></strong>
-                                        <span class="lms-slide-counter tabular-nums" style="margin-left: auto;">
+                                        <span class="lms-slide-counter tabular-nums ml-auto">
                                             DIAPO <?= sprintf('%02d', (int)$s['index']) ?> / <?= sprintf('%02d', $totalSlides) ?>
                                         </span>
                                     </div>
@@ -267,8 +267,8 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                                 </footer>
                             <?php else: ?>
                                 <header class="lms-slide-header">
-                                    <div style="display: flex; align-items: center; gap: 0.6rem; min-width: 0;">
-                                        <img src="assets/img/postgresql_elephant_dark.png" alt="PG18" style="width: 24px; height: 24px;"/>
+                                    <div class="d-flex items-center gap-xs min-w-0">
+                                        <img src="assets/img/postgresql_elephant_dark.png" alt="PG18" class="slide-header-icon"/>
                                         <span class="lms-slide-badge"><?= Security::formatInlineText($s['badge']) ?></span>
                                         <span class="lms-slide-chapter"><?= Security::formatInlineText($s['chapter']) ?></span>
                                     </div>
@@ -300,7 +300,7 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                                 src="about:blank"
                                 data-src="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=module&id=<?= urlencode($moduleId) ?>&format=slides_pdf&inline=1"
                                 allow="unload *"
-                                style="width: 100%; height: 78vh; border: none; border-radius: var(--radius-md);"
+                                class="slide-pdf-iframe"
                                 title="Diaporama PowerPoint PDF 16:9"></iframe>
                     </div>
                 <?php endif; ?>
@@ -309,11 +309,11 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
             <!-- Right sidebar (Column 2): Slide outline (sticky & scrollbar-free) -->
             <aside class="slide-outline-sidebar" id="app-right-sidebar-slides">
                 <div class="toc-box slide-outline-box">
-                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; margin-bottom: 0.65rem;">
-                        <span style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light);">
+                    <div class="d-flex justify-between items-center gap-xs mb-sm">
+                        <span class="sidebar-section-label">
                             🖥️ Plan des <?= $totalSlides ?> Diapositives
                         </span>
-                        <div style="display: flex; align-items: center; gap: 0.35rem;">
+                        <div class="d-flex items-center gap-xs">
                             <span id="slide-sidebar-counter" class="badge-code tabular-nums">1 / <?= $totalSlides ?></span>
                             <button type="button"
                                     class="btn-sidebar-collapse-inline btn-toggle-right-panel"
@@ -362,13 +362,13 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
     ?>
     <div class="reader-grid">
         <div class="reader-main-col">
-            <section class="lms-card" style="padding: 1.25rem; margin-bottom: 1.5rem;">
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.9rem;">
+            <section class="lms-card p-md mb-lg">
+                <div class="d-flex justify-between items-center flex-wrap gap-sm mb-sm">
                     <div>
                         <span class="badge-code">🎬 LECTEUR VIDÉO STUDIO 1080P & SOUS-TITRES WEBVTT</span>
-                        <h2 style="font-size: 1.2rem; margin: 0.3rem 0 0;"><?= Security::e($mod['title']) ?></h2>
+                        <h2 class="section-heading-md mt-xs mb-0"><?= Security::e($mod['title']) ?></h2>
                     </div>
-                    <div style="display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center;">
+                    <div class="d-flex gap-xs flex-wrap items-center">
                         <?php if (isset($mod['downloads']['video_mp4']) && isset($mod['downloads']['video_slides_mp4'])): ?>
                             <a href="index.php?page=module&id=<?= urlencode($moduleId) ?>&mode=video&video_src=course&course=<?= urlencode($currentCourseSlug) ?>"
                                class="btn btn-sm <?= $videoVariant === 'course' ? 'btn-primary' : 'btn-outline' ?>">
@@ -379,7 +379,7 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                                 🎞️ Présentation Slides MP4
                             </a>
                         <?php endif; ?>
-                        <div style="display: inline-flex; gap: 0.25rem; align-items: center;" aria-label="Vitesse de lecture">
+                        <div class="d-inline-flex gap-xxs items-center" aria-label="Vitesse de lecture">
                             <?php foreach ([1, 1.25, 1.5, 2] as $spd): ?>
                                 <button type="button"
                                         class="btn btn-outline btn-sm btn-video-speed tabular-nums"
@@ -392,11 +392,11 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                 </div>
 
                 <?php if (isset($mod['downloads'][$activeVideoFormat])): ?>
-                    <div style="background: #050811; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-strong);">
+                    <div class="video-player-wrap">
                         <video id="lms-module-video"
                                controls
                                preload="metadata"
-                               style="width: 100%; max-height: 70vh; display: block;">
+                               class="video-player-el">
                             <source src="<?= Security::e($videoStreamUrl) ?>" type="video/mp4"/>
                             <?php if ($vttUrl !== ''): ?>
                                 <track kind="subtitles" srclang="fr" label="Français (Studio)" src="<?= Security::e($vttUrl) ?>" default/>
@@ -406,9 +406,9 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                     </div>
                 <?php endif; ?>
 
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.85rem; font-size: 0.8rem; color: var(--text-secondary);">
+                <div class="d-flex justify-between items-center flex-wrap gap-xs mt-sm text-sm text-secondary">
                     <span>💡 Astuce : Activez les sous-titres synchronisés (CC) dans le lecteur ou consultez la transcription intégrale ci-dessous.</span>
-                    <div style="display: flex; gap: 0.45rem;">
+                    <div class="d-flex gap-xs">
                         <?php if (isset($mod['downloads']['video_mp4'])): ?>
                             <a href="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=module&id=<?= urlencode($moduleId) ?>&format=video_mp4" class="btn btn-outline btn-sm">
                                 ⬇ Télécharger MP4 (<?= Security::e($mod['downloads']['video_mp4']['size_formatted'] ?? '') ?>)
@@ -424,9 +424,9 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
             </section>
 
             <?php if ($transcriptHtml !== ''): ?>
-                <section class="lms-card" style="padding: 1.5rem;">
+                <section class="lms-card p-card-resume">
                     <span class="badge-code">📜 TRANSCRIPTION INTÉGRALE & ACCESSIBILITÉ (WCAG / QUALIOPI)</span>
-                    <h3 style="font-size: 1.15rem; margin: 0.35rem 0 1rem;">Transcription Textuelle Synchronisée du Module</h3>
+                    <h3 class="section-heading-sm mt-xs mb-1">Transcription Textuelle Synchronisée du Module</h3>
                     <div class="markdown-body">
                         <?= $transcriptHtml ?>
                     </div>
@@ -436,12 +436,12 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
 
         <aside class="reader-sidebar" id="app-right-sidebar">
             <div class="toc-box">
-                <div style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light); margin-bottom: 0.5rem;">
+                <div class="sidebar-section-label mb-xs">
                     📝 Mes Notes Vidéo
                 </div>
                 <textarea id="user-personal-note" class="form-control" rows="6" placeholder="Prenez vos notes pendant le visionnage vidéo..."><?= Security::e($savedNote) ?></textarea>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.55rem;">
-                    <span id="note-save-status" style="font-size: 0.74rem; color: var(--accent-emerald);"></span>
+                <div class="d-flex justify-between items-center mt-xs">
+                    <span id="note-save-status" class="text-xs text-emerald"></span>
                     <button type="button" id="btn-save-note" class="btn btn-primary btn-sm" data-id="<?= Security::e($moduleId) ?>" data-course="<?= Security::e($currentCourseSlug) ?>">
                         💾 Enregistrer
                     </button>
@@ -451,10 +451,10 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
     </div>
 
 <?php elseif ($viewMode === 'html_preview' && isset($mod['downloads']['html'])): ?>
-    <div style="background: #FFFFFF; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border-strong); height: 82vh;">
+    <div class="preview-iframe-wrap">
         <iframe src="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=module&id=<?= urlencode($moduleId) ?>&format=html&inline=1"
                 allow="unload *"
-                style="width: 100%; height: 100%; border: none;"
+                class="preview-iframe-full"
                 title="<?= Security::e($mod['title']) ?>"></iframe>
     </div>
 
@@ -471,13 +471,13 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
             <!-- Self-graded interactive QCM quiz -->
             <?php if (!empty($parsed['quiz'])): ?>
                 <section id="quiz-section" class="quiz-card">
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
+                    <div class="d-flex justify-between items-center flex-wrap gap-sm mb-1">
                         <div>
                             <span class="badge-code">ÉVALUATION FORMATIVE QUALIOPI</span>
-                            <h2 style="font-size: 1.35rem; margin: 0.35rem 0 0;">❓ Quiz Interactif d'Auto-Évaluation (<?= count($parsed['quiz']) ?> questions)</h2>
+                            <h2 class="text-xl mt-xs mb-0">❓ Quiz Interactif d'Auto-Évaluation (<?= count($parsed['quiz']) ?> questions)</h2>
                         </div>
                         <?php if ($quizScore !== null): ?>
-                            <span class="badge-completed tabular-nums" style="font-size: 0.85rem; padding: 0.35rem 0.75rem;">
+                            <span class="badge-completed tabular-nums badge-lg">
                                 Dernier score : <?= (int)$quizScore['score'] ?>/<?= (int)$quizScore['total'] ?> (<?= (int)$quizScore['percentage'] ?>%)
                             </span>
                         <?php endif; ?>
@@ -486,25 +486,25 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                     <form id="interactive-quiz-form" data-module-id="<?= Security::e($moduleId) ?>" data-course="<?= Security::e($currentCourseSlug) ?>">
                         <?php foreach ($parsed['quiz'] as $q): ?>
                             <div class="quiz-question-box" data-correct="<?= Security::e($q['correct']) ?>">
-                                <div style="font-weight: 700; margin-bottom: 0.65rem; color: var(--text-primary);">
+                                <div class="font-bold mb-sm text-primary">
                                     <?= Security::formatInlineText($q['question']) ?>
                                 </div>
                                 <?php foreach ($q['options'] as $letter => $optText): ?>
                                     <label class="quiz-option-label">
-                                        <input type="radio" name="q_<?= (int)$q['index'] ?>" value="<?= Security::e($letter) ?>" required style="margin-top: 0.25rem;"/>
+                                        <input type="radio" name="q_<?= (int)$q['index'] ?>" value="<?= Security::e($letter) ?>" required class="quiz-option-radio"/>
                                         <span><strong><?= Security::e($letter) ?>.</strong> <?= Security::formatInlineText($optText) ?></span>
                                     </label>
                                 <?php endforeach; ?>
-                                <div class="quiz-feedback" style="display: none; margin-top: 0.85rem; padding: 0.75rem; border-radius: var(--radius-sm); background: rgba(16, 185, 129, 0.1); border-left: 3px solid var(--accent-emerald); font-size: 0.84rem;">
+                                <div class="quiz-feedback">
                                     <strong>✔ Réponse attendue : <?= Security::e($q['correct']) ?></strong><br/>
                                     <?= Security::formatInlineText($q['explanation']) ?>
                                 </div>
                             </div>
                         <?php endforeach; ?>
 
-                        <div id="quiz-result-banner" style="display: none;"></div>
+                        <div id="quiz-result-banner" class="is-hidden"></div>
 
-                        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.8rem;">
+                        <button type="submit" class="btn btn-primary btn-block-md">
                             🎯 Valider mes Réponses & Enregistrer mon Score Qualiopi
                         </button>
                     </form>
@@ -520,7 +520,7 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                         </a>
                     <?php endif; ?>
                 </div>
-                <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
+                <div class="d-flex gap-sm flex-wrap">
                     <?php if (!empty($mod['linked_lab_id'])): ?>
                         <a href="index.php?page=lab&id=<?= urlencode((string)$mod['linked_lab_id']) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald">
                             🧪 Passer au Lab Pratique Docker (Lab <?= Security::e($mod['code']) ?>)
@@ -542,11 +542,11 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
         <aside class="reader-sidebar" id="app-right-sidebar">
             <!-- 1. Document outline with live ScrollSpy position -->
             <div class="toc-box">
-                <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; margin-bottom: 0.45rem;">
-                    <span style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light);">
+                <div class="d-flex justify-between items-center gap-xs mb-xs">
+                    <span class="sidebar-section-label">
                         📑 Sommaire & Position
                     </span>
-                    <div style="display: flex; align-items: center; gap: 0.35rem;">
+                    <div class="d-flex items-center gap-xs">
                         <span id="toc-read-pct" class="badge-code tabular-nums" title="Progression de lecture dans ce document">0% lu</span>
                         <button type="button"
                                 class="btn-sidebar-collapse-inline btn-toggle-right-panel"
@@ -556,8 +556,8 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                         </button>
                     </div>
                 </div>
-                <div class="progress-bar-track" style="height: 5px; margin-bottom: 0.75rem;">
-                    <div id="toc-read-bar" class="progress-bar-fill" style="width: 0%;"></div>
+                <div class="progress-bar-track progress-bar-track--xs mb-sm">
+                    <div id="toc-read-bar" class="progress-bar-fill" data-progress="0"></div>
                 </div>
 
                 <nav id="toc-scrollspy-nav" class="toc-scrollspy-nav">
@@ -580,12 +580,12 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
 
             <!-- 2. Learner personal notes block -->
             <div class="toc-box">
-                <div style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light); margin-bottom: 0.5rem;">
+                <div class="sidebar-section-label mb-xs">
                     📝 Mes Notes Personnelles
                 </div>
                 <textarea id="user-personal-note" class="form-control" rows="4" aria-label="Mes notes personnelles sur ce module" placeholder="Notez vos points clés, paramètres postgresql.conf ou questions..."><?= Security::e($savedNote) ?></textarea>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.55rem;">
-                    <span id="note-save-status" style="font-size: 0.74rem; color: var(--accent-emerald);"></span>
+                <div class="d-flex justify-between items-center mt-xs">
+                    <span id="note-save-status" class="text-xs text-emerald"></span>
                     <button type="button" id="btn-save-note" class="btn btn-primary btn-sm" data-id="<?= Security::e($moduleId) ?>" data-course="<?= Security::e($currentCourseSlug) ?>">
                         💾 Enregistrer
                     </button>
@@ -593,16 +593,16 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
             </div>
 
             <!-- 3. Collapsible curriculum track progress stepper -->
-            <details class="toc-box" style="cursor: pointer;">
-                <summary style="display: flex; justify-content: space-between; align-items: center; list-style: none;">
-                    <span style="font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand-cyan-light);">
+            <details class="toc-box">
+                <summary class="summary-reset cursor-pointer">
+                    <span class="sidebar-section-label">
                         📍 Étape <?= (int)($mod['track_position'] ?? 1) ?> / <?= (int)($mod['track_total'] ?? count($trackModules)) ?> du Parcours
                     </span>
                     <span class="badge-code tabular-nums"><?= $trackProgressPct ?>%</span>
                 </summary>
-                <div style="margin-top: 0.65rem;">
-                    <div class="progress-bar-track" style="height: 5px; margin-bottom: 0.65rem;">
-                        <div class="progress-bar-fill" style="width: <?= $trackProgressPct ?>%;"></div>
+                <div class="mt-sm">
+                    <div class="progress-bar-track progress-bar-track--xs mb-sm">
+                        <div class="progress-bar-fill" data-progress="<?= (int)$trackProgressPct ?>"></div>
                     </div>
                     <div class="curriculum-stepper-list">
                         <?php foreach ($trackModules as $tmKey => $tmItem):

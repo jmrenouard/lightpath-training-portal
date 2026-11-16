@@ -8,15 +8,23 @@ class Auth
     public const VALID_ROLES = ['student', 'trainer', 'admin'];
 
     private StorageInterface $storage;
+    private int $sessionIdleTtl;
     private array $loginAttempts = [];
     private const MAX_LOGIN_ATTEMPTS = 5;
     private const MAX_IP_LOGIN_ATTEMPTS = 25;
     private const LOCKOUT_SECONDS = 300;
     private const DUMMY_BCRYPT_HASH = '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi';
 
-    public function __construct(StorageInterface $storage)
+    public function __construct(StorageInterface $storage, ?int $sessionIdleTtl = null)
     {
         $this->storage = $storage;
+        if ($sessionIdleTtl !== null) {
+            $this->sessionIdleTtl = max(60, $sessionIdleTtl);
+        } else {
+            $appCfgFile = __DIR__ . '/../../config/app.php';
+            $appCfg = is_file($appCfgFile) ? @include $appCfgFile : [];
+            $this->sessionIdleTtl = is_array($appCfg) ? max(60, (int)($appCfg['session_idle_ttl'] ?? 7200)) : 7200;
+        }
         if (PHP_SAPI !== 'cli' && isset($_SESSION['lms_login_attempts']) && is_array($_SESSION['lms_login_attempts'])) {
             $this->loginAttempts = $_SESSION['lms_login_attempts'];
         }
@@ -84,10 +92,22 @@ class Auth
         $this->syncThrottleSession();
     }
 
+    /**
+     * Checks whether a user account is active (defaults to true unless explicitly false, 0, or '0').
+     */
+    public static function isUserActive(array $user): bool
+    {
+        if (!array_key_exists('active', $user)) {
+            return true;
+        }
+        $val = $user['active'];
+        return !($val === false || $val === 0 || $val === '0');
+    }
+
     public function verifyCredentials(string $email, string $password): ?array
     {
         $user = $this->storage->getUserByEmail($email);
-        if ($user === null || empty($user['active'])) {
+        if ($user === null || !self::isUserActive($user)) {
             // Perform a dummy bcrypt verify to mitigate account enumeration via response timing.
             password_verify($password, self::DUMMY_BCRYPT_HASH);
             return null;
@@ -116,7 +136,9 @@ class Auth
         $this->storage->logAuditEvent($user['email'], 'LOGIN', 'Connexion réussie au portail LMS');
 
         if (PHP_SAPI !== 'cli') {
-            session_regenerate_id(true);
+            if (session_status() === PHP_SESSION_ACTIVE && !headers_sent()) {
+                session_regenerate_id(true);
+            }
             $_SESSION['user_id'] = (int)$user['id'];
             $_SESSION['last_activity'] = time();
         }
@@ -127,7 +149,7 @@ class Auth
     {
         if (PHP_SAPI !== 'cli' || session_status() === PHP_SESSION_ACTIVE) {
             $_SESSION = [];
-            if (ini_get('session.use_cookies')) {
+            if (ini_get('session.use_cookies') && !headers_sent()) {
                 $params = session_get_cookie_params();
                 setcookie(
                     session_name(),
@@ -154,9 +176,9 @@ class Auth
             return null;
         }
 
-        // Enforce automatic session expiration after 4 hours (14400s) of inactivity.
+        // Enforce automatic session expiration after the configured idle TTL (default 7200s).
         if (isset($_SESSION['last_activity'])) {
-            if ((time() - (int)$_SESSION['last_activity']) > 14400) {
+            if ((time() - (int)$_SESSION['last_activity']) > $this->sessionIdleTtl) {
                 $this->logout();
                 return null;
             }
@@ -164,7 +186,8 @@ class Auth
         $_SESSION['last_activity'] = time();
 
         $user = $this->storage->getUserById($uid);
-        if ($user === null || empty($user['active'])) {
+        if ($user === null || !self::isUserActive($user)) {
+            $this->logout();
             return null;
         }
         return $user;
@@ -212,6 +235,9 @@ class Auth
         $user['password_hash'] = password_hash($newPassword, PASSWORD_BCRYPT);
         $this->storage->saveUser($user);
         $this->storage->logAuditEvent((string)($user['email'] ?? ''), 'PASSWORD_CHANGE', 'Modification du mot de passe utilisateur');
+        if (PHP_SAPI !== 'cli' && session_status() === PHP_SESSION_ACTIVE && !headers_sent()) {
+            session_regenerate_id(true);
+        }
         return ['success' => true, 'message' => 'Mot de passe mis à jour avec succès.'];
     }
 

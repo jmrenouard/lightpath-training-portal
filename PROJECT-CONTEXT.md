@@ -15,7 +15,7 @@
 1. **Zero Composer/Node Runtime Dependencies:** Custom PSR-4 autoloader in [src/bootstrap.php](src/bootstrap.php) (`LightPath\LMS\` -> `src/`), standard library PHP `>= 8.1`, and a built-in pure-PHP PKZIP store fallback when `ZipArchive` is unavailable in [DownloadController.php](src/Course/DownloadController.php).
 2. **100% Offline & Zero External CDNs:** All JavaScript, CSS, diagramming engines (`public/assets/mermaid.min.js`), pre-rendered slide decks (`public/assets/slides_cache/`), Retina Mermaid PNGs (`public/assets/mermaid_cache/`), and brand images (`public/assets/`) are self-hosted. External `<script>` or CDN links are strictly prohibited.
 3. **Dual-Driver Storage Abstraction:** Supports zero-setup local JSON flat files (`JsonStorage`) or transactional database persistence (`PdoStorage`) via [StorageInterface.php](src/Core/StorageInterface.php).
-4. **Thin Domain Modules over Monolithic Routing:** Domain logic lives in `src/Core/`, `src/Course/`, and `src/Docker/`, coordinated by [public/index.php](public/index.php), [FeatureManager.php](src/Core/FeatureManager.php), and [AdminService.php](src/Core/AdminService.php) without framework bloat.
+4. **Modular HTTP & Domain Architecture (`P1-7` Resolved):** Thin front controller [public/index.php](public/index.php) dispatches to `src/Http/{AuthController,LearnerController,LabApiController,AdminController}.php`, backed by `src/Core/`, `src/Course/`, and `src/Docker/`, while [templates/pages/admin.php](templates/pages/admin.php) delegates lazily to 7 clean partials under `templates/partials/admin/`.
 5. **Graceful Docker Degradation:** Live per-student containers (`lp_pg18_user_<id>`) run locally via native Docker or Windows WSL2 with non-blocking `proc_open()` timeouts and automatically degrade to `cloud_simulated` mode on static/shared PHP hosts.
 
 ---
@@ -24,19 +24,20 @@
 
 | Path | Ownership & Responsibility |
 | :--- | :--- |
-| [config/app.php](config/app.php) | Application metadata, storage driver selection, PDO DSN settings, Docker port/image/quota defaults |
+| [config/app.php](config/app.php) | Application metadata, `session_idle_ttl` (`7200`s default), storage driver selection, PDO DSN settings, Docker port/image/quota defaults |
 | [config/courses.php](config/courses.php) | Declarative course-pack registry (`postgresql-18`, 4 tracks, module filters) |
-| [config/features.php](config/features.php) | Default definitions for 8 modular LMS feature toggles |
+| [config/features.php](config/features.php) | Default definitions for **10** categorized LMS feature toggles with `requires` dependency chains |
 | [config/playwright-mcp.config.json](config/playwright-mcp.config.json) | Headless Chrome MCP configuration restricted to `localhost`/`127.0.0.1` |
+| `src/Http/` | `AuthController`, `LearnerController`, `LabApiController`, `AdminController` |
 | `src/Core/` | `Auth`, `Security`, `StorageInterface`, `JsonStorage`, `PdoStorage`, `FeatureManager`, `AdminService`, `Gamification` |
 | `src/Course/` | `CourseRepository`, `MarkdownParser`, `LmsCatalog`, `DownloadController` |
 | `src/Docker/` | `DockerManager`, `LabSqlRunner`, `SakilaSeeder` |
 | `bin/` | CLI utilities: `lab-runner.php`, `sync-course.php`, `export_slides_cache.py` |
 | `public/` | Web root (`index.php` front controller, `assets/css/app.css`, `assets/js/app.js`, self-hosted media) |
-| `templates/` | `layout.php` global shell + 16 modular view templates in `templates/pages/` |
-| `storage/data/` | Runtime JSON stores, `.lock` files, `parsed_cache/`, `catalog_cache_*.json`, monthly audit archives |
-| `tests/` | PHP TDD suite (`run_tests.php`), adversarial suites (`test_adversarial_b1..b5.php`), Playwright E2E (`tests/e2e/`) |
-| `docs/` | Modular engineering, security, operations, Docker, course-pack, API, and audit documentation |
+| `templates/` | `layout.php` global shell + 16 domain view templates in `templates/pages/` + 7 admin tab partials in `templates/partials/admin/` |
+| `storage/data/` | Runtime JSON stores, `.lock` files, `parsed_cache/`, `catalog_cache_*.json`, tamper-evident monthly audit archives |
+| `tests/` | PHP TDD suite (`run_tests.php`), functional HTTP suite (`test_functional_http.php`), reflection/CSP audit (`test_coverage_audit.php`), adversarial suites (`test_adversarial_b1..b5.php`), Playwright E2E (`tests/e2e/`) |
+| `docs/` | 9 engineering, security, deployment, developer/testing, admin, Docker, course-pack, API, and audit guides |
 
 ---
 
@@ -48,7 +49,7 @@
   - Writes via temporary file + `rename()` with short retry backoff for Windows file-lock contention.
   - Seeds 3 default accounts when `users.json` does not exist: ID `1` (`jmrenouard@lightpath.fr`, `admin`), ID `2` (`formateur@lightpath.fr`, `trainer`), ID `3` (`stagiaire@lightpath.fr`, `student`).
   - Generates CSPRNG certificate identifiers matching `LP-PG18-CERT-<uid>-<8HEX>` via `random_bytes(4)`.
-  - Retains 1,000 active audit records in `audit_logs` and rotates overflow into monthly `audit_logs_YYYYMM` payloads; `getAuditLogs(int $limit, bool $includeArchives = false)` merges archived months newest-first when `$includeArchives === true`.
+  - Retains 1,000 active audit records in `audit_logs` with atomic SHA-256 chain links (`prev_hash`, `entry_hash`) and rotates overflow into monthly `audit_logs_YYYYMM` payloads; `getAuditLogs(int $limit, bool $includeArchives = false)` merges archived months newest-first, and `verifyAuditIntegrity(bool $includeArchives = false)` checks chain integrity while gracefully tolerating pre-chain historical records (`legacy_unchained`).
 - **`PdoStorage`** ([src/Core/PdoStorage.php](src/Core/PdoStorage.php)):
   - Extends `JsonStorage`, overriding `readFile()`, `writeFile()`, and `mutateFile()` against auto-created `lms_kv_store (store_key VARCHAR(128) PRIMARY KEY, payload TEXT, updated_at VARCHAR(32))`.
   - Uses `ON CONFLICT (store_key) DO UPDATE` (`pgsql`/`sqlite`), `ON DUPLICATE KEY UPDATE` (`mysql`), and `SELECT ... FOR UPDATE` row locking during `mutateFile()`.
@@ -82,15 +83,15 @@
   - `CourseRepository.php` / `DownloadController.php`: `video_transcript_path`, `transcript_md_path`, `v8_rca164`, `loadCourse()`, `clearCatalogCache()`, `assets/`, `Permissions-Policy: unload=`, `Security::renderUnloadShimScript()`, `Security::isPathInside(`, `$chunkSize = 64 * 1024`, `fread($fp, $readSize)`, `ob_flush()`, `flush()`.
   - `app.css` / `app.js` / templates: `overflow-wrap: break-word`, `min-width: 0`, `[hidden] {`, `@media (max-width: 640px)`, `minmax(min(100%, 330px), 1fr)`, `.reader-grid > *`, `.lms-callout-note`, `#00B0F0`, `.lms-code-badge`, `tabular-nums`, `updateScrollSpy`, `data-scrollspy-target`, `syncThemeLogos`, `sidebar-module-filter`, `switchSlideEngine`, `centerElementInScrollBox`, `index.php?page=search&q=`, `elseif ($adminTab === 'system'):`, `tab=system`, `!$auth->isStaff($currentUser)`, `$inspectedUserId === $userId`, `export_notes_md`, `note-inline-editor`.
 - **Shared Cache Hygiene:** Running `tests/run_tests.php` or `tests/test_adversarial_b4.php` creates/clears entries under `storage/data/parsed_cache`. Always use a dedicated `LMS_DATA_DIR` temporary directory when running standalone Playwright/HTTP scripts.
-- **Wave 4A Hardened Behavioral Contracts:**
-  - `Auth::canAccessCourse($user, $courseSlug)`: unset/`null` `enrolled_courses` defaults to `['postgresql-18']`, whereas an explicit empty array `[]` grants **zero** courses to non-staff students.
-  - Strict CSP (`Security::sendSecurityHeaders()`): `script-src 'self' 'sha256-...'` (zero `'unsafe-inline'` in `script-src`) hashes `Security::UNLOAD_SHIM_JS`; `login.php` uses `app.js` `[data-demo-email]` listeners instead of inline `<script>`.
-  - `FeatureManager` memoizes `all()` per HTTP request in `$resolvedFlags` and resets it in `updateFlags()`.
+- **Wave 4A & Issue `#41` Hardened Behavioral Contracts:**
+  - `Auth::canAccessCourse($user, $courseSlug)`: unset/`null` `enrolled_courses` defaults to `['postgresql-18']`, whereas an explicit empty array `[]` grants **zero** courses to non-staff students. `Auth::isUserActive($user)` blocks suspended users on login and actively terminates active sessions via `$this->logout()` in `currentUser()`, while `changePassword()` calls `session_regenerate_id(true)`.
+  - **Strict Zero-Inline-Style CSP (`P1-6` Resolved):** `Security::sendSecurityHeaders()` enforces `script-src 'self' 'sha256-...'` (matching `Security::UNLOAD_SHIM_JS`) and `style-src 'self'` with **zero** `'unsafe-inline'` and **zero** inline `style=` attributes across `src/` and `templates/`; dynamic numeric bars hydrate via `data-progress` CSSOM in `app.js`, verification QR SVGs use `.lms-qr-verify-svg`, and standalone inline `.html` previews in `DownloadController::streamFile()` emit `Security::sendStandaloneDocumentCspHeader()`. Mutating routes also enforce `Security::verifySameOriginRequest()`.
+  - `FeatureManager` manages **10** categorized flags (`personal_notes` and `flashcards_srs` added), `requires` dependencies (`chaos_engineering` -> `docker_labs`), 4 deployment profiles (`full_enterprise`, `classroom_workshop`, `exam_lockdown`, `static_hosting_nodocker`), per-course overrides (`isEnabledForCourse()`), JSON export/import, and request-level memoization (`$resolvedFlags` + `$courseOverrideCache`).
   - `LabSqlRunner::stripCommentsAndLiterals()` provides single-pass comment/quote/dollar-quote lexing so backslash checks run strictly on `$outsideQuotes` while timeout/role bypass checks inspect both raw and `$commentsStripped` SQL.
-  - `DockerManager::seedUserContainer()` and `getContainerLogs()` default `$allowSharedFallback = false`; web APIs pass `$auth->isStaff($currentUser)`.
+  - `DockerManager` enforces `$allowSharedFallback = false` across seeding, logs, savepoints (`createSavepoint()`, `listSavepoints()`, `restoreSavepoint()`, `deleteSavepoint()`), bounded `pgbench` (`runPgbenchBenchmark()`), `inspectPgDiagnostics()`, and `checkLabReadiness()`, plus `getFleetSummary()`, `reapIdleContainers()`, and `healChaosScenario()`.
   - `DownloadController::resolveHttpRange()` validates `Range: bytes=...` headers cleanly (`200`, `206 Partial Content` in `64 * 1024` byte chunks, or `416 Range Not Satisfiable`).
   - `MarkdownParser::renderMermaidBlock()` resolves course-pack Retina PNGs from `$sourceRoot/assets/mermaid_cache/mermaid_<hash>.png`.
-  - `templates/pages/admin.php` lazy-loads tab datasets (`cohort`, `qna`, `docker`, `users`, `courses`, `audit`, `system`) per active tab, while `AdminService::getSystemHealthReport()` scans `storage/data/parsed_cache/*.html` and `catalog_cache_*.json`.
+  - [templates/pages/admin.php](templates/pages/admin.php) lazy-loads tab datasets into 7 partials under `templates/partials/admin/`, uses `.admin-split-grid` + `.table-col-nowrap` on `tab_system.php`, and surfaces `AdminService` cohort KPIs, at-risk detection, completion matrix, Cohort CSV & Qualiopi JSON exports, user bulk ops, throttle unlock, and 7-probe System Health (including `Chaîne Audit SHA-256`).
 
 ---
 

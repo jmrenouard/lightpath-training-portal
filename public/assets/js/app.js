@@ -20,6 +20,22 @@ document.addEventListener('DOMContentLoaded', () => {
         body: JSON.stringify({ csrf_token: csrfToken, ...payload })
     });
 
+    // Hydrate dynamic progress widths and track accent variables via CSSOM (strict CSP style-src 'self' compliant)
+    document.querySelectorAll('[data-progress]').forEach((el) => {
+        const raw = parseFloat(el.getAttribute('data-progress') || '0');
+        if (Number.isFinite(raw)) {
+            const clamped = Math.max(0, Math.min(100, raw));
+            el.style.width = `${clamped}%`;
+        }
+    });
+    document.querySelectorAll('[data-accent]').forEach((el) => {
+        const color = (el.getAttribute('data-accent') || '').trim();
+        if (/^#[0-9a-fA-F]{3,8}$/.test(color) || /^rgb\(/i.test(color)) {
+            el.style.setProperty('--track-accent', color);
+            el.style.setProperty('--pill-accent', color);
+        }
+    });
+
     // Demo account quick-login buttons (delegated cleanly from login.php)
     const demoEmailInput = document.getElementById('login-email');
     const demoPassInput = document.getElementById('login-password');
@@ -889,6 +905,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const execSqlBtn = document.getElementById('btn-execute-sql');
+    const labSqlEditor = document.getElementById('lab-sql-editor');
+    if (labSqlEditor && execSqlBtn) {
+        labSqlEditor.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                execSqlBtn.click();
+            }
+        });
+    }
     if (execSqlBtn) {
         execSqlBtn.addEventListener('click', async () => {
             const editor = document.getElementById('lab-sql-editor');
@@ -900,13 +925,172 @@ document.addEventListener('DOMContentLoaded', () => {
             execSqlBtn.disabled = true;
             outBox.innerText = `⏳ Exécution SQL sur votre instance PostgreSQL 18 (base : ${db})...`;
 
-            const res = await postApiJson('api_run_sql', {
-                sql: editor.value,
-                database: db
-            });
+            try {
+                const res = await postApiJson('api_run_sql', {
+                    sql: editor.value,
+                    database: db
+                });
+                const data = await res.json();
+                outBox.innerText = `[Instance: ${data.container || 'N/A'} | Base: ${data.database || db} | Durée: ${data.duration_ms || 0} ms]\n\n` + (data.output || '');
+            } catch (err) {
+                outBox.innerText = `❌ Erreur réseau lors de l'exécution SQL : ${err && err.message ? err.message : 'connexion impossible'}`;
+            } finally {
+                execSqlBtn.disabled = false;
+            }
+        });
+    }
+
+    // Shared helper for secondary Lab Workbench actions (savepoints, pgbench, PG18 diagnostics, readiness)
+    const runLabWorkbenchAction = async (btn, loadingMsg, action, payloadBuilder, formatOutput) => {
+        const outBox = document.getElementById('lab-sql-output');
+        if (!btn || !outBox) return;
+        const origText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = '⏳ En cours...';
+        outBox.innerText = loadingMsg;
+        try {
+            const payload = payloadBuilder();
+            const res = await postApiJson(action, payload);
             const data = await res.json();
-            execSqlBtn.disabled = false;
-            outBox.innerText = `[Instance: ${data.container || 'N/A'} | Base: ${data.database || db} | Durée: ${data.duration_ms || 0} ms]\n\n` + (data.output || '');
+            outBox.innerText = formatOutput(data, payload);
+        } catch (err) {
+            outBox.innerText = `❌ Erreur réseau (${action}) : ${err && err.message ? err.message : 'requête échouée'}`;
+        } finally {
+            btn.disabled = false;
+            btn.innerText = origText;
+        }
+    };
+
+    const getSanitizedSavepointName = () => {
+        const inp = document.getElementById('lab-savepoint-name');
+        const raw = inp ? inp.value.trim() : 'checkpoint_1';
+        const cleaned = raw.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 32);
+        const finalName = cleaned || 'checkpoint_1';
+        if (inp) inp.value = finalName;
+        return finalName;
+    };
+
+    const btnSavepointCreate = document.getElementById('btn-savepoint-create');
+    if (btnSavepointCreate) {
+        btnSavepointCreate.addEventListener('click', () => {
+            const db = getSelectedLabDb();
+            const name = getSanitizedSavepointName();
+            runLabWorkbenchAction(
+                btnSavepointCreate,
+                `⏳ Création du savepoint '${name}' sur la base ${db}...`,
+                'api_lab_savepoint',
+                () => ({ op: 'create', name, db }),
+                (data) => {
+                    const status = data.success ? '✅ SAVEPOINT CRÉÉ' : '❌ ÉCHEC SAVEPOINT';
+                    return `[${status} | Nom: ${data.name || name} | Base: ${data.database || db} | Mode: ${data.mode || 'sandbox'}]\n\n`
+                        + [data.message || '', data.output || ''].filter(Boolean).join('\n');
+                }
+            );
+        });
+    }
+
+    const btnSavepointRestore = document.getElementById('btn-savepoint-restore');
+    if (btnSavepointRestore) {
+        btnSavepointRestore.addEventListener('click', () => {
+            const db = getSelectedLabDb();
+            const name = getSanitizedSavepointName();
+            runLabWorkbenchAction(
+                btnSavepointRestore,
+                `⏳ Restauration du savepoint '${name}' sur la base ${db}...`,
+                'api_lab_savepoint',
+                () => ({ op: 'restore', name, db }),
+                (data) => {
+                    const status = data.success ? '✅ SAVEPOINT RESTAURÉ' : '❌ ÉCHEC RESTAURATION';
+                    return `[${status} | Nom: ${data.name || name} | Base: ${data.database || db} | Mode: ${data.mode || 'sandbox'}]\n\n`
+                        + [data.message || '', data.output || ''].filter(Boolean).join('\n');
+                }
+            );
+        });
+    }
+
+    const btnRunPgbench = document.getElementById('btn-run-pgbench');
+    if (btnRunPgbench) {
+        btnRunPgbench.addEventListener('click', () => {
+            const db = getSelectedLabDb();
+            runLabWorkbenchAction(
+                btnRunPgbench,
+                `⏳ Exécution du benchmark borné pgbench (4 clients / 2s) sur ${db}...`,
+                'api_lab_pgbench',
+                () => ({ clients: 4, duration: 2, select_only: false, db }),
+                (data) => {
+                    const header = `[BENCHMARK PGBENCH | Base: ${data.database || db} | Clients: ${data.clients ?? 4} | Durée: ${data.duration_seconds ?? 2}s | Mode: ${data.mode || 'sandbox'}]`;
+                    const metrics = (data.tps !== undefined)
+                        ? `Débit : ${data.tps} TPS | Latence moyenne : ${data.latency_avg_ms ?? 'N/A'} ms | Transactions : ${data.transactions ?? 'N/A'}`
+                        : '';
+                    return [header, metrics, data.message || '', data.output || ''].filter(Boolean).join('\n\n');
+                }
+            );
+        });
+    }
+
+    const btnPgDiag = document.getElementById('btn-pg-diag');
+    if (btnPgDiag) {
+        btnPgDiag.addEventListener('click', () => {
+            const db = getSelectedLabDb();
+            runLabWorkbenchAction(
+                btnPgDiag,
+                `⏳ Collecte de la télémétrie PostgreSQL 18 (pg_stat_activity, pg_settings, cache hit) sur ${db}...`,
+                'api_lab_pg_diag',
+                () => ({ db }),
+                (data) => {
+                    const header = `[DIAGNOSTIC LIVE PG18 | Base: ${data.database || db} | Container: ${data.container || 'N/A'} | Mode: ${data.mode || 'sandbox'}]`;
+                    if (data.output) {
+                        return `${header}\n\n${data.output}`;
+                    }
+                    const details = [];
+                    if (data.server_version) details.push(`Version : ${data.server_version}`);
+                    if (data.cache_hit_ratio !== undefined) details.push(`Cache Hit Ratio : ${data.cache_hit_ratio}%`);
+                    if (data.settings && typeof data.settings === 'object') {
+                        details.push('Paramètres clés :\n' + Object.entries(data.settings).map(([k, v]) => `  • ${k} = ${v}`).join('\n'));
+                    }
+                    if (data.activity && typeof data.activity === 'object') {
+                        const a = data.activity;
+                        const actSummary = `Activité backends : ${a.total_backends ?? 0} total (${a.active ?? 0} actif, ${a.idle ?? 0} idle, ${a.idle_in_transaction ?? 0} idle-in-tx, ${a.waiting_locks ?? 0} lock-wait)`;
+                        const sessLines = Array.isArray(a.sessions)
+                            ? a.sessions.map((s) => `  • PID ${s.pid} [${s.usename}@${s.datname}] ${s.state} : ${(s.query || '').slice(0, 90)}`).join('\n')
+                            : '';
+                        details.push(sessLines ? `${actSummary}\n${sessLines}` : actSummary);
+                    }
+                    if (Array.isArray(data.databases)) {
+                        details.push('Bases de données :\n' + data.databases.map((d) => `  • ${d.datname} : ${d.size_pretty ?? ''} (hit ${d.cache_hit_ratio ?? 'N/A'}%)`).join('\n'));
+                    }
+                    if (Array.isArray(data.extensions)) {
+                        details.push(`Extensions : ${data.extensions.join(', ')}`);
+                    }
+                    if (details.length === 0) details.push(JSON.stringify(data, null, 2));
+                    return [header, data.message || '', ...details].filter(Boolean).join('\n\n');
+                }
+            );
+        });
+    }
+
+    const btnCheckReadiness = document.getElementById('btn-check-readiness');
+    if (btnCheckReadiness) {
+        btnCheckReadiness.addEventListener('click', () => {
+            const labId = btnCheckReadiness.getAttribute('data-lab-id') || '';
+            runLabWorkbenchAction(
+                btnCheckReadiness,
+                `⏳ Vérification des prérequis système, base cible et extensions pour ${labId}...`,
+                'api_lab_readiness',
+                () => ({ lab_id: labId }),
+                (data) => {
+                    const status = data.ready ? '✅ PRÊT' : '⚠️ PRÉREQUIS INCOMPLETS';
+                    const targetDb = data.recommended_database || data.database || getSelectedLabDb();
+                    const header = `[READINESS LAB ${labId} | Statut: ${status} | Base cible: ${targetDb}]`;
+                    const checks = Array.isArray(data.checks)
+                        ? data.checks.map((c) => {
+                            const line = `${c.ok ? '✔' : '✘'} ${c.label || c.name || 'Check'}${c.detail ? ' — ' + c.detail : ''}`;
+                            return (!c.ok && c.remediation) ? `${line}\n    → Remédiation : ${c.remediation}` : line;
+                        }).join('\n')
+                        : '';
+                    return [header, checks, data.message || '', data.output || ''].filter(Boolean).join('\n\n');
+                }
+            );
         });
     }
 
@@ -1176,6 +1360,33 @@ document.addEventListener('DOMContentLoaded', () => {
         const sel = e.target.closest('[data-auto-submit="change"]');
         if (sel && sel.form) {
             sel.form.submit();
+            return;
+        }
+        // Delegated bulk checkbox toggle for Admin user tables
+        const master = e.target.closest('[data-bulk-select-all]');
+        if (master) {
+            const targetSelector = (master.getAttribute('data-bulk-select-all') || '').trim();
+            const scope = master.closest('form') || master.closest('table') || document;
+            let checkboxes = [];
+            if (targetSelector !== '' && targetSelector !== '1' && targetSelector !== 'true') {
+                try {
+                    checkboxes = Array.from(scope.querySelectorAll(targetSelector));
+                } catch (_) {
+                    checkboxes = [];
+                }
+                if (checkboxes.length === 0) {
+                    checkboxes = Array.from(scope.querySelectorAll(`input[type="checkbox"][name="${targetSelector}"]`));
+                }
+            }
+            if (checkboxes.length === 0) {
+                const table = master.closest('table') || scope;
+                checkboxes = Array.from(table.querySelectorAll('tbody input[type="checkbox"]:not([disabled])'));
+            }
+            checkboxes.forEach((cb) => {
+                if (cb !== master) {
+                    cb.checked = Boolean(master.checked);
+                }
+            });
         }
     });
 

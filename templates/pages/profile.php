@@ -3,9 +3,9 @@ declare(strict_types=1);
 use LightPath\LMS\Core\Security;
 ?>
 
-<div style="max-width: 680px; margin: 0 auto;">
+<div class="profile-container">
     <span class="badge-code">PARAMÈTRES DU COMPTE</span>
-    <h1 style="font-size: 1.65rem; margin: 0.4rem 0 1.25rem;">👤 Mon Profil Apprenant / Formateur</h1>
+    <h1 class="hero-title-lg mt-xs mb-md">👤 Mon Profil Apprenant / Formateur</h1>
 
     <div class="lms-card">
         <form method="POST" action="index.php?page=profile&action=update_profile">
@@ -34,7 +34,7 @@ use LightPath\LMS\Core\Security;
                 <label for="profile-new-password">Nouveau Mot de Passe (laisser vide pour ne pas modifier)</label>
                 <input type="password" id="profile-new-password" name="new_password" class="form-control" autocomplete="new-password" minlength="6" placeholder="Minimum 6 caractères"/>
             </div>
-            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
+            <button type="submit" class="btn btn-primary w-100 mt-xs">
                 💾 Enregistrer mes Modifications
             </button>
         </form>

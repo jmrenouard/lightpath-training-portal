@@ -1,6 +1,6 @@
 # Docker Classroom Labs & SQL Workbench Guide — LightPath Training Portal
 
-> **Scope:** Per-learner PostgreSQL 18 container orchestration (`DockerManager`), non-blocking `proc_open()` timeouts, resource quotas, `SakilaSeeder` dataset initialization, sandboxed SQL workbench (`LabSqlRunner`), 34 Qualiopi verification oracles, Chaos Engineering fault injection, and `bin/lab-runner.php` CLI operations.
+> **Scope:** Per-learner PostgreSQL 18 container orchestration (`DockerManager`), non-blocking `proc_open()` timeouts, resource quotas, `SakilaSeeder` dataset initialization, sandboxed SQL workbench (`LabSqlRunner`), per-user savepoints, bounded `pgbench`, live PG18 diagnostics, 34-lab readiness checks, idle container reaper, Chaos Engineering fault injection/healing, and `bin/lab-runner.php` CLI operations.
 
 ---
 
@@ -10,11 +10,11 @@ Each authenticated learner receives a dedicated isolated PostgreSQL 18 container
 
 ```mermaid
 flowchart LR
-    UI["Lab View (templates/pages/lab_view.php)"] -->|"Base64 UTF-8 SQL + CSRF"| API["public/index.php (api_run_sql / api_docker_action / api_seed_lab)"]
-    API -->|"execCommandWithTimeout (proc_open)"| DM["DockerManager (native / wsl2 / cloud_simulated)"]
-    API -->|"psql -X -U lms_student (15s timeout)"| RUN["LabSqlRunner (formation_pg / dvdrental / postgres)"]
-    DM -->|"Seed & Grants"| SEED["SakilaSeeder (12 Sakila + 4 pgbench + lms_student)"]
-    DM -->|"lp_pg18_user_<id> (Port 5500 + uid)"| CONT["PostgreSQL 18 Container (1 CPU, 1 GiB RAM, 512M SHM, 256 PIDs)"]
+    UI["Lab View (templates/pages/lab_view.php)"] -->|"Base64 UTF-8 SQL + CSRF + Same-Origin"| API["public/index.php -> src/Http/LabApiController.php"]
+    API -->|"execCommandWithTimeout (proc_open)"| DM["DockerManager (Savepoints / pgbench / Reaper / Heal)"]
+    API -->|"psql -X -U lms_student (15s timeout)"| RUN["LabSqlRunner (Execute / Schema / PG18 Diag / Readiness / 34 Oracles)"]
+    DM -->|"Seed & Grants"| SEED["SakilaSeeder (12 Sakila + 4 pgbench + lms_student + pg_read_all_stats)"]
+    DM -->|"lp_pg18_user_{id} (Port 5500 + uid)"| CONT["PostgreSQL 18 Container (1 CPU, 1 GiB RAM, 512M SHM, 256 PIDs)"]
 ```
 
 ### Runtime Detection & Graceful Degradation
@@ -52,7 +52,7 @@ When a container starts, resets, or re-seeds (`api_seed_lab` / `seedUserContaine
 | **PostgreSQL 18 Extensions** | `pageinspect`, `pg_stat_statements`, `pgstattuple`, `postgres_fdw` | Pre-installed in `public` |
 | **Sakila / Pagila Schema (12 Tables)** | `actor` (`14`), `category` (`10`), `film` (`18`), `film_actor` (`26`), `film_category` (`20`), `address` (`12`), `store` (`2`), `staff` (`2`), `customer` (`12`), `inventory` (`30`), `rental` (`24`), `payment` (`24`) | Includes unreturned rentals (`return_date IS NULL`) and multiple MPAA ratings for realistic SQL/join/index labs |
 | **`pgbench` Benchmark Schema (4 Tables)** | `pgbench_branches` (`2`), `pgbench_tellers` (`20`), `pgbench_accounts` (`1000`), `pgbench_history` (`10`) | Generated via `generate_series(1, 1000)` for `EXPLAIN` and locking labs |
-| **Sandbox Role** | `lms_student` | Non-superuser with `pg_read_all_stats` + `public` DDL/DML; zero OS/filesystem privileges |
+| **Sandbox Role** | `lms_student` | Non-superuser with `pg_read_all_stats`, `pg_stat_scan_tables`, and `public` DDL/DML; zero OS/filesystem privileges |
 
 ---
 
@@ -73,15 +73,40 @@ When a container starts, resets, or re-seeds (`api_seed_lab` / `seedUserContaine
 - When Docker is active, rows are queried live from `information_schema.columns` joined with `pg_catalog.pg_class.reltuples` (`source => 'Docker PostgreSQL 18 Live'`).
 - When inactive, returns the aligned static reference catalog (`source => 'Catalogue Statique Sakila / PG18'`) covering 12+ `dvdrental` Sakila tables, `formation_pg` tables, and `postgres` `pg_catalog` observability views.
 
-### Lab Verification Oracles & Solution Runner
+### Lab Verification Oracles, Workbench Controls & Solution Runner
 - **`api_validate_lab` / `api_run_oracle`:** Evaluates 34 lab-specific SQL oracles (`LabSqlRunner::getLabOracles()`, IDs `01`..`29` + `sql_01`..`sql_05`) plus expected marker verification (`extractExpectedMarkers()`), automatically awarding lab completion when `passed === true`.
 - **`api_run_lab_solution`:** Guarded by trainer `lock_solutions`; returns both `steps_executed` and `steps_count` alongside per-step outputs.
+- **Interactive Workbench Ergonomics (`templates/pages/lab_view.php` + `public/assets/js/app.js`):**
+  - `Ctrl+Enter` / `Meta+Enter` inside `#lab-sql-editor` submits SQL directly (`#btn-execute-sql`).
+  - Secondary `.workbench-subtoolbar` provides 1-click Savepoint Create/Restore (`#lab-savepoint-name`, `#btn-savepoint-create`, `#btn-savepoint-restore`), bounded `pgbench` (`#btn-run-pgbench`), live PG18 Diagnostics (`#btn-pg-diag`), and 34-lab Readiness checks (`#btn-check-readiness`), with `aria-live="polite"` output feedback (`#lab-sql-output`, `#docker-action-feedback`).
 
 ---
 
-## 5. Chaos Engineering Fault Injection (`DockerManager::triggerChaosScenario()`)
+## 5. Sandbox Savepoints, Bounded `pgbench`, PG18 Diagnostics & 34-Lab Readiness
 
-Trainers and learners (when feature flag `chaos_engineering` is enabled) can inject and heal four controlled production failure scenarios against running `lp_pg18_user_*` / `pg_formation_primary` instances via `api_chaos`:
+### 5.1 Per-User Sandbox Savepoints (`DockerManager` + `api_lab_savepoint`)
+Learners can snapshot and roll back their lab database state before risky schema or tuning experiments:
+- **Methods:** `createSavepoint()`, `listSavepoints()`, `restoreSavepoint()`, `deleteSavepoint()`.
+- **Guardrails:** Enforces strict savepoint naming (`^[a-zA-Z0-9_-]{1,32}$`), database allowlist (`['formation_pg', 'dvdrental', 'postgres']`), cap of **5 savepoints per user**, and `$allowSharedFallback = false` tenant isolation (staff/CLI may pass `$allowSharedFallback = true`).
+- **Execution:** Uses compressed `pg_dump -Fc --clean --if-exists` / `pg_restore` in `/tmp/lms_savepoints` on live Docker containers; persists deterministic savepoint metadata (`savepoints_state_<userId>`) via `StorageInterface` in `cloud_simulated` mode.
+
+### 5.2 Bounded `pgbench` Benchmarking (`DockerManager::runPgbenchBenchmark()` + `api_lab_pgbench`)
+- Clamps concurrency (`$clients` `1..8`) and duration (`$durationSeconds` `1..5`), with optional `$selectOnly` read-only mode against `formation_pg` (or allowed DBs), executed via non-blocking `execCommandWithTimeout()`.
+- Returns structured telemetry (`success`, `mode`, `clients`, `duration_seconds`, `select_only`, `tps`, `latency_avg_ms`, `transactions`, `output`, `container`) for live workshop tuning comparisons.
+
+### 5.3 Live PostgreSQL 18 Diagnostics (`LabSqlRunner::inspectPgDiagnostics()` + `api_lab_pg_diag`)
+- Leveraging `pg_read_all_stats` granted to `lms_student` in [SakilaSeeder.php](../src/Docker/SakilaSeeder.php), inspects active sessions (`pg_stat_activity`), core GUCs (`pg_settings` for `shared_buffers`, `work_mem`, `max_connections`, `statement_timeout`, `io_method`), buffer cache hit ratio, and database sizes (with rich simulated PG18 payloads under `LMS_DOCKER_FORCE_SIMULATED=1`).
+
+### 5.4 34-Lab Readiness Matrix (`LabSqlRunner::checkLabReadiness()` + `api_lab_readiness`)
+- Maps every lab (`01..29`, `sql_01..sql_05`) against `LabSqlRunner::getLabOracles()`, recommended target database (`dvdrental` vs `formation_pg`), required extensions (`pageinspect`, `pg_stat_statements`, `pgstattuple`, `postgres_fdw`), and active container status, returning actionable `ready` and `checks` diagnostics.
+
+---
+
+## 6. Chaos Engineering, Idle Container Reaper & Fleet Hygiene
+
+### 6.1 Chaos Fault Injection (`DockerManager::triggerChaosScenario()`)
+
+Trainers and learners (when feature flag `chaos_engineering` is enabled — automatically dependent on `docker_labs`) can inject and heal four controlled production failure scenarios against running `lp_pg18_user_*` / `pg_formation_primary` instances via `api_chaos`:
 
 | Scenario | `inject` Behavior | `heal` Behavior |
 | :--- | :--- | :--- |
@@ -90,14 +115,21 @@ Trainers and learners (when feature flag `chaos_engineering` is enabled) can inj
 | `idle_in_tx` | Creates `public.chaos_sessions` with `1,000` rows for idle transaction monitoring | `DROP TABLE IF EXISTS public.chaos_sessions CASCADE;` |
 | `wal_pressure` | Inserts `25,000` hashed rows into `public.chaos_wal_burst` and triggers `CHECKPOINT;` | `DROP TABLE IF EXISTS public.chaos_wal_burst CASCADE;` |
 
+### 6.2 Idle Container Reaper, Fleet Summary & Chaos Heal
+- **Activity Heartbeat (`DockerManager::touchContainerActivity()`):** Updates per-container `last_activity_at` metadata whenever lifecycle or SQL workbench operations execute.
+- **Fleet Summary (`DockerManager::getFleetSummary()`):** Aggregates total/running/stopped user containers, host `max_containers` cap, primary cluster status, active runtime mode (`docker_live` vs `cloud_simulated`), and idle container counts for the Trainer/Admin Docker tab.
+- **Idle Reaper (`DockerManager::reapIdleContainers(int $maxIdleSeconds = 3600)`):** Safely stops idle student containers exceeding `$maxIdleSeconds` (callable from **Administration -> Docker** or scheduled via `bin/lab-runner.php reap-idle`).
+- **Fleet Chaos Heal (`DockerManager::healChaosScenario()`):** Cleans residual chaos fault tables/locks across active lab instances safely (`admin_heal_chaos` / `bin/lab-runner.php heal`).
+
 ---
 
-## 6. CLI Reference (`bin/lab-runner.php`)
+## 7. CLI Reference (`bin/lab-runner.php`)
 
-Manage student lab containers directly from the host terminal (append `--json` to any subcommand for machine-readable output):
+Manage student lab containers, checkpoints, benchmarks, diagnostics, and fleet hygiene directly from the host terminal (append `--json` to any subcommand for machine-readable output):
 
 ```bash
 php bin/lab-runner.php list [--json]
+php bin/lab-runner.php fleet [--json]
 php bin/lab-runner.php status <user_id> [--json]
 php bin/lab-runner.php start <user_id> [--json]
 php bin/lab-runner.php stop <user_id> [--json]
@@ -107,6 +139,13 @@ php bin/lab-runner.php seed <user_id> [all|sakila|pgbench] [--no-reset] [--json]
 php bin/lab-runner.php logs <user_id> [tail:10..200] [--json]
 php bin/lab-runner.php stats <user_id> [--json]
 php bin/lab-runner.php oracle <user_id> <lab_id> [--json]
+php bin/lab-runner.php savepoint <user_id> <name|list|create|restore|delete> [name_or_db] [db] [--json]
+php bin/lab-runner.php restore <user_id> <name> [db] [--json]
+php bin/lab-runner.php bench <user_id> [clients:1..8] [duration:1..5] [db] [--select-only] [--json]
+php bin/lab-runner.php diag <user_id> [db] [--json]
+php bin/lab-runner.php readiness <user_id> <lab_id> [--json]
+php bin/lab-runner.php reap-idle [max_idle_seconds] [--json]
+php bin/lab-runner.php heal [course_slug] [--json]
 php bin/lab-runner.php stop-all [--json]
 php bin/lab-runner.php prune [--json]
 php bin/lab-runner.php help
