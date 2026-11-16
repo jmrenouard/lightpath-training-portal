@@ -1,18 +1,27 @@
 {
     "name": "lightpath/training-portal",
-    "description": "Plateforme LMS Multi-Formations Interactive (PHP 8.3) avec Orchestration de Labs Docker par Utilisateur, Téléchargements Multi-Formats et Conformité Qualiopi",
+    "description": "Interactive multi-course LMS portal (PHP 8.3) with per-learner Docker lab orchestration, multi-format exports, and Qualiopi compliance",
     "type": "project",
-    "license": "Proprietary",
+    "license": "MIT",
+    "homepage": "https://www.lightpath.fr",
     "authors": [
         {
             "name": "Jean-Marie Renouard",
             "email": "contact@lightpath.fr",
             "homepage": "https://www.lightpath.fr",
-            "role": "Expert Bases de Données & DataOps"
+            "role": "Database & DataOps Expert"
         }
     ],
     "require": {
-        "php": ">=8.1"
+        "php": ">=8.3",
+        "ext-json": "*",
+        "ext-pdo": "*"
+    },
+    "suggest": {
+        "ext-mbstring": "Improves UTF-8 string handling performance (pure-PHP fallback included)",
+        "ext-zip": "Required for native SCORM ZIP package generation",
+        "ext-pdo_pgsql": "Required when using PostgreSQL PDO storage backend",
+        "ext-pdo_sqlite": "Required when using SQLite PDO storage backend"
     },
     "autoload": {
         "psr-4": {
@@ -21,6 +30,13 @@
     },
     "scripts": {
         "test": "php tests/run_tests.php",
+        "test:http": "php tests/test_functional_http.php",
+        "test:audit": "php tests/test_coverage_audit.php",
+        "test:all": [
+            "@test",
+            "@test:http",
+            "@test:audit"
+        ],
         "serve": "php -S localhost:8080 -t public"
     }
 }

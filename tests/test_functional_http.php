@@ -375,6 +375,9 @@ if (!is_array($env)) {
 }
 $env['LMS_DATA_DIR'] = $tmpDataDir;
 $env['LMS_DOCKER_FORCE_SIMULATED'] = '1';
+$env['LMS_INIT_ADMIN_PASSWORD'] = 'LightPath2026!';
+$env['LMS_INIT_TRAINER_PASSWORD'] = 'Formateur2026!';
+$env['LMS_INIT_STUDENT_PASSWORD'] = 'Stagiaire2026!';
 
 $proc = null;
 $serverOutLog = $tmpRoot . DIRECTORY_SEPARATOR . 'php_server_out.log';
@@ -615,13 +618,14 @@ try {
     $inlineCsp = (string)($studentClient->firstHeader($inlineHtmlResp['headers'], 'content-security-policy') ?? '');
     $inlineScriptSrc = preg_match('/script-src\s+([^;]+)/i', $inlineCsp, $inSm) ? $inSm[0] : '';
     $inlineStyleSrc = preg_match('/style-src\s+([^;]+)/i', $inlineCsp, $inStm) ? $inStm[0] : '';
+    $hasMermaidInitScript = str_contains($inlineHtmlResp['body'], 'mermaid.initialize');
     $runner->assertTrue(
         str_contains($inlineHtmlResp['body'], 'EventTarget.prototype.addEventListener')
         && str_contains($inlineStyleSrc, "'unsafe-inline'")
         && str_contains($inlineScriptSrc, "'sha256-Y+Iy31+SIVnkv2t35OtFkyF8C43lr3XQSadODH27V58='")
-        && str_contains($inlineScriptSrc, "'sha256-fIvSulwFNp3RteiAZGkbvt+fvUeVJoTUB439YMvw0EA='")
+        && (!$hasMermaidInitScript || str_contains($inlineScriptSrc, "'sha256-fIvSulwFNp3RteiAZGkbvt+fvUeVJoTUB439YMvw0EA='"))
         && !str_contains($inlineScriptSrc, 'unsafe-inline'),
-        'Standalone HTML preview emits standalone style-src CSP while keeping script-src SHA-256 strict with Mermaid hash'
+        'Standalone HTML preview emits standalone style-src CSP while keeping script-src SHA-256 strict'
     );
 
     // HTTP method enforcement: GET against mutating api_run_sql rejects with 405 + Allow: POST; read-only api_docker_status allows GET.

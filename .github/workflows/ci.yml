@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      LMS_DOCKER_FORCE_SIMULATED: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, zip, pdo_sqlite, pdo_pgsql
+          coverage: none
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: PHP syntax lint
+        run: find config src public templates bin tests -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: JavaScript syntax check
+        run: node --check public/assets/js/app.js && node --check tests/e2e/run_playwright_campaign.mjs && node --check tests/e2e/test_adversarial_challenger.mjs
+
+      - name: Run unit and contract suite
+        run: php tests/run_tests.php
+
+      - name: Run adversarial suites
+        run: for f in tests/test_adversarial_b*.php; do php "$f"; done
+
+      - name: Run functional HTTP suite
+        run: php tests/test_functional_http.php
+
+      - name: Run coverage and security static audit
+        run: php tests/test_coverage_audit.php

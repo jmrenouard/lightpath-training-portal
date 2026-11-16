@@ -12,12 +12,33 @@ class MarkdownParser
 
     public function __construct(?string $sourceRoot = null, ?string $cacheDir = null)
     {
-        $defaultRoot = dirname(__DIR__, 3) . '/training_postgresql';
-        $this->sourceRoot = $sourceRoot ?? (realpath($defaultRoot) ?: $defaultRoot);
+        if ($sourceRoot !== null) {
+            $this->sourceRoot = $sourceRoot;
+        } else {
+            $envRoot = getenv('LMS_COURSE_ROOT');
+            $adjacentRoot = dirname(__DIR__, 3) . '/training_postgresql';
+            $demoRoot = dirname(__DIR__, 2) . '/examples/demo-course';
+            if (is_string($envRoot) && $envRoot !== '' && is_dir($envRoot)) {
+                $this->sourceRoot = realpath($envRoot) ?: $envRoot;
+            } elseif (is_dir($adjacentRoot)) {
+                $this->sourceRoot = realpath($adjacentRoot) ?: $adjacentRoot;
+            } else {
+                $this->sourceRoot = realpath($demoRoot) ?: $demoRoot;
+            }
+        }
         $this->cacheDir = $cacheDir ?? (dirname(__DIR__, 2) . '/storage/data/parsed_cache');
         if (!is_dir($this->cacheDir)) {
             @mkdir($this->cacheDir, 0775, true);
         }
+    }
+
+    /**
+     * Checks whether the parser sourceRoot targets the bundled standalone demo course-pack.
+     */
+    private function isDemoCourseRoot(): bool
+    {
+        $normalized = rtrim(str_replace('\\', '/', $this->sourceRoot), '/');
+        return str_ends_with($normalized, '/examples/demo-course');
     }
 
     /**
@@ -37,9 +58,10 @@ class MarkdownParser
         }
         $mtime = (int)@filemtime($mdPath);
         $moduleId = pathinfo($mdPath, PATHINFO_FILENAME);
+        $isDemoCourse = $this->isDemoCourseRoot();
         $manifestPath = dirname(__DIR__, 2) . '/public/assets/slides_cache/' . $moduleId . '/manifest.json';
-        $manifestMtime = is_file($manifestPath) ? (int)@filemtime($manifestPath) : 0;
-        $cacheKey = md5('mod_v8_rca158:' . $courseSlug . ':' . $mdPath . ':' . $mtime . ':' . $manifestMtime);
+        $manifestMtime = (!$isDemoCourse && is_file($manifestPath)) ? (int)@filemtime($manifestPath) : 0;
+        $cacheKey = md5('mod_v8_rca158:' . $courseSlug . ':' . $mdPath . ':' . $mtime . ':' . $manifestMtime . ':' . ($isDemoCourse ? 'demo' : 'full'));
         $cacheFile = $this->cacheDir . '/' . $cacheKey . '.json';
         if (is_file($cacheFile)) {
             $cached = @json_decode((string)@file_get_contents($cacheFile), true);
@@ -270,7 +292,7 @@ class MarkdownParser
      */
     public function extractSlides(string $markdown, string $courseSlug = 'postgresql-18', array $quiz = [], ?string $moduleId = null): array
     {
-        if ($moduleId !== null && $moduleId !== '') {
+        if ($moduleId !== null && $moduleId !== '' && !$this->isDemoCourseRoot()) {
             $manifestFile = dirname(__DIR__, 2) . '/public/assets/slides_cache/' . $moduleId . '/manifest.json';
             if (is_file($manifestFile)) {
                 $manifest = @json_decode((string)@file_get_contents($manifestFile), true);

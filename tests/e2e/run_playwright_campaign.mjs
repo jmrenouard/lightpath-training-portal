@@ -13,7 +13,12 @@ import net from 'node:net';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORTAL_ROOT = resolve(__dirname, '..', '..');
-const TRAINING_ROOT = resolve(PORTAL_ROOT, '..', 'training_postgresql');
+const EXPLICIT_COURSE_ROOT = process.env.LMS_COURSE_ROOT ? resolve(process.env.LMS_COURSE_ROOT) : '';
+const ADJACENT_TRAINING_ROOT = resolve(PORTAL_ROOT, '..', 'training_postgresql');
+const TRAINING_ROOT = (EXPLICIT_COURSE_ROOT && existsSync(EXPLICIT_COURSE_ROOT))
+    ? EXPLICIT_COURSE_ROOT
+    : ADJACENT_TRAINING_ROOT;
+const HAS_EXTERNAL_TRAINING_ROOT = existsSync(TRAINING_ROOT);
 const PUBLIC_DIR = join(PORTAL_ROOT, 'public');
 const MCP_CONFIG_PATH = join(PORTAL_ROOT, 'config', 'playwright-mcp.config.json');
 const REPORT_DIR = join(PORTAL_ROOT, 'storage', 'tmp');
@@ -205,7 +210,13 @@ async function main() {
 
     const phpProc = spawn('php', ['-S', `127.0.0.1:${port}`, '-t', PUBLIC_DIR], {
         cwd: PORTAL_ROOT,
-        env: { ...process.env, LMS_DATA_DIR: tempDataDir },
+        env: {
+            ...process.env,
+            LMS_DATA_DIR: tempDataDir,
+            LMS_INIT_ADMIN_PASSWORD: 'LightPath2026!',
+            LMS_INIT_TRAINER_PASSWORD: 'Formateur2026!',
+            LMS_INIT_STUDENT_PASSWORD: 'Stagiaire2026!',
+        },
         stdio: 'ignore',
         windowsHide: true,
     });
@@ -454,8 +465,13 @@ async function main() {
             };
         }`);
 
-        assert(slidesAudit.totalSlides === 58 && slidesAudit.outlineCount === 58, 'Module 01 charge exactement 58 diapositives Studio 16:9 et 58 entrées de sommaire');
-        assert(slidesAudit.activeSlideIdx === '3' && slidesAudit.activeImgWidth === 1440, 'Navigation au clic vers la Slide 4 avec rendu PNG haute définition (1440 px)');
+        if (HAS_EXTERNAL_TRAINING_ROOT) {
+            assert(slidesAudit.totalSlides === 58 && slidesAudit.outlineCount === 58, 'Module 01 charge exactement 58 diapositives Studio 16:9 et 58 entrées de sommaire');
+            assert(slidesAudit.activeSlideIdx === '3' && slidesAudit.activeImgWidth === 1440, 'Navigation au clic vers la Slide 4 avec rendu PNG haute définition (1440 px)');
+        } else {
+            assert(slidesAudit.totalSlides >= 12 && slidesAudit.outlineCount === slidesAudit.totalSlides, `Demo Module 01 loads ${slidesAudit.totalSlides} interactive 16:9 slides`);
+            assert(slidesAudit.activeSlideIdx === '3', 'Demo Module 01 navigates to Slide 4 on click');
+        }
         assert(slidesAudit.pdfVisible && slidesAudit.htmlHidden, 'Bascule fluide entre Diaporama HTML5 et Lecteur PDF Continu en colonne principale');
         assert(slidesAudit.leftCollapsed && slidesAudit.rightCollapsed, 'Réduction/extension en 1 clic des barres verticales gauche et droite fonctionnelle');
         assert(slidesAudit.isLight && slidesAudit.lightLogo.includes('lightpath_logo_dark_text.png'), 'Bascule Thème Sombre / Clair et permutation automatique des logos transparents');
@@ -473,6 +489,7 @@ async function main() {
             return {
                 hasIframe: true,
                 status: res.status,
+                hasUnloadHash: csp.includes("'sha256-Y+Iy31+SIVnkv2t35OtFkyF8C43lr3XQSadODH27V58='"),
                 hasMermaidHash: csp.includes("'sha256-fIvSulwFNp3RteiAZGkbvt+fvUeVJoTUB439YMvw0EA='"),
                 noUnsafeInlineScript: !/script-src[^;]*unsafe-inline/i.test(csp),
             };
@@ -481,11 +498,12 @@ async function main() {
         assert(
             previewAudit.hasIframe
             && previewAudit.status === 200
-            && previewAudit.hasMermaidHash
+            && previewAudit.hasUnloadHash
+            && (!HAS_EXTERNAL_TRAINING_ROOT || previewAudit.hasMermaidHash)
             && previewAudit.noUnsafeInlineScript
             && previewConsole.text.includes('Errors: 0')
             && !previewConsole.text.includes('Content Security Policy'),
-            'Module 01 html_preview iframe emits Mermaid SHA-256 CSP without script unsafe-inline and zero console errors',
+            'Module 01 html_preview iframe emits strict SHA-256 CSP without script unsafe-inline and zero console errors',
             JSON.stringify(previewAudit)
         );
 
@@ -599,12 +617,12 @@ async function main() {
             `Edge Case Mobile 375x812 : Chaîne continue de 255 caractères sans espace contenue sans débordement (articleRight=${longStringMetrics.articleRight} <= ${longStringMetrics.innerWidth})`
         );
 
-        // 6. Comprehensive E2E Audit via @playwright/mcp: 4 Tracks, 34 Modules (Reader + Slides), 34 Labs, Enterprise Views & 172 HTML Deliverables
-        console.log('\n--- 6. Audit Exhaustif E2E : 4 Parcours, 34 Modules, 34 Labs, Vues Enterprise & 172 Livrables HTML ---');
+        // 6. Comprehensive E2E Audit via @playwright/mcp: Tracks, Modules (Reader + Slides), Labs, Enterprise Views & HTML Deliverables
+        console.log('\n--- 6. Audit Exhaustif E2E : Parcours, Modules, Labs, Vues Enterprise & Livrables HTML ---');
         await mcp.callTool('browser_resize', { width: 1440, height: 900 });
         await mcp.callTool('browser_navigate', { url: `${baseUrl}/index.php?page=catalog` });
 
-        // 6.1 Audit 4 Tracks (Modules + Labs) + Cheatsheets / Referentiel / Tools Tabs + Enterprise Views
+        // 6.1 Audit Tracks (Modules + Labs) + Cheatsheets / Referentiel / Tools Tabs + Enterprise Views
         const tracksAndEnterpriseAudit = await mcp.evaluateJson(`async () => {
             const hasRawTokens = (root) => {
                 if (!root) return false;
@@ -613,7 +631,10 @@ async function main() {
                 const txt = clone.textContent || '';
                 return txt.includes('**') || txt.includes('\`');
             };
-            const trackIds = ['cursus-complet', 'performance-tuning', 'ingenierie-specialisee', 'fondamentaux-sql'];
+            const isFullCourse = ${JSON.stringify(HAS_EXTERNAL_TRAINING_ROOT)};
+            const trackIds = isFullCourse
+                ? ['cursus-complet', 'performance-tuning', 'ingenierie-specialisee', 'fondamentaux-sql']
+                : ['cursus-complet'];
             let trackPagesOk = 0;
             let trackRawErrors = [];
             for (const tid of trackIds) {
@@ -632,8 +653,12 @@ async function main() {
                 'index.php?page=catalog&tab=cheatsheets',
                 'index.php?page=catalog&tab=referentiel',
                 'index.php?page=catalog&tab=tools',
-                'index.php?page=documents&tab=cheatsheets&id=cheatsheet_mod_01_introduction_postgresql_18',
-                'index.php?page=documents&tab=referentiel&id=programme_detaille',
+                isFullCourse
+                    ? 'index.php?page=documents&tab=cheatsheets&id=cheatsheet_mod_01_introduction_postgresql_18'
+                    : 'index.php?page=documents&tab=cheatsheets&id=cheatsheet_mod_01_architecture',
+                isFullCourse
+                    ? 'index.php?page=documents&tab=referentiel&id=programme_detaille'
+                    : 'index.php?page=documents&tab=referentiel&id=programme_demo_open_source',
                 'index.php?page=flashcards',
                 'index.php?page=flashcards&tab=glossary',
                 'index.php?page=diagnostic',
@@ -667,6 +692,7 @@ async function main() {
             ));
 
             return {
+                expectedTrackPages: trackIds.length * 2,
                 trackPagesOk,
                 trackRawErrors,
                 extraOk,
@@ -678,8 +704,8 @@ async function main() {
         }`);
 
         assert(
-            tracksAndEnterpriseAudit.trackPagesOk === 8 && tracksAndEnterpriseAudit.trackRawErrors.length === 0,
-            '8 / 8 vues de parcours (4 parcours × Modules & Labs) répondent en HTTP 200 avec 0 token Markdown/backtick brut',
+            tracksAndEnterpriseAudit.trackPagesOk === tracksAndEnterpriseAudit.expectedTrackPages && tracksAndEnterpriseAudit.trackRawErrors.length === 0,
+            `${tracksAndEnterpriseAudit.trackPagesOk} / ${tracksAndEnterpriseAudit.expectedTrackPages} vues de parcours répondent en HTTP 200 avec 0 token Markdown/backtick brut`,
             tracksAndEnterpriseAudit.trackRawErrors.join(', ')
         );
         assert(
@@ -687,14 +713,23 @@ async function main() {
             `${tracksAndEnterpriseAudit.extraOk} / ${tracksAndEnterpriseAudit.extraTotal} vues Enterprise (Cheatsheets, Référentiel, Tools, Reader Document, Flashcards, Glossaire, Diagnostic, Examen, Recherche, Émargement, Satisfaction) répondent en HTTP 200 avec 0 token brut`,
             tracksAndEnterpriseAudit.extraRawErrors.join(', ')
         );
-        assert(
-            tracksAndEnterpriseAudit.moduleIds.length === 34 && tracksAndEnterpriseAudit.labIds.length === 34,
-            `Découverte complète depuis le DOM LMS : ${tracksAndEnterpriseAudit.moduleIds.length} modules et ${tracksAndEnterpriseAudit.labIds.length} ateliers`
-        );
+        if (HAS_EXTERNAL_TRAINING_ROOT) {
+            assert(
+                tracksAndEnterpriseAudit.moduleIds.length === 34 && tracksAndEnterpriseAudit.labIds.length === 34,
+                `Découverte complète depuis le DOM LMS : ${tracksAndEnterpriseAudit.moduleIds.length} modules et ${tracksAndEnterpriseAudit.labIds.length} ateliers`
+            );
+        } else {
+            assert(
+                tracksAndEnterpriseAudit.moduleIds.length >= 2 && tracksAndEnterpriseAudit.labIds.length >= 1,
+                `Demo course discovery from LMS DOM: ${tracksAndEnterpriseAudit.moduleIds.length} modules and ${tracksAndEnterpriseAudit.labIds.length} labs`
+            );
+        }
 
-        // 6.2 Comprehensive audit of all 34 Modules (mode=reader and mode=slides)
+        // 6.2 Comprehensive audit of discovered Modules (mode=reader and mode=slides)
+        const minSlidesRequired = HAS_EXTERNAL_TRAINING_ROOT ? 30 : 12;
         const modulesAudit = await mcp.evaluateJson(`async () => {
             const moduleIds = ${JSON.stringify(tracksAndEnterpriseAudit.moduleIds)};
+            const minSlidesReq = ${minSlidesRequired};
             const hasRawTokens = (root) => {
                 if (!root) return false;
                 const clone = root.cloneNode(true);
@@ -730,7 +765,7 @@ async function main() {
                 const rawS = hasRawTokens(docSlides.querySelector('.app-content'));
                 totalSlidesCount += slideFrames;
                 if (slideFrames < minSlides) minSlides = slideFrames;
-                if (rSlides.status === 200 && slideFrames >= 30 && slideFrames === outlineItems && !rawS) {
+                if (rSlides.status === 200 && slideFrames >= minSlidesReq && slideFrames === outlineItems && !rawS) {
                     slidesOk++;
                 } else {
                     slidesIssues.push('slides:' + id + '(st=' + rSlides.status + ',slides=' + slideFrames + ',outline=' + outlineItems + ',raw=' + rawS + ')');
@@ -740,17 +775,25 @@ async function main() {
         }`);
 
         assert(
-            modulesAudit.readerOk === 34,
-            `34 / 34 modules en mode Lecture de Cours validés (H1 propre, grille métadonnées, sommaire TOC, Quiz >= 3 QCM, 0 token brut)`,
+            modulesAudit.readerOk === tracksAndEnterpriseAudit.moduleIds.length,
+            `${modulesAudit.readerOk} / ${tracksAndEnterpriseAudit.moduleIds.length} modules en mode Lecture de Cours validés (H1 propre, grille métadonnées, sommaire TOC, Quiz >= 3 QCM, 0 token brut)`,
             modulesAudit.readerIssues.slice(0, 5).join('; ')
         );
-        assert(
-            modulesAudit.slidesOk === 34 && modulesAudit.totalSlidesCount === 1686 && modulesAudit.minSlides >= 33,
-            `34 / 34 modules en mode Diaporama 16:9 validés (${modulesAudit.totalSlidesCount} diapositives Studio au total, min=${modulesAudit.minSlides} slides/module, 0 token brut)`,
-            modulesAudit.slidesIssues.slice(0, 5).join('; ')
-        );
+        if (HAS_EXTERNAL_TRAINING_ROOT) {
+            assert(
+                modulesAudit.slidesOk === 34 && modulesAudit.totalSlidesCount === 1686 && modulesAudit.minSlides >= 33,
+                `34 / 34 modules en mode Diaporama 16:9 validés (${modulesAudit.totalSlidesCount} diapositives Studio au total, min=${modulesAudit.minSlides} slides/module, 0 token brut)`,
+                modulesAudit.slidesIssues.slice(0, 5).join('; ')
+            );
+        } else {
+            assert(
+                modulesAudit.slidesOk === tracksAndEnterpriseAudit.moduleIds.length && modulesAudit.minSlides >= 12,
+                `${modulesAudit.slidesOk} / ${tracksAndEnterpriseAudit.moduleIds.length} demo modules in 16:9 Slideshow mode validated (${modulesAudit.totalSlidesCount} total slides, min=${modulesAudit.minSlides})`,
+                modulesAudit.slidesIssues.slice(0, 5).join('; ')
+            );
+        }
 
-        // 6.3 Comprehensive audit of all 34 Hands-on Labs (mode=enonce and mode=corrige)
+        // 6.3 Comprehensive audit of all discovered Hands-on Labs (mode=enonce and mode=corrige)
         const labsAudit = await mcp.evaluateJson(`async () => {
             const labIds = ${JSON.stringify(tracksAndEnterpriseAudit.labIds)};
             const hasRawTokens = (root) => {
@@ -793,17 +836,26 @@ async function main() {
         }`);
 
         assert(
-            labsAudit.enonceOk === 34 && labsAudit.corrigeOk === 34,
-            `34 / 34 ateliers pratiques validés en mode Énoncé (${labsAudit.enonceOk}/34) et en mode Corrigé Complet (${labsAudit.corrigeOk}/34) avec 0 token brut`,
+            labsAudit.enonceOk === tracksAndEnterpriseAudit.labIds.length && labsAudit.corrigeOk === tracksAndEnterpriseAudit.labIds.length,
+            `${labsAudit.enonceOk} / ${tracksAndEnterpriseAudit.labIds.length} ateliers pratiques validés en mode Énoncé et en mode Corrigé Complet (${labsAudit.corrigeOk}/${tracksAndEnterpriseAudit.labIds.length}) avec 0 token brut`,
             labsAudit.issues.slice(0, 5).join('; ')
         );
 
-        // 6.4 Comprehensive audit of all 172 compiled HTML deliverables in training_postgresql via @playwright/mcp
-        const htmlDeliverables = collectHtmlDeliverables(TRAINING_ROOT);
-        assert(
-            htmlDeliverables.length === 172,
-            `Découverte des ${htmlDeliverables.length} livrables HTML compilés dans training_postgresql`
-        );
+        // 6.4 Comprehensive audit of compiled HTML deliverables via @playwright/mcp
+        const demoCourseRoot = join(PORTAL_ROOT, 'examples', 'demo-course');
+        const deliverablesRoot = HAS_EXTERNAL_TRAINING_ROOT ? TRAINING_ROOT : demoCourseRoot;
+        const htmlDeliverables = collectHtmlDeliverables(deliverablesRoot);
+        if (HAS_EXTERNAL_TRAINING_ROOT) {
+            assert(
+                htmlDeliverables.length === 172,
+                `Découverte des ${htmlDeliverables.length} livrables HTML compilés dans training_postgresql`
+            );
+        } else {
+            assert(
+                htmlDeliverables.length >= 1,
+                `Demo course discovers ${htmlDeliverables.length} compiled HTML deliverable(s)`
+            );
+        }
 
         const deliverablesAudit = await mcp.evaluateJson(`async () => {
             const relPaths = ${JSON.stringify(htmlDeliverables)};
@@ -836,20 +888,22 @@ async function main() {
         }`);
 
         assert(
-            deliverablesAudit.okCount === 172 && deliverablesAudit.statusErrors.length === 0 && deliverablesAudit.rawErrors.length === 0,
-            `172 / 172 livrables HTML compilés (training_postgresql) audités via le navigateur MCP : HTTP 200, charte LightPath, 0 forbidden vendor leak, 0 token '**' ou backtick brut`,
+            deliverablesAudit.okCount === htmlDeliverables.length && deliverablesAudit.statusErrors.length === 0 && deliverablesAudit.rawErrors.length === 0,
+            `${deliverablesAudit.okCount} / ${htmlDeliverables.length} livrables HTML compilés audités via le navigateur MCP : HTTP 200, charte LightPath, 0 forbidden vendor leak, 0 token '**' ou backtick brut`,
             [...deliverablesAudit.statusErrors, ...deliverablesAudit.rawErrors].slice(0, 5).join('; ')
         );
 
         // Live Chromium navigation (browser_navigate) across representative standalone HTML deliverables
-        const sampleDeliverables = [
-            'GUIDE_PARCOURS.html',
-            '01_programme_et_referentiel/programme_formation_postgresql_18.html',
-            '03_supports_de_cours/module_01_introduction_postgresql_18.html',
-            '03_supports_de_cours/module_10_integrating_postgresql_with_applications.html',
-            '04_ateliers_et_tp/lab_01_introduction_setup_postgresql_18.html',
-            '05_cheatsheets/modules/cheatsheet_mod_01_introduction_postgresql_18.html',
-        ];
+        const sampleDeliverables = HAS_EXTERNAL_TRAINING_ROOT
+            ? [
+                'GUIDE_PARCOURS.html',
+                '01_programme_et_referentiel/programme_formation_postgresql_18.html',
+                '03_supports_de_cours/module_01_introduction_postgresql_18.html',
+                '03_supports_de_cours/module_10_integrating_postgresql_with_applications.html',
+                '04_ateliers_et_tp/lab_01_introduction_setup_postgresql_18.html',
+                '05_cheatsheets/modules/cheatsheet_mod_01_introduction_postgresql_18.html',
+            ]
+            : ['03_supports_de_cours/module_01_introduction_postgresql_18.html'];
         let liveDeliverablesOk = 0;
         const sampleIssues = [];
         for (const rel of sampleDeliverables) {

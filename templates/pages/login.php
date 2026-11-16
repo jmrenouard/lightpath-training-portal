@@ -2,7 +2,7 @@
 declare(strict_types=1);
 use LightPath\LMS\Core\Security;
 $allowSelfRegistration = isset($featureManager) ? $featureManager->isEnabled('self_registration') : true;
-$allowDemoQuickLogin = isset($featureManager) ? $featureManager->isEnabled('demo_quick_login') : true;
+$allowDemoQuickLogin = isset($featureManager) ? $featureManager->isEnabled('demo_quick_login') : false;
 $activeTab = ($allowSelfRegistration && ($_GET['tab'] ?? 'login') === 'register') ? 'register' : 'login';
 $csrfToken = Security::getCsrfToken();
 $moduleCountLabel = !empty($currentCourse['modules']) ? count($currentCourse['modules']) : 34;
@@ -89,11 +89,11 @@ $labCountLabel = !empty($currentCourse['labs']) ? count($currentCourse['labs']) 
                     <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
                     <div class="form-group">
                         <label for="login-email">Adresse Email Professionnelle</label>
-                        <input type="email" id="login-email" name="email" class="form-control" autocomplete="username" required value="jmrenouard@lightpath.fr"/>
+                        <input type="email" id="login-email" name="email" class="form-control" autocomplete="username" required placeholder="prenom.nom@entreprise.fr"/>
                     </div>
                     <div class="form-group">
                         <label for="login-password">Mot de Passe</label>
-                        <input type="password" id="login-password" name="password" class="form-control" autocomplete="current-password" required value="LightPath2026!"/>
+                        <input type="password" id="login-password" name="password" class="form-control" autocomplete="current-password" required/>
                     </div>
                     <button type="submit" class="btn btn-primary login-submit-btn">
                         🚀 Se connecter au Portail LightPath

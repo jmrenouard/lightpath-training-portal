@@ -380,5 +380,23 @@
   - ✅ Sign-Off Navigateur Live Itération B (`http://127.0.0.1:18090`, `@playwright/mcp` vérifié sur hôte) : **`0` violation CSP** (y compris `mode=html_preview`), **`0` erreur console JS**, **`0` débordement horizontal** sur `1440x900`, `768x1024` et `375x812`, grille `.admin-split-grid` Santé Système nette, filtres d'audit alignés, pastille d'intégrité SHA-256 et workflow Savepoint Create/Restore validés.
   - ✅ Validation Python des `13` fichiers Markdown (`README.md`, `PROJECT-CONTEXT.md`, `9` guides `docs/*.md`, `REGISTRE_RCA.md`, `JOURNAL_DE_BORD.md`) : **`CHECKED_FILES=13`, `ERRORS=[]`** (liens relatifs valides, syntaxe Mermaid saine, `0` CDN externe, `0` marque tierce, LaTeX conforme).
 
+---
+
+### Correction RCA-171 — Préparation Open-Source MIT v2.0.0, Relocalisation du Dépôt, Pack Démo Autonome, Durcissement Premier Démarrage & Outillage Docker / CI (`RCA-LMS-41` / Issue #43)
+* **Date :** 2026-11-17 00:10
+* **Issues GitHub associées :** `lightpath-training-portal#43` (branche `feat/mit-open-source-v2`) & `training_postgresql#116` (branche `chore/relocate-portal-tests`)
+* **Fichiers modifiés et créés :**
+  - **Vague 1 — Relocalisation & Archivage (`mover`) :** Déplacement du dépôt vers `Gestion2026\EnCours\lightpath-training-portal` avec recréation des 3 jonctions NTFS (`images`, `logos`, `mermaid_cache`), déplacement `git mv` de `REGISTRE_RCA.md` et `JOURNAL_DE_BORD.md` vers `docs/internal/`, et mise à jour des chemins croisés dans `training_postgresql/tests/{test_adversarial_rule_governance.py,test_rca_contracts.py}` (`_get_lms_root()`, `_get_lms_internal_doc()`).
+  - **Vague 2 — Pack Démo Autonome (`coursepack`) :** `examples/demo-course/**` (2 modules, 1 lab 7 piliers Qualiopi, cheatsheets, programme, `demo_connect.py`, `pg_health_demo.py`, stub MP4 Range), `config/{courses,app}.php`, `bin/{sync-course.php,export_slides_cache.py}`, `src/Course/MarkdownParser.php`.
+  - **Vague 2 — Durcissement Premier Démarrage (`authsec`) :** `config/features.php` (`demo_quick_login => false`), `templates/pages/login.php` (suppression valeurs pré-remplies & fallback `false`), `src/Core/{JsonStorage,StorageInterface}.php` (`LMS_INIT_*_PASSWORD` / génération CSPRNG `initial_admin_credentials.txt`).
+  - **Vague 2 — Conteneurs, CI & Manifestes (`devops`) :** `.github/workflows/ci.yml`, `Dockerfile`, `.dockerignore`, `docker-compose.yml`, `.env.example`, `composer.json` (`MIT`, `php >= 8.3`, extensions optionnelles en `suggest`), `package.json`, `.gitignore`.
+  - **Vague 2 — Documentation Open-Source MIT (`ossdocs`) :** Création de `LICENSE` (MIT), `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md` (`[2.0.0] - 2026-11-16`), mise à jour complète de `README.md` (badge CI natif GitHub Actions, Quickstart Docker Compose & PHP + `examples/demo-course/` + `LMS_COURSE_ROOT`, section identifiants au premier démarrage, section Licence MIT vs cours commerciaux, index `docs/internal/`), consignation `RCA-171` (`RCA-LMS-41`) et entrée `JOURNAL_DE_BORD.md`.
+  - **Vague 3 — Adaptation des Tests & Bascule Démo/PG18 (`testauthor`) :** `tests/run_tests.php` (`$isFullPg18Course`, Section 24 dynamique, Section 25 MIT & amorçage aléatoire), `tests/test_functional_http.php`, `tests/test_adversarial_b1..b5.php` et `tests/e2e/{run_playwright_campaign,test_adversarial_challenger}.mjs`.
+* **Nature de la correction :** Découplage du dépôt de cours commercial, mise en conformité open-source MIT v2.0.0 avec pack de démonstration autonome out-of-the-box, suppression des mots de passe codés en dur au profit d'un amorçage CSPRNG ou par variables d'environnement, ajout du déploiement Docker Compose 1-commande et du pipeline GitHub Actions CI, et archivage des journaux RCA internes sous `docs/internal/`.
+* **Tests post-correction :**
+  - ✅ Mode A (autonome `examples/demo-course/`, `LMS_DOCKER_FORCE_SIMULATED=1`) : `php -l` **`59/59`**, `node --check` **`3/3`**, `php tests/run_tests.php` **`644/644`**, `tests/test_adversarial_b1..b5.php` **`69/50/69/78/78`** (`344/344` `APPROVE`), `php tests/test_functional_http.php` **`155/155`**, `php tests/test_coverage_audit.php` **`211/211`** (`100.0%`, `AUDIT PASSED`).
+  - ✅ Mode B (`training_postgresql` monté via `LMS_COURSE_ROOT` & `LMS_PGSCRIPTS_ROOT`, `LMS_DOCKER_FORCE_SIMULATED=1`) : `php tests/run_tests.php` **`658/658`** (`34` modules/labs, `58` slides Studio M01, Section 25).
+  - ✅ Dépôt compagnon `training_postgresql` : `pytest tests/test_rca_contracts.py -q` **`256/256`** passés (`0` régression).
+
 
 

@@ -8,6 +8,7 @@ by extracting section, title, and body preview directly from each PDF page (the 
 of slide_NNN.png) and matching PPTX speaker notes by normalized slide title.
 """
 import json
+import os
 import re
 import time
 from pathlib import Path
@@ -15,7 +16,9 @@ import pymupdf
 from pptx import Presentation
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC_SLIDES = ROOT.parent / "training_postgresql" / "03_supports_de_cours"
+_ENV_COURSE_ROOT = os.environ.get("LMS_COURSE_ROOT", "").strip()
+COURSE_ROOT = Path(_ENV_COURSE_ROOT) if _ENV_COURSE_ROOT else (ROOT.parent / "training_postgresql")
+SRC_SLIDES = COURSE_ROOT / "03_supports_de_cours"
 OUT_ROOT = ROOT / "public" / "assets" / "slides_cache"
 
 

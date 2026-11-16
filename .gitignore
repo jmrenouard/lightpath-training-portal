@@ -1,8 +1,10 @@
 # LightPath Training Portal - Ignore Rules
 /vendor/
+/node_modules/
 /storage/data/*.json
 /storage/data/*.lock
 /storage/data/*.tmp*
+/storage/data/*.txt
 /storage/data/parsed_cache/
 /public/assets/logos
 /public/assets/images

@@ -962,4 +962,37 @@ Valide avec php tests/run_tests.php.
   ```
 * **Statut :** ✅ Implémenté — voir Journal de Bord 2026-11-16 (Exécution Approfondie en 2 Itérations sur les 7 Axes — Issue #41)
 
+---
+
+## Fiche d'Incident RCA-171 (`RCA-LMS-41`) : Préparation Open-Source MIT v2.0.0, Relocalisation du Dépôt, Pack Démo Autonome `examples/demo-course/`, Durcissement Premier Démarrage & Outillage Docker / CI
+
+* **Date de détection :** 2026-11-17
+* **Issues GitHub associées :** `lightpath-training-portal#43` (branche `feat/mit-open-source-v2`) & `training_postgresql#116` (branche `chore/relocate-portal-tests`)
+* **Composant Affecté :** `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `README.md`, `docs/internal/{REGISTRE_RCA,JOURNAL_DE_BORD}.md`, `examples/demo-course/**`, `config/{courses,app,features}.php`, `bin/{sync-course.php,export_slides_cache.py}`, `src/Course/MarkdownParser.php`, `src/Core/{JsonStorage,StorageInterface}.php`, `templates/pages/login.php`, `.github/workflows/ci.yml`, `Dockerfile`, `.dockerignore`, `docker-compose.yml`, `.env.example`, `composer.json`, `package.json`, `.gitignore`
+* **1. Mécanisme :**
+  Avant l'ouverture du dépôt en licence MIT (`v2.0.0`), quatre freins structurels empêchaient toute utilisation autonome et sécurisée après clonage public :
+  1) **Couplage physique & dépendance dure au cours commercial :** Le portail résidait sous `Formations\PostgreSQL\lightpath-training-portal` et nécessitait un répertoire adjacent `../training_postgresql` pour afficher un catalogue.
+  2) **Identifiants de développement statiques & connexion rapide activée par défaut :** `JsonStorage::ensureDefaultUsers()`, `importUsersFromCsv()`, `templates/pages/login.php` (valeurs pré-remplies) et `config/features.php` (`demo_quick_login => true`) exposaient des mots de passe codés en dur au premier déploiement.
+  3) **Absence de déploiement conteneurisé 1-commande & CI :** Absence de `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `.env.example`, `.github/workflows/ci.yml`, `package.json`, et contrainte `php >= 8.1` / `license: Proprietary` dans `composer.json`.
+  4) **Gouvernance open-source & archivage interne :** Absence de `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, et maintien des journaux internes `REGISTRE_RCA.md` / `JOURNAL_DE_BORD.md` à la racine du dépôt.
+* **2. Hypothèse :**
+  Relocaliser le dépôt vers `Gestion2026\EnCours\lightpath-training-portal` en préservant les jonctions d'assets locales et en adaptant les tests croisés de `training_postgresql`, embarquer un pack démo MIT autonome (`examples/demo-course/`) avec surcharge `LMS_COURSE_ROOT` / `LMS_PGSCRIPTS_ROOT`, remplacer les mots de passe statiques par `LMS_INIT_*_PASSWORD` ou génération CSPRNG unique dans `initial_admin_credentials.txt` (`demo_quick_login => false`), fournir Docker Compose + GitHub Actions CI + `composer.json`/`package.json` alignés (`php >= 8.3`, extensions optionnelles en `suggest`), et livrer la documentation open-source MIT avec archivage des journaux internes dans `docs/internal/`.
+* **3. Contre-mesure :**
+  1) **Relocalisation & Archivage (`mover`) :** Migration vers `Gestion2026\EnCours\lightpath-training-portal`, ouverture des issues `#43` (`lightpath-training-portal`) et `#116` (`training_postgresql`), déplacement `REGISTRE_RCA.md` & `JOURNAL_DE_BORD.md` vers `docs/internal/`, et mise à jour de `tests/test_adversarial_rule_governance.py` et `tests/test_rca_contracts.py` (`_get_lms_root()`, `_get_lms_internal_doc()`).
+  2) **Pack Démo Autonome (`coursepack`) :** Création de `examples/demo-course/` (2 modules, 1 lab 7 piliers Qualiopi, cheatsheets, programme, exemples Python, stub MP4 Range), résolution `LMS_COURSE_ROOT` / `LMS_PGSCRIPTS_ROOT` / `LMS_DOCKER_COMPOSE_DIR` / `LMS_CLASSROOMCTL_PATH` dans `config/{courses,app}.php` et `bin/`, et garde `extractSlides()` dans `MarkdownParser.php`.
+  3) **Durcissement Premier Démarrage (`authsec`) :** Passage de `demo_quick_login` à `false` dans `config/features.php`, suppression des valeurs pré-remplies dans `templates/pages/login.php`, génération CSPRNG dans `JsonStorage::ensureDefaultUsers()` (`LMS_INIT_*_PASSWORD` -> `initial_admin_credentials.txt` `0600`) et `importUsersFromCsv()` sans nouvelle méthode publique.
+  4) **Conteneurs, CI & Manifestes (`devops`) :** Création de `.github/workflows/ci.yml`, `Dockerfile` (`php:8.3-cli-alpine3.21` non-root `lms`), `.dockerignore`, `docker-compose.yml`, `.env.example`, `package.json`, mise à jour `composer.json` (`MIT`, `php >= 8.3`, extensions optionnelles en `suggest`, `test:all`) et `.gitignore`.
+  5) **Documentation Open-Source MIT (`ossdocs`) :** Création de `LICENSE` (MIT), `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md` (`[2.0.0] - 2026-11-16`), refonte de `README.md` (badge CI natif GitHub Actions, Quickstart Docker Compose / PHP + `examples/demo-course/` + `LMS_COURSE_ROOT`, section identifiants au premier démarrage, section Licence MIT vs cours commerciaux, index `docs/internal/`) et consignation `RCA-171` (`RCA-LMS-41`).
+* **4. Prompt LLM :**
+  ```text
+  Contexte : dépôt lightpath-training-portal (branche feat/mit-open-source-v2, Issue #43) relocalisé sous Gestion2026/EnCours/lightpath-training-portal. Lis RCA-171 (RCA-LMS-41) dans docs/internal/REGISTRE_RCA.md.
+  Tâche : Vérifier les invariants de la publication open-source MIT v2.0.0 :
+  1) Gouvernance & Docs (`LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `README.md`, `docs/internal/`) : licence MIT LightPath SARL, badge CI natif GitHub Actions uniquement, 0 CDN externe, 0 marque tierce, documentation Quickstart (`docker compose up -d`, `php -S localhost:8080 -t public`, `LMS_COURSE_ROOT`) et identifiants premier démarrage (`LMS_INIT_ADMIN_PASSWORD` / `initial_admin_credentials.txt`, `demo_quick_login=false`).
+  2) Pack Démo & Résolution Cours (`examples/demo-course/`, `config/{courses,app}.php`, `bin/`, `MarkdownParser.php`) : fonctionnement autonome sans `../training_postgresql` et surcharge `LMS_COURSE_ROOT`.
+  3) Auth & Premier Démarrage (`config/features.php`, `templates/pages/login.php`, `src/Core/{JsonStorage,StorageInterface}.php`) : `demo_quick_login=false`, aucun mot de passe pré-rempli, génération CSPRNG au premier démarrage et aucune méthode publique ajoutée.
+  4) Docker, CI & Manifestes (`.github/workflows/ci.yml`, `Dockerfile`, `docker-compose.yml`, `.env.example`, `composer.json`, `package.json`) : PHP >= 8.3, extensions optionnelles en `suggest`, exécution non-root `lms`.
+  Valide avec : php tests/run_tests.php && php tests/test_functional_http.php && php tests/test_coverage_audit.php
+  ```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-11-17
+
 

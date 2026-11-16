@@ -89,7 +89,11 @@ echo " ADVERSARIAL CHALLENGER B4 — EMPIRICAL VERIFICATION HARNESS\n";
 echo " Target: lightpath-training-portal (PHP 8.3.36)\n";
 echo str_repeat('=', 72) . "\n";
 
-// Configure isolated temporary test storage
+// Configure isolated temporary test storage with deterministic credentials
+putenv('LMS_INIT_ADMIN_PASSWORD=LightPath2026!');
+putenv('LMS_INIT_TRAINER_PASSWORD=Formateur2026!');
+putenv('LMS_INIT_STUDENT_PASSWORD=Stagiaire2026!');
+
 $testDataDir = sys_get_temp_dir() . '/lms_adversarial_b4_' . mt_rand(10000, 99999);
 @mkdir($testDataDir, 0777, true);
 $storage = new JsonStorage($testDataDir);
