@@ -938,8 +938,11 @@ class CourseRepository
 
     public static function truncateUtf8(string $text, int $maxChars): string
     {
-        if (function_exists('mb_strimwidth')) {
-            return mb_strimwidth($text, 0, $maxChars, '…', 'UTF-8');
+        if (function_exists('mb_strlen') && function_exists('mb_substr')) {
+            if (mb_strlen($text, 'UTF-8') <= $maxChars) {
+                return $text;
+            }
+            return rtrim(mb_substr($text, 0, $maxChars, 'UTF-8')) . '…';
         }
         if (strlen($text) <= $maxChars) {
             return $text;
