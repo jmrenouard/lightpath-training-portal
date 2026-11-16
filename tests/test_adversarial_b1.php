@@ -71,8 +71,12 @@ echo " Target: lightpath-training-portal (PHP " . PHP_VERSION . ")\n";
 echo "========================================================================\n\n";
 
 // ----------------------------------------------------------------------------
-// Initialize isolated test storage directory
+// Initialize isolated test storage directory with deterministic credentials
 // ----------------------------------------------------------------------------
+putenv('LMS_INIT_ADMIN_PASSWORD=LightPath2026!');
+putenv('LMS_INIT_TRAINER_PASSWORD=Formateur2026!');
+putenv('LMS_INIT_STUDENT_PASSWORD=Stagiaire2026!');
+
 $testStorageDir = sys_get_temp_dir() . '/lms_adversarial_b1_' . mt_rand(10000, 99999);
 if (!is_dir($testStorageDir)) {
     mkdir($testStorageDir, 0777, true);

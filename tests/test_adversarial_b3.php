@@ -29,6 +29,11 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../src/bootstrap.php';
 
+// Ensure deterministic seeded credentials for child test suites.
+putenv('LMS_INIT_ADMIN_PASSWORD=LightPath2026!');
+putenv('LMS_INIT_TRAINER_PASSWORD=Formateur2026!');
+putenv('LMS_INIT_STUDENT_PASSWORD=Stagiaire2026!');
+
 use LightPath\LMS\Course\MarkdownParser;
 use LightPath\LMS\Core\Security;
 

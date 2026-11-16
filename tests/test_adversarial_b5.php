@@ -78,6 +78,11 @@ class AdversarialTestSuiteB5
     }
 }
 
+// Set deterministic seeded credentials before storage initialization.
+putenv('LMS_INIT_ADMIN_PASSWORD=LightPath2026!');
+putenv('LMS_INIT_TRAINER_PASSWORD=Formateur2026!');
+putenv('LMS_INIT_STUDENT_PASSWORD=Stagiaire2026!');
+
 $suite = new AdversarialTestSuiteB5();
 $testDataDir = sys_get_temp_dir() . '/lms_test_b5_' . mt_rand(10000, 99999);
 if (!is_dir($testDataDir)) {

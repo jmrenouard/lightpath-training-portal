@@ -82,6 +82,10 @@ echo "========================================================================\n
 // ----------------------------------------------------------------------------
 // Isolate test execution in a dedicated temporary storage directory
 // ----------------------------------------------------------------------------
+putenv('LMS_INIT_ADMIN_PASSWORD=LightPath2026!');
+putenv('LMS_INIT_TRAINER_PASSWORD=Formateur2026!');
+putenv('LMS_INIT_STUDENT_PASSWORD=Stagiaire2026!');
+
 $testStorageDir = sys_get_temp_dir() . '/lms_adversarial_b2_' . mt_rand(10000, 99999);
 if (!is_dir($testStorageDir)) {
     mkdir($testStorageDir, 0777, true);

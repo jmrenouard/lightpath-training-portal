@@ -36,7 +36,7 @@ return [
         'default_db' => 'formation_pg',
         'default_user' => 'postgres',
         'default_password' => 'postgres',
-        'compose_dir' => realpath(__DIR__ . '/../../training_postgresql/docker') ?: (__DIR__ . '/../../training_postgresql/docker'),
-        'classroomctl_path' => realpath(__DIR__ . '/../../training_postgresql/scripts/classroomctl.py') ?: '',
+        'compose_dir' => getenv('LMS_DOCKER_COMPOSE_DIR') ?: (realpath(__DIR__ . '/../../training_postgresql/docker') ?: (realpath(__DIR__ . '/..') ?: (__DIR__ . '/..'))),
+        'classroomctl_path' => getenv('LMS_CLASSROOMCTL_PATH') ?: (realpath(__DIR__ . '/../../training_postgresql/scripts/classroomctl.py') ?: ''),
     ],
 ];

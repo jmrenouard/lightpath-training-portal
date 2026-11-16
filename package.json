@@ -1,0 +1,15 @@
+{
+    "name": "lightpath-training-portal",
+    "version": "2.0.0",
+    "private": true,
+    "license": "MIT",
+    "type": "module",
+    "scripts": {
+        "test:e2e": "node tests/e2e/run_playwright_campaign.mjs",
+        "test:e2e:adversarial": "node tests/e2e/test_adversarial_challenger.mjs"
+    },
+    "devDependencies": {
+        "playwright": "^1.52.0",
+        "@playwright/mcp": "^0.0.28"
+    }
+}

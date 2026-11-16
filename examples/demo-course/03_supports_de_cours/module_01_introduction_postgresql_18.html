@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Module 01 — Introduction &amp; Architecture PostgreSQL 18 (Démo LightPath)</title>
+  <style>
+    :root {
+      --bg: #0b1120;
+      --surface: #0f172a;
+      --border: rgba(56, 189, 248, 0.25);
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #00b0f0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 2rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 920px;
+      margin: 0 auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 0.78rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--accent);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.2rem 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    h1 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1.75rem;
+      letter-spacing: -0.02em;
+    }
+    h2 {
+      margin-top: 1.5rem;
+      color: var(--accent);
+      font-size: 1.15rem;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 0.92rem;
+      margin-bottom: 1.25rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.75rem;
+      font-variant-numeric: tabular-nums;
+    }
+    th, td {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 0.55rem 0.75rem;
+      text-align: left;
+    }
+    th {
+      background: rgba(0, 176, 240, 0.12);
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: #38bdf8;
+    }
+    footer {
+      margin-top: 2rem;
+      padding-top: 1rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <span class="badge">PostgreSQL 18 • Démo Open-Source MIT</span>
+    <h1>Module 01 : Introduction &amp; Architecture PostgreSQL 18</h1>
+    <p class="meta">Formateur : Jean-Marie Renouard (LightPath SARL) • Durée : 2h00 • Niveau Bloom C2</p>
+
+    <h2>Points Clés d'Architecture</h2>
+    <ul>
+      <li>Isolation par processus OS : <code>postmaster</code> supervise un processus <code>backend</code> dédié par session.</li>
+      <li>Mémoire partagée : <code>shared_buffers</code> et <code>wal_buffers</code> coordonnent les échanges avec <code>PGDATA</code> et <code>pg_wal</code>.</li>
+      <li>Sous-système AIO PostgreSQL 18 : <code>io_method</code> (<code>worker</code>, <code>io_uring</code>, <code>sync</code>) accélère les lectures disques.</li>
+      <li>Concurrence MVCC : lecteurs et écrivains travaillent sans blocage mutuel grâce aux compteurs <code>xmin</code>/<code>xmax</code>.</li>
+    </ul>
+
+    <h2>Mémoire de Référence</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Paramètre</th>
+          <th>Portée</th>
+          <th>Valeur Initiale Recommandée</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>shared_buffers</code></td>
+          <td>Globale (IPC)</td>
+          <td>25 % de la RAM système</td>
+        </tr>
+        <tr>
+          <td><code>wal_buffers</code></td>
+          <td>Globale (IPC)</td>
+          <td>16 Mo à 64 Mo</td>
+        </tr>
+        <tr>
+          <td><code>work_mem</code></td>
+          <td>Par opération SQL</td>
+          <td>16 Mo à 64 Mo</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <footer>
+      LightPath Academy — Pack de Démonstration Open-Source (Licence MIT) • contact@lightpath.fr
+    </footer>
+  </main>
+</body>
+</html>

@@ -16,7 +16,11 @@ $slug = (string)preg_replace('/[^a-zA-Z0-9_\-]/', '', $rawSlug);
 if ($slug === '') {
     $slug = 'postgresql-18';
 }
-$sourceDir = $argv[2] ?? realpath(__DIR__ . '/../../training_postgresql');
+$envCourseRoot = getenv('LMS_COURSE_ROOT');
+$defaultSourceDir = (is_string($envCourseRoot) && $envCourseRoot !== '' && is_dir($envCourseRoot))
+    ? (realpath($envCourseRoot) ?: $envCourseRoot)
+    : (realpath(__DIR__ . '/../../training_postgresql') ?: realpath(__DIR__ . '/../examples/demo-course'));
+$sourceDir = $argv[2] ?? $defaultSourceDir;
 
 if (!$sourceDir || !is_dir((string)$sourceDir)) {
     fwrite(STDERR, "[ERROR] Source directory not found.\n");

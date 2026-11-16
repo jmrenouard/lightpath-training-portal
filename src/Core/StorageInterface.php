@@ -61,7 +61,7 @@ interface StorageInterface
     public function resolveDiscussionMessage(string $courseSlug, string $itemId, string $messageId, bool $resolved = true): bool;
     public function deleteDiscussionMessage(string $courseSlug, string $itemId, string $messageId): bool;
     public function getAllCourseDiscussions(string $courseSlug = 'postgresql-18'): array;
-    public function importUsersFromCsv(string $csvContent, string $defaultPassword = 'LightPath2026!', string $courseSlug = 'postgresql-18'): array;
+    public function importUsersFromCsv(string $csvContent, string $defaultPassword = '', string $courseSlug = 'postgresql-18'): array;
 
     public function getLoginThrottle(string $key): ?array;
     public function listLoginThrottles(): array;

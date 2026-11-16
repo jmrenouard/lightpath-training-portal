@@ -7,8 +7,20 @@ declare(strict_types=1);
  * or a synchronized course bundle under storage/courses/<slug>.
  */
 
-$pgSourceRoot = realpath(__DIR__ . '/../../training_postgresql') ?: (__DIR__ . '/../../training_postgresql');
-$pgScriptsRoot = realpath(__DIR__ . '/../../pgscripts') ?: (__DIR__ . '/../../pgscripts');
+$resolveCourseRoot = static function (string $envVar, string $adjacentRel, string $demoRel): string {
+    $envVal = getenv($envVar);
+    if (is_string($envVal) && $envVal !== '' && is_dir($envVal)) {
+        return realpath($envVal) ?: $envVal;
+    }
+    $adjacent = realpath(__DIR__ . '/' . $adjacentRel);
+    if ($adjacent !== false && is_dir($adjacent)) {
+        return $adjacent;
+    }
+    return realpath(__DIR__ . '/' . $demoRel) ?: (__DIR__ . '/' . $demoRel);
+};
+
+$pgSourceRoot = $resolveCourseRoot('LMS_COURSE_ROOT', '../../training_postgresql', '../examples/demo-course');
+$pgScriptsRoot = $resolveCourseRoot('LMS_PGSCRIPTS_ROOT', '../../pgscripts', '../examples/demo-course/pgscripts');
 
 return [
     'postgresql-18' => [

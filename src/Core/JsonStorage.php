@@ -117,13 +117,35 @@ class JsonStorage implements StorageInterface
             return;
         }
 
+        $adminPw = (string)(getenv('LMS_INIT_ADMIN_PASSWORD') ?: '');
+        $trainerPw = (string)(getenv('LMS_INIT_TRAINER_PASSWORD') ?: '');
+        $studentPw = (string)(getenv('LMS_INIT_STUDENT_PASSWORD') ?: '');
+
+        $generatedBootstrap = false;
+        $generatedCreds = [];
+        if ($adminPw === '') {
+            $adminPw = bin2hex(random_bytes(12));
+            $generatedBootstrap = true;
+            $generatedCreds[] = "admin   : jmrenouard@lightpath.fr / {$adminPw}";
+        }
+        if ($trainerPw === '') {
+            $trainerPw = bin2hex(random_bytes(12));
+            $generatedBootstrap = true;
+            $generatedCreds[] = "trainer : formateur@lightpath.fr / {$trainerPw}";
+        }
+        if ($studentPw === '') {
+            $studentPw = bin2hex(random_bytes(12));
+            $generatedBootstrap = true;
+            $generatedCreds[] = "student : stagiaire@lightpath.fr / {$studentPw}";
+        }
+
         $now = date('Y-m-d H:i:s');
         $defaults = [
             [
                 'id' => 1,
                 'name' => 'Jean-Marie Renouard',
                 'email' => 'jmrenouard@lightpath.fr',
-                'password_hash' => password_hash('LightPath2026!', PASSWORD_BCRYPT),
+                'password_hash' => password_hash($adminPw, PASSWORD_BCRYPT),
                 'role' => 'admin',
                 'company' => 'LightPath SARL',
                 'active' => true,
@@ -135,7 +157,7 @@ class JsonStorage implements StorageInterface
                 'id' => 2,
                 'name' => 'Formateur LightPath',
                 'email' => 'formateur@lightpath.fr',
-                'password_hash' => password_hash('Formateur2026!', PASSWORD_BCRYPT),
+                'password_hash' => password_hash($trainerPw, PASSWORD_BCRYPT),
                 'role' => 'trainer',
                 'company' => 'LightPath SARL',
                 'active' => true,
@@ -147,7 +169,7 @@ class JsonStorage implements StorageInterface
                 'id' => 3,
                 'name' => 'Thomas Dubois (Stagiaire DBA)',
                 'email' => 'stagiaire@lightpath.fr',
-                'password_hash' => password_hash('Stagiaire2026!', PASSWORD_BCRYPT),
+                'password_hash' => password_hash($studentPw, PASSWORD_BCRYPT),
                 'role' => 'student',
                 'company' => 'Client Entreprise',
                 'active' => true,
@@ -158,6 +180,22 @@ class JsonStorage implements StorageInterface
         ];
 
         $this->writeFile('users', $defaults);
+
+        if ($generatedBootstrap) {
+            $credFile = $this->dataDir . '/initial_admin_credentials.txt';
+            $banner = "# LightPath Training Portal - Initial Generated Credentials\n"
+                . "# Generated at: {$now}\n"
+                . "# Rotate these passwords or delete this file after first sign-in.\n\n"
+                . implode("\n", $generatedCreds) . "\n";
+            if (!is_file($credFile)) {
+                @touch($credFile);
+            }
+            @chmod($credFile, 0600);
+            @file_put_contents($credFile, $banner, LOCK_EX);
+            if (PHP_SAPI === 'cli-server') {
+                error_log('[LightPath LMS] Generated initial credentials in ' . $credFile);
+            }
+        }
 
         // Seed realistic demo progress for student #3
         $this->markItemCompleted(3, 'postgresql-18', 'module', 'module_01_introduction_postgresql_18', true);
@@ -1221,7 +1259,7 @@ class JsonStorage implements StorageInterface
         return $result;
     }
 
-    public function importUsersFromCsv(string $csvContent, string $defaultPassword = 'LightPath2026!', string $courseSlug = 'postgresql-18'): array
+    public function importUsersFromCsv(string $csvContent, string $defaultPassword = '', string $courseSlug = 'postgresql-18'): array
     {
         // Strip leading UTF-8 BOM emitted by Excel exports
         $cleanContent = preg_replace('/^\xEF\xBB\xBF/', '', trim($csvContent));
@@ -1272,11 +1310,11 @@ class JsonStorage implements StorageInterface
                 $company = trim((string)($cols[2] ?? ''));
                 $role = strtolower(trim((string)($cols[3] ?? 'student')));
 
-                // Enforce minimum 6-character password length or fall back to cohort default
+                // Enforce minimum 6-character password length or generate a random per-user secret
                 $rawPass = trim((string)($cols[4] ?? ''));
                 $password = (strlen($rawPass) >= 6) ? $rawPass : $defaultPassword;
                 if (strlen($password) < 6) {
-                    $password = 'LightPath2026!';
+                    $password = bin2hex(random_bytes(8));
                 }
 
                 // Skip optional CSV header row

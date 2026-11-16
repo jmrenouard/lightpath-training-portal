@@ -17,8 +17,8 @@ return [
         'label' => 'Connexion rapide démo (1-clic)',
         'description' => 'Affiche les boutons de démonstration Admin, Formateur et Stagiaire sur la page de connexion.',
         'category' => 'Authentification & Accès',
-        'default' => true,
-        'enabled' => true,
+        'default' => false,
+        'enabled' => false,
     ],
     'docker_labs' => [
         'label' => 'Conteneurs Docker PostgreSQL 18',
