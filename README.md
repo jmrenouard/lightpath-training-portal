@@ -4,14 +4,14 @@
 
 > **Organization:** LightPath SARL (`https://www.lightpath.fr` | `contact@lightpath.fr`)  
 > **Lead Instructor & Author:** Jean-Marie Renouard (Database & DataOps Expert, Co-developer of MySQLTuner)  
-> **License:** MIT License ([LICENSE](LICENSE)) — LMS Engine & Bundled Demo Course-Pack  
+> **License:** MIT License ([LICENSE](LICENSE)) — LMS Engine & Bundled Demo Course-Packs  
 > **Stack:** Zero-dependency PHP `>= 8.3` • Atomic JSON / Transactional PDO • Docker / WSL2 PostgreSQL 18 Sandbox • Self-hosted Studio Assets (`Zero External CDNs`) • Qualiopi / Datadock / SCORM 1.2
 
 ---
 
 ## 1. Platform Overview
 
-**LightPath Training Portal** (`LightPath Academy v2.0.0`, Ref. `LP-LMS-QUALIOPI-2026`) is an industrial-grade Learning Management System purpose-built for hands-on technical certifications. It boots out-of-the-box with the MIT-licensed [examples/demo-course/](examples/demo-course/) pack (`2` modules, `1` 7-pillar Qualiopi lab, cheatsheets, Python examples, and MP4 streaming stub) and scales seamlessly to full multi-track commercial curricula—such as the 4-track **PostgreSQL 18** curriculum (`34` modules, `34` 7-pillar Qualiopi practical labs, `69` cheatsheets, `18` Qualiopi reference documents, `35` pure-Python `pgscripts`, multi-language client examples, and synchronized 16:9 Studio slide decks)—mounted via `LMS_COURSE_ROOT`.
+**LightPath Training Portal** (`LightPath Academy v2.0.0`, Ref. `LP-LMS-QUALIOPI-2026`) is an industrial-grade Learning Management System purpose-built for hands-on technical certifications. It boots out-of-the-box with **two** MIT-licensed course-packs—[examples/demo-course/](examples/demo-course/) (`2` PostgreSQL 18 modules, `1` 7-pillar Qualiopi Docker lab, cheatsheets, Python companion example, vector Mermaid SVG, and MP4 streaming stub) and [examples/git-basics-course/](examples/git-basics-course/) (`3` Git fundamentals modules, `3` 7-pillar Qualiopi labs, `6` cheatsheets, `GUIDE_PARCOURS.md`, and `3` vector Mermaid SVGs)—and scales seamlessly to full multi-track commercial curricula such as the 4-track **PostgreSQL 18** curriculum (`34` modules, `34` 7-pillar Qualiopi practical labs, `69` cheatsheets, `18` Qualiopi reference documents, `35` pure-Python `pgscripts`, multi-language client examples, and synchronized 16:9 Studio slide decks) mounted via `LMS_COURSE_ROOT`.
 
 ### System Architecture
 
@@ -23,13 +23,50 @@ flowchart LR
     Http -->|"Markdown & Exports"| Course["src/Course (CourseRepository, MarkdownParser, LmsCatalog, DownloadController)"]
     Http -->|"Labs & Oracles"| Docker["src/Docker (DockerManager, LabSqlRunner, SakilaSeeder)"]
     Core -->|"StorageInterface"| Persistence["JsonStorage / PdoStorage (storage/data or lms_kv_store)"]
-    Course -->|"Reads"| Pack["Course Pack (LMS_COURSE_ROOT / ../training_postgresql / examples/demo-course)"]
+    Course -->|"Reads"| Pack["Course Pack (LMS_COURSE_ROOT / ../training_postgresql / examples/demo-course + examples/git-basics-course)"]
     Docker -->|"proc_open + Quotas"| Pg["lp_pg18_user_{id} (PostgreSQL 18 + Sakila + pgbench)"]
 ```
 
 ---
 
-## 2. Two-Minute Quickstart
+## 2. Moodle vs. LightPath Training Portal
+
+### Positioning & Interoperability
+- **When to choose LightPath Training Portal (`v2.0.0`):** Technical academies, DevOps/DBA bootcamps, and French training organizations needing `~0` operational footprint (zero-dependency PHP `>= 8.3`, atomic JSON or auto-bootstrapped PDO, no mandatory Node/Redis/cron runtime), isolated per-learner **Docker PostgreSQL 18 sandboxes** with automated verification oracles, **Git-versioned Markdown + 16:9 Studio slides**, built-in **Qualiopi / OPCO compliance** (attendance, offline SVG QR certificates, J+60 surveys), and a strict **zero-CDN Content Security Policy** (`style-src 'self'`, SHA-256 `script-src`).
+- **When to choose Moodle (`4.5 LTS` / `5.0`):** Multi-faculty universities or large enterprises requiring `2,000+` community plugins, rich shared question banks (Cloze/essay/drag-and-drop), `mod_assign` rubric grading, multi-tenant custom RBAC, OIDC/SAML 2.0/LDAP SSO, native H5P/LTI 1.3 Advantage, and `100+` language packs.
+- **How they interoperate:** LightPath already exports **SCORM 1.2** (`imsmanifest.xml` + standalone `.zip` packages via `DownloadController`) so existing Moodle instances can ingest LightPath modules today. Planned **LTI 1.3 Advantage (`FEAT-12`)** will enable Moodle and Canvas to launch LightPath Docker SQL labs with grade passback, alongside inbound SCORM/H5P/`xAPI`/`cmi5` (`FEAT-11`) and portable `.lpcourse.zip` archives (`FEAT-10`).
+
+### 12-Dimension Feature Comparison
+
+| Dimension | Moodle (`4.5 LTS` / `5.0`) | LightPath Training Portal (`v2.0.0`) |
+| :--- | :--- | :--- |
+| **1. Runtime & Deployment** | Monolithic LAMP/LEMP + PostgreSQL/MySQL, Composer/Node build pipeline, Redis/Memcached cache, mandatory cron worker | Zero-dependency PHP `>= 8.3` (1 command `php -S` or non-root Docker), dual `JsonStorage` / `PdoStorage`, `0` external CDN or JS runtime deps |
+| **2. Content & Slide Authoring** | Browser WYSIWYG/TinyMCE pages, Book, File, URL, Folder activities | Git-native Markdown (`MarkdownParser`), pre-rendered vector Mermaid SVGs, 16:9 Studio slide decks + speaker notes, HTTP `206`/`416` byte-range MP4 streaming |
+| **3. Docker Code/SQL Sandboxes** | Requires third-party plugins (e.g., VPL / CodeRunner + external jail servers) | Native per-learner `lp_pg18_user_<id>` PG18 containers, `Sakila`/`pgbench` auto-seeding, savepoints, bounded `pgbench`, least-privilege `lms_student` SQL workbench, oracle checks, `cloud_simulated` fallback |
+| **4. Quizzes & Assignments** | Shared question bank (`15+` types incl. Cloze, essay, drag-drop), `mod_assign` file upload & rubric grading | Per-module formative MCQs, positioning diagnostic (`15` PG18 / `6` Git), timed final exam (`40` PG18 / `10` Git, `75%` pass); rich question bank (`FEAT-04`) & assignments (`FEAT-05`) planned |
+| **5. Gradebook & Conditional Progress** | Unified weighted gradebook, custom scales, course completion & activity access restrictions | Module/lab completion tracking, quiz/exam thresholds, XP/ranks/badges; weighted gradebook (`FEAT-06`) & prerequisite unlock chains (`FEAT-07`) planned |
+| **6. Qualiopi/OPCO Attendance & QR Verification** | Manual/third-party attendance plugins (`mod_attendance`), external certificate plugins without French OPCO schema | Built-in 7-pillar Qualiopi trail: half-day attendance (`J1_AM`..`J11_PM`) with dual signatures, CSPRNG certificates (`LP-*-CERT-*`), offline SVG QR `page=verify`, J+60 cold survey, formula-safe OPCO CSV & JSON dossier |
+| **7. SCORM/H5P/xAPI/LTI/Badges** | Native SCORM 1.2 player, H5P core, LTI 1.3 Advantage Tool/Consumer, Open Badges `v2.1`/`v3.0`, xAPI plugins | Outbound SCORM 1.2 `imsmanifest.xml` & `.zip` export today; inbound SCORM/H5P/xAPI (`FEAT-11`), LTI 1.3 (`FEAT-12`), Open Badges v3.0 (`FEAT-13`) planned |
+| **8. Auth/SSO/RBAC** | Email self-reset, OAuth 2/OIDC, SAML 2.0, LDAP, TOTP/WebAuthn MFA, granular capability RBAC | CSPRNG first-boot credentials, persistent `(email, ip)` rate limiting, `3` scoped roles (`student`, `trainer`, `admin`), per-course ACL; self-service reset (`FEAT-03`) & SSO/2FA (`FEAT-09`) planned |
+| **9. Cohorts & Calendar** | Site/category cohorts, groups/groupings, `.ics` calendar feeds, enrollment keys | Trainer cockpit, 1-click classroom presets (`lecture`, `guided_lab`, `exam_lockdown`, `open_review`), live broadcast banner; multi-session cohorts & `.ics` (`FEAT-08`), enrollment keys (`FEAT-20`) planned |
+| **10. Collaboration & Notifications** | Forums, Workshop peer assessment, Choice polls, Wiki, Glossary, SMTP/mobile/webhook digests | Per-module/lab Q&A threads with trainer resolution, personal Markdown notes, SRS flashcards, glossary; SMTP/webhooks (`FEAT-14`) & workshops/polls/wikis (`FEAT-16`) planned |
+| **11. i18n Localization** | `100+` community language packs with per-user & per-course locale switching | French UI & dual-documented `pgscripts` today; `FR`/`EN` i18n engine & English demo pack (`FEAT-01`) prioritized at `P0` |
+| **12. Analytics & AI** | Configurable competency frameworks (`CBE`), psychometric quiz stats, opt-in AI providers (`v4.5+`/`5.0`) | At-risk learner cockpit, `8` course-aware gamification badges, SHA-256 tamper-evident audit hash chain; CBE (`FEAT-17`), psychometrics (`FEAT-18`), opt-in local AI (`FEAT-19`) planned |
+
+### Prioritized Missing-Feature Roadmap (`P0`–`P3`)
+
+Full architectural analysis, YAGNI anti-goals, and acceptance criteria live in [docs/MOODLE_COMPARISON.md](docs/MOODLE_COMPARISON.md) and [docs/ACTION_LOGBOOK.md](docs/ACTION_LOGBOOK.md):
+
+| Priority | Target | Focus Theme | Planned Feature IDs (`0/20` Implemented) |
+| :---: | :---: | :--- | :--- |
+| **`P0`** | `v2.1` | Global OSS Adoption & Self-Service Auth | `FEAT-01` (`FR`/`EN` i18n Engine), `FEAT-02` (Visual Identity / `1280x640` Hero / White-Label Tokens), `FEAT-03` (Self-Service Password Reset & Email Verification) |
+| **`P1`** | `v2.2` | Rich Assessments, Gradebook & Cohorts | `FEAT-04` (Shared Question Bank & Cloze/Code Match), `FEAT-05` (Assignments & Rubrics), `FEAT-06` (Weighted Gradebook & Transcripts), `FEAT-07` (Conditional Access & Prerequisites), `FEAT-08` (Multi-Session Cohorts, Groups & `.ics` Calendar) |
+| **`P2`** | `v2.3` | Enterprise SSO, Interoperability & APIs | `FEAT-09` (OIDC/SAML2/LDAP SSO & TOTP 2FA), `FEAT-10` (Portable `.lpcourse.zip` Backup/Restore), `FEAT-11` (Inbound SCORM/H5P & `xAPI`/`cmi5`), `FEAT-12` (LTI 1.3 Advantage), `FEAT-13` (Open Badges v3.0), `FEAT-14` (SMTP/Slack/Teams Notifications), `FEAT-15` (Token REST API & Webhooks) |
+| **`P3`** | `v2.4+` | Collaborative Pedagogy, CBE & Local AI | `FEAT-16` (Peer Workshops, Live Polls & Collaborative Wiki), `FEAT-17` (Competency Frameworks & Learning Plans), `FEAT-18` (Psychometric Stats & Early Warning), `FEAT-19` (Opt-In Local AI Study Coach), `FEAT-20` (Event Hook Contract & Enrollment Keys) |
+
+---
+
+## 3. Two-Minute Quickstart
 
 ### A. 1-Command Docker Compose (Standalone Out-of-the-Box)
 Build and launch the non-root PHP `8.3` CLI container on `http://localhost:8080` with persistent storage and the bundled [examples/demo-course/](examples/demo-course/) pack:
@@ -97,7 +134,7 @@ No static default passwords are hardcoded in the repository. On first boot when 
 
 ---
 
-## 3. Role & Feature Matrix
+## 4. Role & Feature Matrix
 
 | Module / Capability | `student` | `trainer` | `admin` | Notes |
 | :--- | :---: | :---: | :---: | :--- |
@@ -110,7 +147,7 @@ No static default passwords are hardcoded in the repository. On first boot when 
 
 ---
 
-## 4. Modular Feature Flags ([config/features.php](config/features.php))
+## 5. Modular Feature Flags ([config/features.php](config/features.php))
 
 Managed at runtime through [FeatureManager.php](src/Core/FeatureManager.php) and **Administration -> Système** (`action=admin_save_features`), supporting `requires` dependency enforcement, **4 deployment profiles** (`full_enterprise`, `classroom_workshop`, `exam_lockdown`, `static_hosting_nodocker`), **per-course overrides**, and **JSON config export/import**:
 
@@ -129,7 +166,7 @@ Managed at runtime through [FeatureManager.php](src/Core/FeatureManager.php) and
 
 ---
 
-## 5. CLI Utilities
+## 6. CLI Utilities
 
 | Command | Purpose |
 | :--- | :--- |
@@ -139,7 +176,7 @@ Managed at runtime through [FeatureManager.php](src/Core/FeatureManager.php) and
 
 ---
 
-## 6. Testing, Adversarial QA & Git Hooks
+## 7. Testing, Adversarial QA & Git Hooks
 
 ### PHP Syntax, Unit & Adversarial Suites
 ```bash
@@ -172,14 +209,14 @@ git config core.hooksPath .githooks
 
 ---
 
-## 7. Qualiopi, Datadock & SCORM 1.2 Compliance
+## 8. Qualiopi, Datadock & SCORM 1.2 Compliance
 
 - **Complete Qualiopi Evidence Trail:** `15`-question positioning diagnostic -> half-day attendance (`J1_AM`..`J11_PM`) with dual trainee/trainer signatures -> formative module quizzes + oracle-verified 7-pillar labs -> `40`-question certification exam (`75%` pass threshold) -> CSPRNG certificate `LP-PG18-CERT-<uid>-<8HEX>` with offline SVG QR verification (`page=verify`) -> Hot & Cold (`J+60`) satisfaction surveys -> Formula-safe OPCO/Qualiopi CSV & SCORM 1.2 exports.
 - **Accessibility & Brand Discipline:** WCAG 2.1 AA `--text-muted` contrast (`#94A3B8` dark / `#475569` light), keyboard `:focus-visible`, reduced-motion support, `tabular-nums`, self-hosted assets, zero external CDNs, and exclusive LightPath SARL branding.
 
 ---
 
-## 8. Engineering Documentation Index
+## 9. Engineering Documentation Index
 
 | Document | Contents |
 | :--- | :--- |
@@ -187,6 +224,8 @@ git config core.hooksPath .githooks
 | [SECURITY.md](SECURITY.md) | Vulnerability disclosure policy (`contact@lightpath.fr`), 48h SLA, supported versions |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines, PHP `>= 8.3` zero-dependency rules, strict CSP, English comment policy, PR checklist |
 | [CHANGELOG.md](CHANGELOG.md) | Release notes following Keep a Changelog (`2.0.0`) |
+| [docs/MOODLE_COMPARISON.md](docs/MOODLE_COMPARISON.md) | Strategic 12-domain architectural & feature benchmark vs. Moodle `4.5 LTS` / `5.0`, canonical `FEAT-01`..`FEAT-20` gap analysis, and YAGNI anti-goals |
+| [docs/ACTION_LOGBOOK.md](docs/ACTION_LOGBOOK.md) | Engineering Action Logbook (`ACT-001`..`ACT-004`), Phase 1–8 execution dashboard, and prioritized Moodle-gap backlog (`FEAT-01`..`FEAT-20`) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Mermaid topology, `src/Http/*` controllers & admin partials, dual `JsonStorage`/`PdoStorage` concurrency, caching, strict zero-inline-style UI |
 | [docs/SECURITY.md](docs/SECURITY.md) | Threat model, `style-src 'self'` CSP + standalone doc CSP, `verifySameOriginRequest()`, `isUserActive()`, SHA-256 tamper-evident audit hash chain, SQL sandbox |
 | [docs/ADMIN_AND_TRAINER_GUIDE.md](docs/ADMIN_AND_TRAINER_GUIDE.md) | Role matrix, Trainer cockpit (at-risk learners, matrix, presets, Cohort/Qualiopi exports), Admin control plane (10 flags, 4 profiles, per-course overrides, `.admin-split-grid` health) |
@@ -201,7 +240,7 @@ git config core.hooksPath .githooks
 
 ---
 
-## 9. License & Courseware Scope
+## 10. License & Courseware Scope
 
-- **Open-Source LMS Engine & Demo Pack (`MIT`):** The LightPath Training Portal engine (`src/`, `public/`, `templates/`, `bin/`, `config/`, `tests/`) and the bundled [examples/demo-course/](examples/demo-course/) curriculum are licensed under the [MIT License](LICENSE) (`Copyright (c) 2026 LightPath SARL (Jean-Marie Renouard)`).
+- **Open-Source LMS Engine & Bundled Demo Packs (`MIT`):** The LightPath Training Portal engine (`src/`, `public/`, `templates/`, `bin/`, `config/`, `tests/`) and both bundled course-packs ([examples/demo-course/](examples/demo-course/) and [examples/git-basics-course/](examples/git-basics-course/)) are licensed under the [MIT License](LICENSE) (`Copyright (c) 2026 LightPath SARL (Jean-Marie Renouard)`).
 - **Commercial Courseware Repositories:** Separate full-scale training repositories (such as LightPath SARL's proprietary `training_postgresql` curriculum) are **not** included in this repository and remain governed by their own commercial licensing terms when mounted via `LMS_COURSE_ROOT`.
