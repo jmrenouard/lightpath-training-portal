@@ -3271,6 +3271,122 @@ try {
     $s25CleanupDir($s26Root);
 }
 
+// ============================================================================
+// 27. Moodle Comparison, Action Logbook Backlog & README Documentation
+// ============================================================================
+echo "\n--- 27. Moodle Comparison, Action Logbook & README Integrity ---\n";
+$s27RepoRoot = realpath(__DIR__ . '/..') ?: dirname(__DIR__);
+$moodleComparisonPath = $s27RepoRoot . '/docs/MOODLE_COMPARISON.md';
+$actionLogbookPath = $s27RepoRoot . '/docs/ACTION_LOGBOOK.md';
+$readmePath = $s27RepoRoot . '/README.md';
+
+$moodleExists = is_file($moodleComparisonPath);
+$moodleBody = $moodleExists ? (string)file_get_contents($moodleComparisonPath) : '';
+$t->assertTrue(
+    $moodleExists && trim($moodleBody) !== '',
+    "Section 27: docs/MOODLE_COMPARISON.md exists and is non-empty"
+);
+$t->assertTrue(
+    str_contains($moodleBody, 'Moodle') && str_contains($moodleBody, '4.5') && str_contains($moodleBody, '5.0'),
+    "Section 27: docs/MOODLE_COMPARISON.md references Moodle, 4.5, and 5.0"
+);
+
+$missingMoodleFeats = [];
+for ($fIdx = 1; $fIdx <= 20; $fIdx++) {
+    $featId = sprintf('FEAT-%02d', $fIdx);
+    if (!str_contains($moodleBody, $featId)) {
+        $missingMoodleFeats[] = $featId;
+    }
+}
+$t->assertEquals(
+    [],
+    $missingMoodleFeats,
+    "Section 27: docs/MOODLE_COMPARISON.md contains all 20 backlog IDs (FEAT-01..FEAT-20)"
+);
+
+$logbookExists = is_file($actionLogbookPath);
+$logbookBody = $logbookExists ? (string)file_get_contents($actionLogbookPath) : '';
+$t->assertTrue(
+    $logbookExists && trim($logbookBody) !== '',
+    "Section 27: docs/ACTION_LOGBOOK.md exists and is non-empty"
+);
+
+$missingLogbookFeats = [];
+for ($fIdx = 1; $fIdx <= 20; $fIdx++) {
+    $featId = sprintf('FEAT-%02d', $fIdx);
+    if (preg_match('/\[ \][^\r\n]*\b' . preg_quote($featId, '/') . '\b/', $logbookBody) !== 1) {
+        $missingLogbookFeats[] = $featId;
+    }
+}
+$t->assertEquals(
+    [],
+    $missingLogbookFeats,
+    "Section 27: docs/ACTION_LOGBOOK.md tracks unchecked [ ] backlog items for all FEAT-01..FEAT-20"
+);
+
+$missingActs = [];
+for ($aIdx = 1; $aIdx <= 4; $aIdx++) {
+    $actId = sprintf('ACT-%03d', $aIdx);
+    if (!str_contains($logbookBody, $actId)) {
+        $missingActs[] = $actId;
+    }
+}
+$t->assertEquals(
+    [],
+    $missingActs,
+    "Section 27: docs/ACTION_LOGBOOK.md includes action history IDs ACT-001..ACT-004"
+);
+$t->assertTrue(
+    stripos($logbookBody, '1. Ongoing Actions') !== false && stripos($logbookBody, '2. Completed Actions') !== false,
+    "Section 27: docs/ACTION_LOGBOOK.md contains both '1. Ongoing Actions' and '2. Completed Actions'"
+);
+
+$readmeExists = is_file($readmePath);
+$readmeBody = $readmeExists ? (string)file_get_contents($readmePath) : '';
+$t->assertTrue(
+    $readmeExists
+    && str_contains($readmeBody, 'Moodle')
+    && str_contains($readmeBody, '[docs/MOODLE_COMPARISON.md](docs/MOODLE_COMPARISON.md)')
+    && str_contains($readmeBody, '[docs/ACTION_LOGBOOK.md](docs/ACTION_LOGBOOK.md)')
+    && str_contains($readmeBody, 'examples/git-basics-course/'),
+    "Section 27: README.md mentions Moodle, links MOODLE_COMPARISON.md & ACTION_LOGBOOK.md, and cites examples/git-basics-course/"
+);
+
+$missingReadmeFeats = [];
+for ($fIdx = 1; $fIdx <= 20; $fIdx++) {
+    $featId = sprintf('FEAT-%02d', $fIdx);
+    if (!str_contains($readmeBody, $featId)) {
+        $missingReadmeFeats[] = $featId;
+    }
+}
+$t->assertEquals(
+    [],
+    $missingReadmeFeats,
+    "Section 27: README.md roadmap summary references all canonical IDs FEAT-01..FEAT-20"
+);
+
+// Verify new comparison/backlog docs and README have 0 prohibited vendor leaks or external CDN URLs.
+$s27BlockedBrand = 'noble' . 'prog';
+$s27BlockedCdns = ['https://cd' . 'n.', 'http://cd' . 'n.', 'fonts.google' . 'apis', 'fonts.gst' . 'atic', 'unp' . 'kg.com', 'jsdeli' . 'vr.net', 'cdnjs.cloud' . 'flare.com'];
+foreach ([
+    'docs/MOODLE_COMPARISON.md' => $moodleBody,
+    'docs/ACTION_LOGBOOK.md' => $logbookBody,
+    'README.md' => $readmeBody,
+] as $s27DocName => $s27DocBody) {
+    $s27VendorClean = $s27DocBody !== '' && stripos($s27DocBody, $s27BlockedBrand) === false;
+    $s27CdnClean = true;
+    foreach ($s27BlockedCdns as $s27Cdn) {
+        if (stripos($s27DocBody, $s27Cdn) !== false) {
+            $s27CdnClean = false;
+            break;
+        }
+    }
+    $t->assertTrue(
+        $s27VendorClean && $s27CdnClean,
+        "Section 27: {$s27DocName} contains 0 prohibited vendor references and 0 external CDN URLs"
+    );
+}
+
 exit($t->summary());
 
 
