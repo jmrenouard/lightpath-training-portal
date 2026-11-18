@@ -3,7 +3,8 @@ declare(strict_types=1);
 use LightPath\LMS\Core\Security;
 use LightPath\LMS\Course\CourseRepository;
 
-$labId = (string)($_GET['id'] ?? 'lab_01_introduction_setup_postgresql_18');
+$firstLabViewId = (string)(array_key_first($currentCourse['labs'] ?? []) ?: 'lab_01_introduction_setup_postgresql_18');
+$labId = (string)($_GET['id'] ?? $firstLabViewId);
 $lab = $courseRepo->getLab($currentCourseSlug, $labId);
 if ($lab === null) {
     $firstKey = array_key_first($currentCourse['labs'] ?? []);
@@ -15,12 +16,16 @@ if ($lab === null) {
     return;
 }
 
+$courseHasDocker = !isset($currentCourse['docker_enabled']) || !empty($currentCourse['docker_enabled']);
+$dockerFeatureEnabled = !isset($featureManager) || $featureManager->isEnabledForCourse('docker_labs', $currentCourseSlug);
+$courseDockerEnabled = $courseHasDocker && $dockerFeatureEnabled;
+
 $labId = (string)$lab['id'];
 $parsed = $mdParser->parseLabFile($lab['source_md_path'], $currentCourseSlug);
 $isLabDone = in_array($labId, $userProgress['completed_labs'] ?? [], true);
 $savedNote = (string)($userProgress['notes'][$labId] ?? '');
-$defaultSql = $parsed['sql_snippets'][0]['sql'] ?? "SELECT version(), current_setting('server_version_num'), current_setting('data_checksums');";
-$defaultLabDb = $sqlRunner->detectTargetDatabase($labId);
+$defaultSql = $courseHasDocker ? ($parsed['sql_snippets'][0]['sql'] ?? "SELECT version(), current_setting('server_version_num'), current_setting('data_checksums');") : '';
+$defaultLabDb = $courseHasDocker ? $sqlRunner->detectTargetDatabase($labId) : '';
 $isBookmarked = false;
 foreach (($userProgress['bookmarks'] ?? []) as $bm) {
     if (($bm['type'] ?? '') === 'lab' && ($bm['id'] ?? '') === $labId) {
@@ -74,8 +79,9 @@ $activeLabToc = match ($labMode) {
     'full' => $parsed['toc'],
     default => (!empty($parsed['enonce_toc']) ? $parsed['enonce_toc'] : $parsed['toc']),
 };
-$dockerPassword = isset($docker) ? $docker->getDefaultPassword() : (string)($dockerStatus['default_password'] ?? 'postgres');
-$dockerFeatureEnabled = !isset($featureManager) || $featureManager->isEnabled('docker_labs');
+$dockerPassword = $courseDockerEnabled
+    ? (isset($docker) ? $docker->getDefaultPassword() : (string)($dockerStatus['default_password'] ?? 'postgres'))
+    : '';
 ?>
 
 <!-- Practical lab header, track position, and downloadable resources bar -->
@@ -137,9 +143,13 @@ $dockerFeatureEnabled = !isset($featureManager) || $featureManager->isEnabled('d
                     data-title="<?= Security::e($lab['badge_code'] . ' — ' . $lab['title']) ?>">
                 <?= $isBookmarked ? '⭐ Favori' : '☆ Favori' ?>
             </button>
-            <?php if (!empty($lab['linked_cheatsheet_id'])): ?>
-                <a href="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=cheatsheet&id=<?= urlencode((string)$lab['linked_cheatsheet_id']) ?>&format=pdf" class="btn btn-outline btn-sm flex-1" title="Télécharger la Fiche Mémo PDF de cet atelier">
-                    📑 Mémo Lab PDF
+            <?php if (!empty($lab['linked_cheatsheet_id'])):
+                $labCsId = (string)$lab['linked_cheatsheet_id'];
+                $labCsDownloads = $currentCourse['cheatsheets'][$labCsId]['downloads'] ?? [];
+                $labCsFormat = isset($labCsDownloads['pdf']) ? 'pdf' : (isset($labCsDownloads['md']) ? 'md' : (string)(array_key_first($labCsDownloads) ?: 'md'));
+            ?>
+                <a href="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=cheatsheet&id=<?= urlencode($labCsId) ?>&format=<?= urlencode($labCsFormat) ?>" class="btn btn-outline btn-sm flex-1" title="Télécharger la Fiche Mémo <?= Security::e(strtoupper($labCsFormat)) ?> de cet atelier">
+                    📑 Mémo Lab <?= Security::e(strtoupper($labCsFormat)) ?>
                 </a>
             <?php endif; ?>
         </div>
@@ -191,7 +201,7 @@ $dockerFeatureEnabled = !isset($featureManager) || $featureManager->isEnabled('d
     </div>
 
     <div class="d-flex gap-xs flex-wrap items-center">
-        <button type="button" id="btn-toggle-lab-solutions" class="btn btn-outline btn-sm" title="Déplier ou replier toutes les solutions SQL intégrées">
+        <button type="button" id="btn-toggle-lab-solutions" class="btn btn-outline btn-sm" title="Déplier ou replier toutes les solutions intégrées">
             👁️ Afficher / Masquer les Solutions
         </button>
         <button type="button"
@@ -203,7 +213,7 @@ $dockerFeatureEnabled = !isset($featureManager) || $featureManager->isEnabled('d
 </div>
 
 <!-- Interactive Docker container cockpit & live SQL console -->
-<?php if ($dockerFeatureEnabled): ?>
+<?php if ($courseDockerEnabled): ?>
 <section class="docker-cockpit">
     <div class="d-flex justify-between items-center flex-wrap gap-md mb-1">
         <div class="min-w-0 flex-1">
@@ -318,7 +328,7 @@ $dockerFeatureEnabled = !isset($featureManager) || $featureManager->isEnabled('d
         <div id="lab-sql-output" class="sql-output-console" aria-live="polite">Prêt (Ctrl+Entrée pour exécuter). Cliquez sur n'importe quel bouton « ▶ Exécuter dans le Lab SQL » dans l'énoncé ou le corrigé ci-dessous, ou cliquez sur « 🧪 Tester & Valider le Corrigé Officiel » pour rejouer le corrigé complet sur Docker.</div>
     </div>
 </section>
-<?php else: ?>
+<?php elseif ($courseHasDocker): ?>
 <section class="docker-cockpit" aria-label="Environnement Docker Labs désactivé">
     <div class="flash-banner" role="status">
         ℹ️ L'environnement interactif Docker Labs et la console SQL en ligne sont actuellement désactivés par l'administrateur. Vous pouvez consulter l'énoncé et exécuter vos commandes sur votre instance PostgreSQL locale.
@@ -364,7 +374,7 @@ $dockerFeatureEnabled = !isset($featureManager) || $featureManager->isEnabled('d
             <div class="lab-mode-banner lab-mode-banner-enonce">
                 <div>
                     <strong>📋 Mode Énoncé & Travail Pas-à-Pas :</strong>
-                    Réalisez les étapes dans la console SQL ci-dessus. Les solutions sont masquées par défaut pour préserver votre démarche d'investigation.
+                    <?= $courseDockerEnabled ? "Réalisez les étapes dans la console SQL ci-dessus. Les solutions sont masquées par défaut pour préserver votre démarche d'investigation." : "Réalisez les étapes pratiques dans votre terminal local. Les solutions sont masquées par défaut pour préserver votre démarche d'investigation." ?>
                 </div>
                 <?php if (!$solutionsLocked): ?>
                     <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&mode=corrige&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald btn-sm">
@@ -376,13 +386,13 @@ $dockerFeatureEnabled = !isset($featureManager) || $featureManager->isEnabled('d
             <!-- Progressive pedagogical hint drawer without revealing the full solution -->
             <details class="lms-card lms-card--hint-drawer">
                 <summary class="font-bold text-cyan text-sm">
-                    💡 Besoin d'un coup de pouce ? Afficher l'Indice & Piste de Diagnostic DBA (sans dévoiler la solution)
+                    💡 Besoin d'un coup de pouce ? Afficher l'Indice & Piste de Diagnostic<?= $courseHasDocker ? ' DBA' : '' ?> (sans dévoiler la solution)
                 </summary>
                 <div class="mt-xs text-sm text-secondary">
                     <p class="mb-xs mt-0"><?= Security::e((string)($labHint['hint'] ?? '')) ?></p>
                     <?php if (!empty($labHint['first_command_clue'])): ?>
                         <div class="text-sm text-primary">
-                            <strong>Première piste SQL / catalogue à inspecter :</strong>
+                            <strong><?= $courseHasDocker ? 'Première piste SQL / catalogue à inspecter :' : 'Première commande / piste à inspecter :' ?></strong>
                             <code><?= Security::e((string)$labHint['first_command_clue']) ?> ...</code>
                         </div>
                     <?php endif; ?>
@@ -497,7 +507,7 @@ $dockerFeatureEnabled = !isset($featureManager) || $featureManager->isEnabled('d
             <label for="user-personal-note" class="d-block sidebar-section-label mb-xs">
                 📝 Notes d'Atelier / REX
             </label>
-            <textarea id="user-personal-note" class="form-control" rows="5" placeholder="Consignez vos observations EXPLAIN, métriques TPS ou commandes..."><?= Security::e($savedNote) ?></textarea>
+            <textarea id="user-personal-note" class="form-control" rows="5" placeholder="<?= $courseHasDocker ? 'Consignez vos observations EXPLAIN, métriques TPS ou commandes...' : 'Consignez vos commandes, sorties et retours d\'expérience...' ?>"><?= Security::e($savedNote) ?></textarea>
             <div class="d-flex justify-between items-center mt-xs">
                 <span id="note-save-status" class="text-xs text-emerald"></span>
                 <button type="button" id="btn-save-note" class="btn btn-primary btn-sm" data-id="<?= Security::e($labId) ?>" data-course="<?= Security::e($currentCourseSlug) ?>">

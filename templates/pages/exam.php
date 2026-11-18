@@ -4,7 +4,19 @@ declare(strict_types=1);
 use LightPath\LMS\Core\Security;
 use LightPath\LMS\Course\LmsCatalog;
 
-$questions = LmsCatalog::getFinalExamQuestions();
+$questions = LmsCatalog::getFinalExamQuestions($currentCourseSlug);
+$examTotalCount = count($questions);
+$examPassCount = (int)ceil($examTotalCount * 0.75);
+$examPointPerQ = $examTotalCount > 0 ? round(100 / $examTotalCount, 1) : 2.5;
+$examPointFormatted = str_replace('.', ',', (string)$examPointPerQ);
+$examCourseTitle = $currentCourseSlug === 'postgresql-18'
+    ? 'PostgreSQL 18'
+    : (string)($currentCourse['short_title'] ?? $currentCourse['title'] ?? 'Formation');
+$examDomains = [];
+foreach ($questions as $eq) {
+    $examDomains[(string)($eq['domain'] ?? '')] = (string)($eq['domain_label'] ?? $eq['domain'] ?? '');
+}
+$examCourseHasDocker = !isset($currentCourse['docker_enabled']) || !empty($currentCourse['docker_enabled']);
 $bestExam = $storage->getBestExamAttempt($userId, $currentCourseSlug);
 $allAttempts = $storage->getExamAttempts($userId, $currentCourseSlug);
 $latestAttempt = !empty($allAttempts) ? $allAttempts[0] : null;
@@ -17,11 +29,15 @@ $isExamLockedForStudent = !empty($classroomState['lock_exam']) && !$auth->isStaf
     <div class="flex-1 min-w-0">
         <div class="d-flex items-center gap-xs flex-wrap mb-xs">
             <span class="badge-code">QUALIOPI INDICATEUR 11 • ÉVALUATION SOMMATIVE CERTIFIANTE</span>
-            <span class="badge-phase tabular-nums">40 Questions Pondérées • Seuil de Réussite : 75% (30/40)</span>
+            <span class="badge-phase tabular-nums"><?= $examTotalCount ?> Questions Pondérées • Seuil de Réussite : 75% (<?= $examPassCount ?>/<?= $examTotalCount ?>)</span>
         </div>
-        <h1 class="hero-title-md mb-xs">🏆 Examen Final de Certification PostgreSQL 18</h1>
+        <h1 class="hero-title-md mb-xs">🏆 Examen Final de Certification <?= Security::e($examCourseTitle) ?></h1>
         <p class="hero-subtitle-sm mb-0">
-            Validez officiellement l'ensemble des compétences opérationnelles du cursus PostgreSQL 18 (Architecture, SQL Avancé, Sécurité SCRAM/RLS, Sauvegardes PITR/HA, CBO & Kernel Linux Module 20).
+            <?php if ($currentCourseSlug === 'postgresql-18'): ?>
+                Validez officiellement l'ensemble des compétences opérationnelles du cursus PostgreSQL 18 (Architecture, SQL Avancé, Sécurité SCRAM/RLS, Sauvegardes PITR/HA, CBO & Kernel Linux Module 20).
+            <?php else: ?>
+                Validez officiellement l'ensemble des compétences opérationnelles de la formation <?= Security::e($examCourseTitle) ?> (<?= Security::e(implode(', ', array_values($examDomains))) ?>).
+            <?php endif; ?>
         </p>
     </div>
 
@@ -64,7 +80,7 @@ $isExamLockedForStudent = !empty($classroomState['lock_exam']) && !$auth->isStaf
                 <div class="kpi-value tabular-nums text-4xl <?= !empty($latestAttempt['passed']) ? 'text-emerald-bright' : 'text-amber-bright' ?>">
                     <?= (int)($latestAttempt['percent'] ?? 0) ?>%
                 </div>
-                <div class="kpi-sub tabular-nums"><?= (int)($latestAttempt['score'] ?? 0) ?> / <?= (int)($latestAttempt['total'] ?? 40) ?> bonnes réponses</div>
+                <div class="kpi-sub tabular-nums"><?= (int)($latestAttempt['score'] ?? 0) ?> / <?= (int)($latestAttempt['total'] ?? $examTotalCount) ?> bonnes réponses</div>
             </div>
         </div>
 
@@ -73,7 +89,7 @@ $isExamLockedForStudent = !empty($classroomState['lock_exam']) && !$auth->isStaf
                 <div class="domain-breakdown-card">
                     <div class="d-flex justify-between items-center mb-xs">
                         <strong class="text-sm"><?= Security::e((string)($dInfo['label'] ?? $dKey)) ?></strong>
-                        <span class="badge-code tabular-nums"><?= (int)($dInfo['correct'] ?? 0) ?>/<?= (int)($dInfo['total'] ?? 8) ?> (<?= (int)($dInfo['percent'] ?? 0) ?>%)</span>
+                        <span class="badge-code tabular-nums"><?= (int)($dInfo['correct'] ?? 0) ?>/<?= (int)($dInfo['total'] ?? 0) ?> (<?= (int)($dInfo['percent'] ?? 0) ?>%)</span>
                     </div>
                     <div class="progress-bar-track progress-bar-track--sm">
                         <div class="progress-bar-fill" data-progress="<?= (int)($dInfo['percent'] ?? 0) ?>"></div>
@@ -102,7 +118,7 @@ $isExamLockedForStudent = !empty($classroomState['lock_exam']) && !$auth->isStaf
             🔒 L'examen final est temporairement verrouillé par le formateur jusqu'à la session d'évaluation officielle
         </h2>
         <p class="exam-lock-desc">
-            Conformément au protocole d'évaluation sommative Qualiopi (Indicateur 11), le formateur déverrouille l'épreuve certifiante de 40 QCM lors de la séquence d'examen. En attendant, vous pouvez consolider vos acquis avec les flashcards SRS et les ateliers Docker.
+            Conformément au protocole d'évaluation sommative Qualiopi (Indicateur 11), le formateur déverrouille l'épreuve certifiante de <?= $examTotalCount ?> QCM lors de la séquence d'examen. En attendant, vous pouvez consolider vos acquis avec les flashcards SRS et les <?= $examCourseHasDocker ? 'ateliers Docker' : 'ateliers pratiques' ?>.
         </p>
         <div class="d-flex justify-center gap-sm flex-wrap">
             <a href="index.php?page=flashcards&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-primary btn-sm">
@@ -119,8 +135,8 @@ $isExamLockedForStudent = !empty($classroomState['lock_exam']) && !$auth->isStaf
     <input type="hidden" name="duration_seconds" id="exam-duration-seconds" value="0"/>
 
     <div class="d-flex justify-between items-center flex-wrap gap-sm mb-md">
-        <h2 class="section-heading-md mb-0">📝 Épreuve Certifiante (40 Questions QCM)</h2>
-        <span class="text-sm text-secondary">Chaque question vaut 2,5 points sur 100.</span>
+        <h2 class="section-heading-md mb-0">📝 Épreuve Certifiante (<?= $examTotalCount ?> Questions QCM)</h2>
+        <span class="text-sm text-secondary">Chaque question vaut <?= Security::e($examPointFormatted) ?> points sur 100.</span>
     </div>
 
     <?php foreach ($questions as $q):
@@ -129,7 +145,7 @@ $isExamLockedForStudent = !empty($classroomState['lock_exam']) && !$auth->isStaf
     ?>
         <div class="quiz-question-box mb-md">
             <div class="d-flex justify-between items-center gap-xs mb-xs">
-                <span class="badge-code tabular-nums">Question <?= sprintf('%02d', (int)$q['number']) ?> / 40</span>
+                <span class="badge-code tabular-nums">Question <?= sprintf('%02d', (int)$q['number']) ?> / <?= $examTotalCount ?></span>
                 <span class="badge-phase"><?= Security::e($q['domain_label']) ?></span>
             </div>
             <div class="font-bold mb-sm text-primary">
@@ -153,7 +169,7 @@ $isExamLockedForStudent = !empty($classroomState['lock_exam']) && !$auth->isStaf
     <?php endforeach; ?>
 
     <button type="submit" class="btn btn-emerald w-100 btn-submit-lg">
-        🏆 Soumettre mon Examen Final de Certification PostgreSQL 18
+        🏆 Soumettre mon Examen Final de Certification <?= Security::e($examCourseTitle) ?>
     </button>
 </form>
 <?php endif; ?>

@@ -5,8 +5,24 @@ $allowSelfRegistration = isset($featureManager) ? $featureManager->isEnabled('se
 $allowDemoQuickLogin = isset($featureManager) ? $featureManager->isEnabled('demo_quick_login') : false;
 $activeTab = ($allowSelfRegistration && ($_GET['tab'] ?? 'login') === 'register') ? 'register' : 'login';
 $csrfToken = Security::getCsrfToken();
-$moduleCountLabel = !empty($currentCourse['modules']) ? count($currentCourse['modules']) : 34;
-$labCountLabel = !empty($currentCourse['labs']) ? count($currentCourse['labs']) : 34;
+$allActiveCourses = isset($courseRepo) ? $courseRepo->getAllCourses() : [];
+$courseCountLabel = !empty($allActiveCourses) ? count($allActiveCourses) : 1;
+$moduleCountLabel = 0;
+$labCountLabel = 0;
+$anyDockerCourse = false;
+if (!empty($allActiveCourses)) {
+    foreach ($allActiveCourses as $cItem) {
+        $moduleCountLabel += count($cItem['modules'] ?? []);
+        $labCountLabel += count($cItem['labs'] ?? []);
+        if (!isset($cItem['docker_enabled']) || !empty($cItem['docker_enabled'])) {
+            $anyDockerCourse = true;
+        }
+    }
+} else {
+    $moduleCountLabel = !empty($currentCourse['modules']) ? count($currentCourse['modules']) : 34;
+    $labCountLabel = !empty($currentCourse['labs']) ? count($currentCourse['labs']) : 34;
+    $anyDockerCourse = !isset($currentCourse['docker_enabled']) || !empty($currentCourse['docker_enabled']);
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -33,8 +49,10 @@ $labCountLabel = !empty($currentCourse['labs']) ? count($currentCourse['labs']) 
                 <h1 class="hero-title-lg mt-sm mb-sm">LightPath Training Portal</h1>
                 <p class="text-secondary text-md">
                     Plateforme interactive d'apprentissage et d'entraînement pratique :
-                    <strong class="tabular-nums"><?= (int)$moduleCountLabel ?> Modules de cours</strong>, <strong class="tabular-nums"><?= (int)$labCountLabel ?> Ateliers Docker</strong>, <strong>Console SQL Live</strong>,
-                    <strong>Quiz QCM</strong> et téléchargements multi-formats (<code>PDF</code>, <code>PPTX</code>, <code>MD</code>, <code>HTML</code>, <code>DOCX</code>).
+                    <strong class="tabular-nums"><?= (int)$courseCountLabel ?> <?= $courseCountLabel > 1 ? 'Formations' : 'Formation' ?></strong>,
+                    <strong class="tabular-nums"><?= (int)$moduleCountLabel ?> Modules de cours</strong>,
+                    <strong class="tabular-nums"><?= (int)$labCountLabel ?> Ateliers pratiques</strong>,
+                    <strong>Diaporamas 16:9</strong>, <strong>Quiz QCM</strong>, <strong>Certificats Qualiopi</strong><?= $anyDockerCourse ? ' &amp; <strong>Console SQL Docker</strong>' : '' ?> et téléchargements multi-formats (<code>PDF</code>, <code>PPTX</code>, <code>MD</code>, <code>HTML</code>, <code>DOCX</code>).
                 </p>
 
                 <?php if ($allowDemoQuickLogin): ?>
@@ -83,7 +101,7 @@ $labCountLabel = !empty($currentCourse['labs']) ? count($currentCourse['labs']) 
             <?php if ($activeTab === 'login'): ?>
                 <h2 class="text-xl mb-xs">Accéder à votre Espace Formation</h2>
                 <p class="text-secondary text-sm mb-md">
-                    Connectez-vous pour retrouver votre progression, vos supports et votre conteneur Docker PostgreSQL 18.
+                    Connectez-vous pour retrouver vos formations, vos supports interactifs, vos ateliers pratiques et vos attestations Qualiopi.
                 </p>
                 <form method="POST" action="index.php?action=login" id="login-form">
                     <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>
@@ -102,7 +120,7 @@ $labCountLabel = !empty($currentCourse['labs']) ? count($currentCourse['labs']) 
             <?php else: ?>
                 <h2 class="text-xl mb-xs">Inscription Nouvel Apprenant</h2>
                 <p class="text-secondary text-sm mb-md">
-                    Créez votre compte pour accéder immédiatement aux modules, quiz et à votre instance Docker dédiée.
+                    Créez votre compte pour accéder immédiatement aux modules, diaporamas, quiz et ateliers pratiques du portail.
                 </p>
                 <form method="POST" action="index.php?action=register" id="register-form">
                     <input type="hidden" name="csrf_token" value="<?= Security::e($csrfToken) ?>"/>

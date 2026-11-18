@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 220" width="880" height="220" role="img" aria-label="Graphe de divergence de branches Git et fusion 3-way">
+  <defs>
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38BDF8"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#F59E0B"/>
+    </marker>
+    <marker id="arrow-emerald" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#10B981"/>
+    </marker>
+  </defs>
+
+  <!-- Obsidian studio canvas -->
+  <rect x="0" y="0" width="880" height="220" rx="12" fill="#0B1120"/>
+  <rect x="1" y="1" width="878" height="218" rx="11" fill="none" stroke="#1E293B" stroke-width="1.5"/>
+
+  <!-- Header badge and title -->
+  <rect x="24" y="16" width="174" height="22" rx="6" fill="#0F172A" stroke="#00B0F0" stroke-width="1"/>
+  <text x="111" y="31" fill="#38BDF8" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle" letter-spacing="0.06em">BRANCHES &amp; 3-WAY MERGE</text>
+  <text x="214" y="31" fill="#F8FAFC" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="12" font-weight="700">Divergence d'Historique &amp; Commit de Fusion</text>
+
+  <!-- Connectors -->
+  <line x1="138" y1="120" x2="176" y2="120" stroke="#38BDF8" stroke-width="2" marker-end="url(#arrow-cyan)"/>
+  <path d="M 288 108 L 368 74" fill="none" stroke="#F59E0B" stroke-width="2" marker-end="url(#arrow-amber)"/>
+  <path d="M 288 132 L 344 166" fill="none" stroke="#38BDF8" stroke-width="2" marker-end="url(#arrow-cyan)"/>
+  <line x1="496" y1="168" x2="536" y2="168" stroke="#38BDF8" stroke-width="2" marker-end="url(#arrow-cyan)"/>
+  <path d="M 526 74 L 704 110" fill="none" stroke="#10B981" stroke-width="2" marker-end="url(#arrow-emerald)"/>
+  <path d="M 678 168 L 704 132" fill="none" stroke="#10B981" stroke-width="2" marker-end="url(#arrow-emerald)"/>
+
+  <!-- Branch lane badges -->
+  <text x="448" y="45" fill="#F59E0B" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="10.5" font-weight="700" text-anchor="middle">branche fix/rounding</text>
+  <text x="514" y="207" fill="#38BDF8" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="10.5" font-weight="700" text-anchor="middle">branche feat/tva-eu</text>
+
+  <!-- C1 init -->
+  <rect x="26" y="96" width="112" height="48" rx="9" fill="#0F172A" stroke="#38BDF8" stroke-width="1.6"/>
+  <text x="82" y="124" fill="#F8FAFC" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="12.5" font-weight="700" text-anchor="middle">C1 init</text>
+
+  <!-- C2 base -->
+  <rect x="180" y="96" width="112" height="48" rx="9" fill="#0F172A" stroke="#00B0F0" stroke-width="1.6"/>
+  <text x="236" y="124" fill="#F8FAFC" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="12.5" font-weight="700" text-anchor="middle">C2 base</text>
+
+  <!-- C3 fix/rounding -->
+  <rect x="372" y="52" width="154" height="48" rx="9" fill="#0F172A" stroke="#F59E0B" stroke-width="1.6"/>
+  <text x="449" y="80" fill="#F8FAFC" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="12.5" font-weight="700" text-anchor="middle">C3 fix/rounding</text>
+
+  <!-- C4 feat/tva-eu -->
+  <rect x="348" y="144" width="148" height="48" rx="9" fill="#0F172A" stroke="#38BDF8" stroke-width="1.6"/>
+  <text x="422" y="172" fill="#F8FAFC" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="12.5" font-weight="700" text-anchor="middle">C4 feat/tva-eu</text>
+
+  <!-- C5 tests tva -->
+  <rect x="540" y="144" width="138" height="48" rx="9" fill="#0F172A" stroke="#38BDF8" stroke-width="1.6"/>
+  <text x="609" y="172" fill="#F8FAFC" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="12.5" font-weight="700" text-anchor="middle">C5 tests tva</text>
+
+  <!-- M1 merge commit -->
+  <rect x="708" y="96" width="146" height="48" rx="9" fill="#0F172A" stroke="#10B981" stroke-width="2"/>
+  <text x="781" y="124" fill="#10B981" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="12.5" font-weight="700" text-anchor="middle">M1 merge commit</text>
+</svg>

@@ -11,45 +11,135 @@ $userAttendance = $storage->getUserAttendance($inspectedUserId, $currentCourseSl
 $learningSeconds = (int)($userProgress['learning_seconds'] ?? 0);
 $selectedTrack = (string)($_GET['track'] ?? 'cursus-complet');
 
-$attendanceTracks = [
-    'cursus-complet' => [
-        'label' => 'Cursus Complet : 10 jours / 20 demi-journées (70h) — Jours 1 à 10',
-        'days' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-        'half_days' => 20,
-    ],
-    'parcours-1-initial-dba' => [
-        'label' => 'Parcours 1 Initial DBA : 3 jours / 6 demi-journées (21h) — Jours 1 à 3',
-        'days' => [1, 2, 3],
-        'half_days' => 6,
-    ],
-    'parcours-2-administration-production' => [
-        'label' => 'Parcours 2 Administration Production : 5 jours / 10 demi-journées (35h) — Jours 1 à 5',
-        'days' => [1, 2, 3, 4, 5],
-        'half_days' => 10,
-    ],
-    'parcours-3-performance-tuning' => [
-        'label' => 'Parcours 3 Performance & Tuning : 3 jours / 6 demi-journées (21h) — Jours 6 à 8',
-        'days' => [6, 7, 8],
-        'half_days' => 6,
-    ],
-];
-if (!isset($attendanceTracks[$selectedTrack])) {
-    $selectedTrack = 'cursus-complet';
-}
-$activeTrackSpec = $attendanceTracks[$selectedTrack];
+if ($currentCourseSlug === 'postgresql-18') {
+    $attendanceTracks = [
+        'cursus-complet' => [
+            'label' => 'Cursus Complet : 10 jours / 20 demi-journées (70h) — Jours 1 à 10',
+            'days' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            'half_days' => 20,
+        ],
+        'parcours-1-initial-dba' => [
+            'label' => 'Parcours 1 Initial DBA : 3 jours / 6 demi-journées (21h) — Jours 1 à 3',
+            'days' => [1, 2, 3],
+            'half_days' => 6,
+        ],
+        'parcours-2-administration-production' => [
+            'label' => 'Parcours 2 Administration Production : 5 jours / 10 demi-journées (35h) — Jours 1 à 5',
+            'days' => [1, 2, 3, 4, 5],
+            'half_days' => 10,
+        ],
+        'parcours-3-performance-tuning' => [
+            'label' => 'Parcours 3 Performance & Tuning : 3 jours / 6 demi-journées (21h) — Jours 6 à 8',
+            'days' => [6, 7, 8],
+            'half_days' => 6,
+        ],
+    ];
+    if (!isset($attendanceTracks[$selectedTrack])) {
+        $selectedTrack = 'cursus-complet';
+    }
+    $activeTrackSpec = $attendanceTracks[$selectedTrack];
 
-$halfDaySchedule = [
-    1 => ['title' => 'Jour 1 — Architecture Interne, Installation & Stockage (M01–M02)', 'mod_focus' => 'M01, M02, Labs 01–02'],
-    2 => ['title' => 'Jour 2 — MVCC, Isolation Transactionnelle & Sécurité SCRAM/RLS (M03–M04)', 'mod_focus' => 'M03, M04, Labs 03–04'],
-    3 => ['title' => 'Jour 3 — Modélisation Avancée, Indexation B-Tree/GIN/GiST/BRIN (M05–M06)', 'mod_focus' => 'M05, M06, Labs 05–06'],
-    4 => ['title' => 'Jour 4 — Développement SQL Moderne, CTE, Fenêtrage & PL/pgSQL (M07, SQL 01–05)', 'mod_focus' => 'M07, SQL 01–05'],
-    5 => ['title' => 'Jour 5 — Sauvegardes Logiques/Physiques PITR & Réplication HA (M08–M09)', 'mod_focus' => 'M08, M09, Labs 08–09'],
-    6 => ['title' => 'Jour 6 — Pooling PgBouncer, Optimiseur CBO & Plans EXPLAIN (M10–M12)', 'mod_focus' => 'M10, M11, M12'],
-    7 => ['title' => 'Jour 7 — Tuning Mémoire/WAL, Partitionnement & Extensions (M13–M15)', 'mod_focus' => 'M13, M14, M15'],
-    8 => ['title' => 'Jour 8 — Observabilité pg_stat_io, Migration & Vacuum Avancé (M16–M18)', 'mod_focus' => 'M16, M17, M18'],
-    9 => ['title' => 'Jour 9 — pgBackRest Industriel & Tuning Kernel Linux (M19–M20)', 'mod_focus' => 'M19, M20, Labs 19–20'],
-    10 => ['title' => 'Jour 10 — Architecture Cloud/K8s, Chaos DBA & Certification Finale (M21–M29)', 'mod_focus' => 'M21–M29 + Examen'],
-];
+    $halfDaySchedule = [
+        1 => ['title' => 'Jour 1 — Architecture Interne, Installation & Stockage (M01–M02)', 'mod_focus' => 'M01, M02, Labs 01–02'],
+        2 => ['title' => 'Jour 2 — MVCC, Isolation Transactionnelle & Sécurité SCRAM/RLS (M03–M04)', 'mod_focus' => 'M03, M04, Labs 03–04'],
+        3 => ['title' => 'Jour 3 — Modélisation Avancée, Indexation B-Tree/GIN/GiST/BRIN (M05–M06)', 'mod_focus' => 'M05, M06, Labs 05–06'],
+        4 => ['title' => 'Jour 4 — Développement SQL Moderne, CTE, Fenêtrage & PL/pgSQL (M07, SQL 01–05)', 'mod_focus' => 'M07, SQL 01–05'],
+        5 => ['title' => 'Jour 5 — Sauvegardes Logiques/Physiques PITR & Réplication HA (M08–M09)', 'mod_focus' => 'M08, M09, Labs 08–09'],
+        6 => ['title' => 'Jour 6 — Pooling PgBouncer, Optimiseur CBO & Plans EXPLAIN (M10–M12)', 'mod_focus' => 'M10, M11, M12'],
+        7 => ['title' => 'Jour 7 — Tuning Mémoire/WAL, Partitionnement & Extensions (M13–M15)', 'mod_focus' => 'M13, M14, M15'],
+        8 => ['title' => 'Jour 8 — Observabilité pg_stat_io, Migration & Vacuum Avancé (M16–M18)', 'mod_focus' => 'M16, M17, M18'],
+        9 => ['title' => 'Jour 9 — pgBackRest Industriel & Tuning Kernel Linux (M19–M20)', 'mod_focus' => 'M19, M20, Labs 19–20'],
+        10 => ['title' => 'Jour 10 — Architecture Cloud/K8s, Chaos DBA & Certification Finale (M21–M29)', 'mod_focus' => 'M21–M29 + Examen'],
+    ];
+} else {
+    $courseAttDays = max(1, (int)($currentCourse['attendance_days'] ?? 1));
+    $courseHalfDaysTotal = $courseAttDays * 2;
+    $courseHoursTotal = $courseAttDays * 7;
+    $dayUnit = $courseAttDays > 1 ? 'jours' : 'jour';
+    $daysRange = range(1, $courseAttDays);
+
+    $attendanceTracks = [];
+    foreach (($currentCourse['tracks'] ?? []) as $tSlug => $tCfg) {
+        $tTitle = (string)($tCfg['short_title'] ?? $tCfg['title'] ?? $tSlug);
+        $attendanceTracks[(string)$tSlug] = [
+            'label' => sprintf(
+                '%s : %d %s / %d demi-journées (%dh) — %s',
+                $tTitle,
+                $courseAttDays,
+                $dayUnit,
+                $courseHalfDaysTotal,
+                $courseHoursTotal,
+                $courseAttDays === 1 ? 'Jour 1' : ('Jours 1 à ' . $courseAttDays)
+            ),
+            'days' => $daysRange,
+            'half_days' => $courseHalfDaysTotal,
+        ];
+    }
+    if (empty($attendanceTracks)) {
+        $courseLabel = (string)($currentCourse['short_title'] ?? $currentCourse['title'] ?? 'Cursus Complet');
+        $attendanceTracks['cursus-complet'] = [
+            'label' => sprintf('%s : %d %s / %d demi-journées (%dh)', $courseLabel, $courseAttDays, $dayUnit, $courseHalfDaysTotal, $courseHoursTotal),
+            'days' => $daysRange,
+            'half_days' => $courseHalfDaysTotal,
+        ];
+    }
+
+    if ($selectedTrack === '' || $selectedTrack === 'cursus-complet' || !isset($attendanceTracks[$selectedTrack])) {
+        $selectedTrack = (string)array_key_first($attendanceTracks);
+    }
+    $activeTrackSpec = $attendanceTracks[$selectedTrack];
+
+    $allCoursePhases = [];
+    foreach (($currentCourse['tracks'] ?? []) as $tCfg) {
+        foreach (($tCfg['phases'] ?? []) as $ph) {
+            if (is_array($ph)) {
+                $allCoursePhases[] = $ph;
+            }
+        }
+    }
+    $courseModCodes = [];
+    foreach (($currentCourse['modules'] ?? []) as $mObj) {
+        $courseModCodes[] = (string)($mObj['code'] ?? '');
+    }
+    $courseModCodes = array_values(array_filter($courseModCodes, static fn(string $c): bool => $c !== ''));
+
+    $halfDaySchedule = [];
+    $modChunks = !empty($courseModCodes)
+        ? array_chunk($courseModCodes, max(1, (int)ceil(count($courseModCodes) / $courseAttDays)))
+        : array_fill(0, $courseAttDays, []);
+
+    foreach ($daysRange as $dIdx => $dayNum) {
+        $dayCodes = $modChunks[$dIdx] ?? [];
+        if ($courseAttDays === 1 && !empty($allCoursePhases)) {
+            $phaseTitles = array_values(array_filter(array_map(
+                static fn(array $ph): string => trim((string)($ph['title'] ?? '')),
+                $allCoursePhases
+            )));
+            $daySummaryTitle = !empty($phaseTitles)
+                ? implode(' • ', $phaseTitles)
+                : (string)($currentCourse['short_title'] ?? $currentCourse['title'] ?? 'Programme de formation');
+        } elseif (!empty($allCoursePhases[$dIdx]['title'])) {
+            $daySummaryTitle = (string)$allCoursePhases[$dIdx]['title'];
+        } else {
+            $daySummaryTitle = (string)($currentCourse['short_title'] ?? $currentCourse['title'] ?? 'Programme de formation');
+        }
+
+        if (!empty($dayCodes)) {
+            $modList = array_map(static fn(string $c): string => 'M' . $c, $dayCodes);
+            $labFirst = $dayCodes[0];
+            $labLast = $dayCodes[count($dayCodes) - 1];
+            $labRange = ($labFirst === $labLast) ? ('Lab ' . $labFirst) : ('Labs ' . $labFirst . '–' . $labLast);
+            $focusText = implode(', ', $modList) . ', ' . $labRange;
+        } else {
+            $focusText = (string)($currentCourse['badge'] ?? 'Modules & Ateliers');
+        }
+
+        $halfDaySchedule[$dayNum] = [
+            'title' => sprintf('Jour %d — %s', $dayNum, $daySummaryTitle),
+            'mod_focus' => $focusText,
+        ];
+    }
+}
 
 $signedHalfDaysCount = count($userAttendance);
 $loggedHours = $signedHalfDaysCount * 3.5;

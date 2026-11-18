@@ -46,7 +46,11 @@ $filteredTotalModules = count($filteredModules);
 $filteredTotalItems = max(1, $filteredTotalModules + $filteredTotalLabs);
 $filteredCompletionPct = min(100, (int)round((($filteredDoneModules + $filteredDoneLabs) / $filteredTotalItems) * 100));
 
-$certCode = (string)($userBestExam['certificate_id'] ?? sprintf('LP-PG18-ATT-%d-%s', (int)$userId, date('Ymd')));
+$certCourseHasDocker = !isset($currentCourse['docker_enabled']) || !empty($currentCourse['docker_enabled']);
+$certPrefix = $currentCourseSlug === 'postgresql-18'
+    ? 'PG18'
+    : (strtoupper(substr((string)preg_replace('/[^A-Z0-9]/i', '', $currentCourseSlug), 0, 6)) ?: 'COURSE');
+$certCode = (string)($userBestExam['certificate_id'] ?? sprintf('LP-%s-ATT-%d-%s', $certPrefix, (int)$userId, date('Ymd')));
 $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (!empty($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443) ? 'https' : 'http';
 $host = $_SERVER['HTTP_HOST'] ?? '';
 $baseUrl = ($host !== '') ? "{$proto}://{$host}" : rtrim((string)($appConfig['website'] ?? 'https://www.lightpath.fr'), '/');
@@ -90,11 +94,17 @@ $verifyUrl = $baseUrl . '/index.php?page=verify&code=' . urlencode($certCode);
                 <div class="text-sm text-secondary">Organisme de Formation Professionnelle • Réf. <?= Security::e($appConfig['qualiopi_ref']) ?></div>
             </div>
         </div>
-        <img src="assets/img/postgresql_elephant_dark.png"
-             data-dark-src="assets/img/postgresql_elephant_dark.png"
-             data-light-src="assets/img/postgresql_elephant_light.png"
-             alt="PostgreSQL 18"
-             class="theme-aware-logo cert-logo-img"/>
+        <?php if ($currentCourseSlug === 'postgresql-18'): ?>
+            <img src="assets/img/postgresql_elephant_dark.png"
+                 data-dark-src="assets/img/postgresql_elephant_dark.png"
+                 data-light-src="assets/img/postgresql_elephant_light.png"
+                 alt="PostgreSQL 18"
+                 class="theme-aware-logo cert-logo-img"/>
+        <?php else: ?>
+            <img src="<?= Security::e(ltrim((string)($currentCourse['icon'] ?? 'assets/img/postgresql_elephant.png'), '/')) ?>"
+                 alt="<?= Security::e((string)($currentCourse['short_title'] ?? 'Course')) ?>"
+                 class="cert-logo-img"/>
+        <?php endif; ?>
     </div>
 
     <div class="text-center mb-2">
@@ -121,14 +131,14 @@ $verifyUrl = $baseUrl . '/index.php?page=verify&code=' . urlencode($certCode);
             <div class="kpi-sub">Taxonomie de Bloom (<?= $filteredTotalModules ?> modules)</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-label">Ateliers Docker Validés</div>
+            <div class="kpi-label"><?= $certCourseHasDocker ? 'Ateliers Docker Validés' : 'Ateliers Pratiques Validés' ?></div>
             <div class="kpi-value tabular-nums"><?= $filteredDoneLabs ?> / <?= $filteredTotalLabs ?></div>
             <div class="kpi-sub">Oracles d'exécution du cursus</div>
         </div>
         <div class="kpi-card">
             <div class="kpi-label">Examen Sommatif & Assiduité</div>
             <div class="kpi-value tabular-nums"><?= $userBestExam !== null ? ((int)$userBestExam['percent'] . '%') : 'En attente' ?></div>
-            <div class="kpi-sub tabular-nums"><?= count($userAttendance ?? []) ?>/<?= $certTotalHalfDays ?> demi-journées • <?= (int)($userGamification['unlocked_count'] ?? 0) ?>/<?= $certTotalBadges ?> Badges DBA</div>
+            <div class="kpi-sub tabular-nums"><?= count($userAttendance ?? []) ?>/<?= $certTotalHalfDays ?> demi-journées • <?= (int)($userGamification['unlocked_count'] ?? 0) ?>/<?= $certTotalBadges ?> Badges<?= $currentCourseSlug === 'postgresql-18' ? ' DBA' : '' ?></div>
         </div>
     </div>
 
@@ -141,7 +151,7 @@ $verifyUrl = $baseUrl . '/index.php?page=verify&code=' . urlencode($certCode);
                     <th>Module & Compétence Opérationnelle Bloom</th>
                     <th>Cours</th>
                     <th>Quiz QCM</th>
-                    <th>Lab Docker</th>
+                    <th><?= $certCourseHasDocker ? 'Lab Docker' : 'Atelier' ?></th>
                 </tr>
             </thead>
             <tbody>

@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 220" width="880" height="220" role="img" aria-label="Architecture interne PostgreSQL 18 entre client, postmaster, backend, shared_buffers et stockage">
+  <defs>
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38BDF8"/>
+    </marker>
+    <marker id="arrow-emerald" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#10B981"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#F59E0B"/>
+    </marker>
+  </defs>
+
+  <!-- Obsidian studio canvas -->
+  <rect x="0" y="0" width="880" height="220" rx="12" fill="#0B1120"/>
+  <rect x="1" y="1" width="878" height="218" rx="11" fill="none" stroke="#1E293B" stroke-width="1.5"/>
+
+  <!-- Header badge and title -->
+  <rect x="20" y="14" width="160" height="22" rx="6" fill="#0F172A" stroke="#00B0F0" stroke-width="1"/>
+  <text x="100" y="29" fill="#38BDF8" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle" letter-spacing="0.06em">POSTGRESQL 18 ENGINE</text>
+  <text x="196" y="29" fill="#F8FAFC" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="12" font-weight="700">Processus, Mémoire Partagée &amp; Stockage Disque</text>
+
+  <!-- Client -->
+  <rect x="20" y="92" width="114" height="58" rx="9" fill="#0F172A" stroke="#38BDF8" stroke-width="1.6"/>
+  <text x="77" y="117" fill="#F8FAFC" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="13" font-weight="700" text-anchor="middle">Application</text>
+  <text x="77" y="136" fill="#94A3B8" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="11" font-weight="500" text-anchor="middle">psql / Client</text>
+
+  <!-- Postmaster -->
+  <rect x="194" y="92" width="106" height="58" rx="9" fill="#0F172A" stroke="#00B0F0" stroke-width="1.6"/>
+  <text x="247" y="117" fill="#F8FAFC" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="13" font-weight="700" text-anchor="middle">Postmaster</text>
+  <text x="247" y="136" fill="#38BDF8" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="11" font-weight="600" text-anchor="middle">postgres</text>
+
+  <!-- Backend -->
+  <rect x="352" y="92" width="118" height="58" rx="9" fill="#0F172A" stroke="#38BDF8" stroke-width="1.6"/>
+  <text x="411" y="117" fill="#F8FAFC" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="13" font-weight="700" text-anchor="middle">Processus</text>
+  <text x="411" y="136" fill="#38BDF8" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="11.5" font-weight="600" text-anchor="middle">Backend</text>
+
+  <!-- shared_buffers -->
+  <rect x="556" y="48" width="136" height="56" rx="9" fill="#0F172A" stroke="#10B981" stroke-width="1.75"/>
+  <text x="624" y="72" fill="#F8FAFC" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="12" font-weight="700" text-anchor="middle">shared_buffers</text>
+  <text x="624" y="91" fill="#10B981" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="11" font-weight="600" text-anchor="middle">Pages 8 Ko</text>
+
+  <!-- wal_buffers -->
+  <rect x="556" y="142" width="136" height="56" rx="9" fill="#0F172A" stroke="#F59E0B" stroke-width="1.75"/>
+  <text x="624" y="166" fill="#F8FAFC" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="12" font-weight="700" text-anchor="middle">wal_buffers</text>
+  <text x="624" y="185" fill="#F59E0B" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="11" font-weight="600" text-anchor="middle">Tampon WAL</text>
+
+  <!-- PGDATA -->
+  <rect x="752" y="48" width="108" height="56" rx="9" fill="#0F172A" stroke="#10B981" stroke-width="1.75"/>
+  <text x="806" y="72" fill="#F8FAFC" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="12.5" font-weight="700" text-anchor="middle">Tables &amp; Index</text>
+  <text x="806" y="91" fill="#10B981" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="11" font-weight="600" text-anchor="middle">PGDATA</text>
+
+  <!-- pg_wal -->
+  <rect x="752" y="142" width="108" height="56" rx="9" fill="#0F172A" stroke="#F59E0B" stroke-width="1.75"/>
+  <text x="806" y="166" fill="#F8FAFC" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="12.5" font-weight="700" text-anchor="middle">pg_wal</text>
+  <text x="806" y="185" fill="#94A3B8" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="11" font-weight="500" text-anchor="middle">Disque WAL</text>
+
+  <!-- Client -> Postmaster -->
+  <line x1="134" y1="121" x2="190" y2="121" stroke="#38BDF8" stroke-width="2" marker-end="url(#arrow-cyan)"/>
+  <text x="163" y="109" fill="#94A3B8" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="10" font-weight="600" text-anchor="middle">TCP 5432</text>
+
+  <!-- Postmaster -> Backend -->
+  <line x1="300" y1="121" x2="348" y2="121" stroke="#38BDF8" stroke-width="2" marker-end="url(#arrow-cyan)"/>
+  <text x="325" y="109" fill="#38BDF8" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="10.5" font-weight="600" text-anchor="middle">fork()</text>
+
+  <!-- Backend <-> shared_buffers -->
+  <path d="M 474 106 L 552 78" fill="none" stroke="#10B981" stroke-width="2" marker-start="url(#arrow-emerald)" marker-end="url(#arrow-emerald)"/>
+  <text x="506" y="73" fill="#10B981" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="10" font-weight="600" text-anchor="middle">R/W 8 Ko</text>
+
+  <!-- Backend -> wal_buffers -->
+  <path d="M 470 138 L 552 168" fill="none" stroke="#F59E0B" stroke-width="2" marker-end="url(#arrow-amber)"/>
+  <text x="504" y="174" fill="#F59E0B" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="10" font-weight="600" text-anchor="middle">Journal</text>
+
+  <!-- shared_buffers -> PGDATA -->
+  <line x1="692" y1="76" x2="748" y2="76" stroke="#10B981" stroke-width="2" marker-end="url(#arrow-emerald)"/>
+  <text x="721" y="65" fill="#94A3B8" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="9.5" font-weight="600" text-anchor="middle">Checkpointer</text>
+
+  <!-- wal_buffers -> pg_wal -->
+  <line x1="692" y1="170" x2="748" y2="170" stroke="#F59E0B" stroke-width="2" marker-end="url(#arrow-amber)"/>
+  <text x="721" y="159" fill="#94A3B8" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="9.5" font-weight="600" text-anchor="middle">WAL Writer</text>
+</svg>

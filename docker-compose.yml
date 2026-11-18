@@ -5,12 +5,14 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "${LMS_PORT:-8080}:8080"
     environment:
       LMS_DOCKER_FORCE_SIMULATED: "${LMS_DOCKER_FORCE_SIMULATED:-1}"
       LMS_DATA_DIR: "/app/storage/data"
       LMS_STORAGE_DRIVER: "${LMS_STORAGE_DRIVER:-json}"
       LMS_INIT_ADMIN_PASSWORD: "${LMS_INIT_ADMIN_PASSWORD:-}"
+      LMS_INIT_TRAINER_PASSWORD: "${LMS_INIT_TRAINER_PASSWORD:-}"
+      LMS_INIT_STUDENT_PASSWORD: "${LMS_INIT_STUDENT_PASSWORD:-}"
     volumes:
       - lms_data:/app/storage/data
     restart: unless-stopped

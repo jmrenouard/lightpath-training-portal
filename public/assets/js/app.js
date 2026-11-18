@@ -128,21 +128,28 @@ document.addEventListener('DOMContentLoaded', () => {
     // ------------------------------------------------------------------------
     // 2. Lazy Loading of Local Vector Mermaid Renderer (only when required)
     // ------------------------------------------------------------------------
-    if (document.querySelectorAll('.mermaid').length > 0) {
-        const initMermaid = () => {
-            if (!window.mermaid) return;
-            try {
+    let mermaidInitialized = false;
+    const initMermaid = () => {
+        if (!window.mermaid) return;
+        try {
+            if (!mermaidInitialized) {
                 window.mermaid.initialize({
-                    startOnLoad: true,
+                    startOnLoad: false,
                     theme: 'neutral',
                     securityLevel: 'strict',
                     fontFamily: 'Plus Jakarta Sans, Open Sans, sans-serif'
                 });
-                if (typeof window.mermaid.run === 'function') {
-                    window.mermaid.run();
-                }
-            } catch (_) {}
-        };
+                mermaidInitialized = true;
+            }
+            const visibleNodes = Array.from(document.querySelectorAll('.mermaid:not([data-processed])'))
+                .filter((el) => el.offsetParent !== null);
+            if (visibleNodes.length > 0 && typeof window.mermaid.run === 'function') {
+                window.mermaid.run({ nodes: visibleNodes });
+            }
+        } catch (_) {}
+    };
+
+    if (document.querySelectorAll('.mermaid').length > 0) {
         if (window.mermaid) {
             initMermaid();
         } else {
@@ -160,12 +167,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const lightboxImg = document.getElementById('diagram-lightbox-img');
     const lightboxCaption = document.getElementById('diagram-lightbox-caption');
     const closeLightboxBtn = document.getElementById('btn-close-lightbox');
+    const defaultLightboxCaption = currentCourse === 'postgresql-18'
+        ? 'Schéma d\'Architecture PostgreSQL 18'
+        : `Schéma Technique — ${currentCourse}`;
 
     const openLightbox = (src, captionText) => {
         if (!lightbox || !lightboxImg || !src) return;
         lightboxImg.src = src;
         if (lightboxCaption) {
-            lightboxCaption.textContent = captionText || 'Schéma d\'Architecture PostgreSQL 18';
+            lightboxCaption.textContent = captionText || defaultLightboxCaption;
         }
         lightbox.hidden = false;
     };
@@ -491,6 +501,7 @@ document.addEventListener('DOMContentLoaded', () => {
             slides.forEach((s, i) => {
                 s.classList.toggle('active', i === currentSlide);
             });
+            initMermaid();
 
             outlineItems.forEach((item, i) => {
                 const isActive = i === currentSlide;
@@ -1235,6 +1246,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (cardBox) {
                 cardBox.setAttribute('data-level', String(level));
+            }
+            const masteredCountEl = document.getElementById('fc-mastered-count');
+            if (masteredCountEl) {
+                masteredCountEl.textContent = String(document.querySelectorAll('.flashcard-box[data-level="3"]').length);
             }
         });
     });

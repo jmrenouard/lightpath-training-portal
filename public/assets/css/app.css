@@ -1881,6 +1881,12 @@ body.theme-light .slide-stage-container {
     display: inline-block;
 }
 
+.lms-mermaid-canvas .mermaid svg {
+    max-width: 100%;
+    height: auto;
+    display: inline-block;
+}
+
 .lms-mermaid-source {
     margin: 0;
     padding: 0.85rem 1rem;

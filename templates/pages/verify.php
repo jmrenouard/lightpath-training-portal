@@ -8,6 +8,15 @@ if ($code === '' && !empty($userBestExam['certificate_id'])) {
     $code = (string)$userBestExam['certificate_id'];
 }
 
+if (str_starts_with(strtoupper($code), 'LP-GITBAS-') || $currentCourseSlug === 'git-basics') {
+    $verifyPrefix = 'GITBAS';
+} elseif ($currentCourseSlug === 'postgresql-18') {
+    $verifyPrefix = 'PG18';
+} else {
+    $verifyPrefix = strtoupper(substr((string)preg_replace('/[^A-Z0-9]/i', '', $currentCourseSlug), 0, 6)) ?: 'COURSE';
+}
+$verifyExampleCert = 'LP-' . $verifyPrefix . '-CERT-3-A1B2C3D4';
+$verifyFormatExample = 'LP-' . $verifyPrefix . '-CERT-...';
 $certData = ($code !== '') ? $storage->findCertificateByCode($code) : null;
 $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (!empty($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443) ? 'https' : 'http';
 $host = $_SERVER['HTTP_HOST'] ?? '';
@@ -23,7 +32,7 @@ $verifyUrl = $baseUrl . '/index.php?page=verify&code=' . urlencode($code);
         </div>
         <h1 class="hero-title-md mb-xs">🔍 Vérification d'Authenticité d'un Certificat</h1>
         <p class="hero-subtitle-sm mb-0">
-            Saisissez l'identifiant unique figurant sur l'attestation ou le certificat (format <code>LP-PG18-CERT-...</code>) pour contrôler sa validité auprès de l'organisme de formation LightPath SARL.
+            Saisissez l'identifiant unique figurant sur l'attestation ou le certificat (format <code><?= Security::e($verifyFormatExample) ?></code>) pour contrôler sa validité auprès de l'organisme de formation LightPath SARL.
         </p>
     </div>
 </div>
@@ -36,7 +45,7 @@ $verifyUrl = $baseUrl . '/index.php?page=verify&code=' . urlencode($code);
                name="code"
                class="form-control tabular-nums flex-1 search-query-input code-mono-input"
                aria-label="Identifiant unique du certificat"
-               placeholder="Ex: LP-PG18-CERT-3-A1B2C3D4"
+               placeholder="Ex: <?= Security::e($verifyExampleCert) ?>"
                value="<?= Security::e($code) ?>"
                required/>
         <button type="submit" class="btn btn-primary">
@@ -54,7 +63,7 @@ $verifyUrl = $baseUrl . '/index.php?page=verify&code=' . urlencode($code);
     <?php if ($certData !== null):
         $holderName = (string)($certData['user_name'] ?? $certData['holder_name'] ?? ($currentUser['name'] ?? 'Apprenant Certifié'));
         $holderCompany = (string)($certData['company'] ?? ($currentUser['company'] ?? ''));
-        $courseTitle = (string)($certData['course_title'] ?? $currentCourse['title'] ?? 'PostgreSQL 18 — Cursus Complet');
+        $courseTitle = (string)($certData['course_title'] ?? $currentCourse['title'] ?? 'Formation Certifiante LightPath');
         $submittedAt = (string)($certData['submitted_at'] ?? $certData['issued_at'] ?? date('Y-m-d'));
         $scorePct = (int)($certData['percent'] ?? $certData['percentage'] ?? 0);
         $mention = (string)($certData['mention'] ?? ($scorePct >= 75 ? 'Certifié LightPath' : 'Attestation de suivi'));
@@ -173,7 +182,7 @@ $verifyUrl = $baseUrl . '/index.php?page=verify&code=' . urlencode($code);
                 Aucun certificat enregistré ne correspond au code <code><?= Security::e($code) ?></code>
             </h2>
             <p class="text-secondary mb-0 text-sm">
-                Vérifiez l'orthographe exacte du code (ex: <code>LP-PG18-CERT-...</code>) ou contactez <strong><?= Security::e($appConfig['contact_email'] ?? 'contact@lightpath.fr') ?></strong>.
+                Vérifiez l'orthographe exacte du code (ex: <code><?= Security::e($verifyFormatExample) ?></code>) ou contactez <strong><?= Security::e($appConfig['contact_email'] ?? 'contact@lightpath.fr') ?></strong>.
             </p>
         </div>
     <?php endif; ?>

@@ -8,6 +8,8 @@ if (!is_array($userNotes)) {
     $userNotes = [];
 }
 $nonEmptyNotes = array_filter($userNotes, static fn($v): bool => trim((string)$v) !== '');
+$courseHasDocker = !isset($currentCourse['docker_enabled']) || !empty($currentCourse['docker_enabled']);
+$courseDockerEnabled = $courseHasDocker && (!isset($featureManager) || $featureManager->isEnabledForCourse('docker_labs', $currentCourseSlug));
 ?>
 
 <div class="hero-banner hero-banner-compact">
@@ -18,7 +20,7 @@ $nonEmptyNotes = array_filter($userNotes, static fn($v): bool => trim((string)$v
         </div>
         <h1 class="hero-title-md mb-xxs">📝 Mon Carnet de Notes & Révisions</h1>
         <p class="hero-subtitle-sm mb-0">
-            Retrouvez, filtrez et enrichissez l'ensemble de vos notes personnelles prises sur les <?= count($currentCourse['modules'] ?? []) ?> modules de cours et les <?= count($currentCourse['labs'] ?? []) ?> ateliers pratiques Docker, ou exportez votre carnet complet en Markdown.
+            Retrouvez, filtrez et enrichissez l'ensemble de vos notes personnelles prises sur les <?= count($currentCourse['modules'] ?? []) ?> modules de cours et les <?= count($currentCourse['labs'] ?? []) ?> <?= $courseDockerEnabled ? 'ateliers pratiques Docker' : 'ateliers pratiques' ?>, ou exportez votre carnet complet en Markdown.
         </p>
     </div>
     <div class="d-flex gap-sm flex-wrap">
@@ -45,7 +47,7 @@ $nonEmptyNotes = array_filter($userNotes, static fn($v): bool => trim((string)$v
                         </option>
                     <?php endforeach; ?>
                 </optgroup>
-                <optgroup label="🧪 Ateliers Pratiques Docker (<?= count($currentCourse['labs'] ?? []) ?>)">
+                <optgroup label="<?= $courseDockerEnabled ? '🧪 Ateliers Pratiques Docker' : '🧪 Ateliers Pratiques' ?> (<?= count($currentCourse['labs'] ?? []) ?>)">
                     <?php foreach (($currentCourse['labs'] ?? []) as $lId => $lab): ?>
                         <option value="<?= Security::e($lId) ?>">
                             <?= Security::e(($lab['badge_code'] ?? 'LAB') . ' — ' . ($lab['title'] ?? $lId)) ?>
@@ -57,7 +59,7 @@ $nonEmptyNotes = array_filter($userNotes, static fn($v): bool => trim((string)$v
                 💾 Enregistrer la note
             </button>
         </div>
-        <textarea id="new-note-textarea" class="form-control" rows="3" aria-label="Contenu de la nouvelle note" placeholder="Saisissez vos commandes SQL clés, retours d'expérience ou points de vigilance de production..."></textarea>
+        <textarea id="new-note-textarea" class="form-control" rows="3" aria-label="Contenu de la nouvelle note" placeholder="<?= $currentCourseSlug === 'postgresql-18' ? "Saisissez vos commandes SQL clés, retours d'expérience ou points de vigilance de production..." : "Saisissez vos commandes clés, retours d'expérience ou points de vigilance pratiques..." ?>"></textarea>
         <div id="new-note-feedback" class="text-sm text-emerald" hidden>✔ Note sauvegardée avec succès.</div>
     </div>
 </div>

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 220" width="880" height="220" role="img" aria-label="Flux de synchronisation Git entre poste local et dépôt distant origin">
+  <defs>
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38BDF8"/>
+    </marker>
+    <marker id="arrow-emerald" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#10B981"/>
+    </marker>
+  </defs>
+
+  <!-- Obsidian studio canvas -->
+  <rect x="0" y="0" width="880" height="220" rx="12" fill="#0B1120"/>
+  <rect x="1" y="1" width="878" height="218" rx="11" fill="none" stroke="#1E293B" stroke-width="1.5"/>
+
+  <!-- Header badge and title -->
+  <rect x="24" y="16" width="186" height="22" rx="6" fill="#0F172A" stroke="#00B0F0" stroke-width="1"/>
+  <text x="117" y="31" fill="#38BDF8" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle" letter-spacing="0.06em">SYNCHRONISATION DISTANTE</text>
+  <text x="226" y="31" fill="#F8FAFC" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="12" font-weight="700">Flux Push, Fetch &amp; Intégration</text>
+
+  <!-- Top Row Nodes -->
+  <rect x="24" y="54" width="170" height="58" rx="9" fill="#0F172A" stroke="#38BDF8" stroke-width="1.6"/>
+  <text x="109" y="79" fill="#F8FAFC" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="13.5" font-weight="700" text-anchor="middle">Working Tree</text>
+  <text x="109" y="99" fill="#94A3B8" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="11.5" font-weight="500" text-anchor="middle">&amp; Index</text>
+
+  <rect x="292" y="54" width="218" height="58" rx="9" fill="#0F172A" stroke="#00B0F0" stroke-width="1.75"/>
+  <text x="401" y="79" fill="#F8FAFC" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="13.5" font-weight="700" text-anchor="middle">Branche Locale</text>
+  <text x="401" y="99" fill="#38BDF8" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="11.5" font-weight="600" text-anchor="middle">refs/heads/feat</text>
+
+  <rect x="652" y="54" width="204" height="58" rx="9" fill="#0F172A" stroke="#10B981" stroke-width="1.75"/>
+  <text x="754" y="79" fill="#F8FAFC" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="13.5" font-weight="700" text-anchor="middle">Dépôt Distant</text>
+  <text x="754" y="99" fill="#10B981" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="11.5" font-weight="600" text-anchor="middle">origin</text>
+
+  <!-- Bottom Node: Remote Tracking -->
+  <rect x="444" y="144" width="224" height="58" rx="9" fill="#0F172A" stroke="#38BDF8" stroke-width="1.6"/>
+  <text x="556" y="169" fill="#F8FAFC" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="13.5" font-weight="700" text-anchor="middle">Suivi Distant</text>
+  <text x="556" y="189" fill="#38BDF8" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="11.5" font-weight="600" text-anchor="middle">origin/main</text>
+
+  <!-- Arrow: Working Tree -> Branche Locale -->
+  <line x1="194" y1="83" x2="288" y2="83" stroke="#38BDF8" stroke-width="2" marker-end="url(#arrow-cyan)"/>
+  <rect x="200" y="58" width="84" height="19" rx="5" fill="#0F172A" stroke="#1E293B" stroke-width="1"/>
+  <text x="242" y="71" fill="#38BDF8" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="10.5" font-weight="600" text-anchor="middle">git commit</text>
+
+  <!-- Arrow: Branche Locale -> Dépôt Distant -->
+  <line x1="510" y1="83" x2="648" y2="83" stroke="#10B981" stroke-width="2" marker-end="url(#arrow-emerald)"/>
+  <rect x="513" y="57" width="136" height="20" rx="5" fill="#0F172A" stroke="#1E293B" stroke-width="1"/>
+  <text x="581" y="71" fill="#10B981" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="10.5" font-weight="600" text-anchor="middle">git push -u origin</text>
+
+  <!-- Arrow: Dépôt Distant -> Suivi Distant -->
+  <path d="M 754 112 L 754 173 L 672 173" fill="none" stroke="#38BDF8" stroke-width="2" marker-end="url(#arrow-cyan)"/>
+  <rect x="692" y="131" width="124" height="21" rx="5" fill="#0F172A" stroke="#1E293B" stroke-width="1"/>
+  <text x="754" y="145" fill="#38BDF8" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="10.5" font-weight="600" text-anchor="middle">git fetch origin</text>
+
+  <!-- Arrow: Suivi Distant -> Branche Locale -->
+  <path d="M 444 173 L 364 173 L 364 116" fill="none" stroke="#38BDF8" stroke-width="2" marker-end="url(#arrow-cyan)"/>
+  <rect x="218" y="162" width="136" height="22" rx="5" fill="#0F172A" stroke="#1E293B" stroke-width="1"/>
+  <text x="286" y="177" fill="#F8FAFC" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="10.5" font-weight="600" text-anchor="middle">git merge / rebase</text>
+</svg>

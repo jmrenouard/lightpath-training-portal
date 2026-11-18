@@ -8,8 +8,16 @@ $dashCourseDays = !empty($currentCourse['attendance_days'])
     ? (int)$currentCourse['attendance_days']
     : (preg_match('/(\d+)\s*JOURS?/i', (string)($currentCourse['duration'] ?? ''), $dm) ? (int)$dm[1] : 10);
 $dashTotalHalfDays = max(2, $dashCourseDays * 2);
-$gamificationEnabled = !isset($featureManager) || $featureManager->isEnabled('gamification');
-$dockerLabsEnabled = !isset($featureManager) || $featureManager->isEnabled('docker_labs');
+$gamificationEnabled = !isset($featureManager) || $featureManager->isEnabledForCourse('gamification', $currentCourseSlug);
+$dockerLabsEnabled = !isset($featureManager) || $featureManager->isEnabledForCourse('docker_labs', $currentCourseSlug);
+$courseHasDocker = !isset($currentCourse['docker_enabled']) || !empty($currentCourse['docker_enabled']);
+$courseDockerEnabled = $courseHasDocker && $dockerLabsEnabled;
+$dashDiagCount = count(\LightPath\LMS\Course\LmsCatalog::getDiagnosticQuestions($currentCourseSlug));
+$dashExamCount = count(\LightPath\LMS\Course\LmsCatalog::getFinalExamQuestions($currentCourseSlug));
+$dashFlashcardsCount = count(\LightPath\LMS\Course\LmsCatalog::getFlashcards($currentCourseSlug));
+$dashXp = (int)($userGamification['xp'] ?? 0);
+$dashCourseBadge = (string)($currentCourse['badge'] ?? 'LightPath LMS');
+$dashRankLabel = (string)($userGamification['rank'] ?? ($currentCourseSlug === 'postgresql-18' ? 'Apprenant DBA' : ('Apprenant • ' . $dashCourseBadge)));
 ?>
 
 <!-- Active course hero banner -->
@@ -37,17 +45,17 @@ $dockerLabsEnabled = !isset($featureManager) || $featureManager->isEnabled('dock
             </a>
             <?php if ($dockerLabsEnabled): ?>
                 <a href="index.php?page=catalog&tab=labs&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald">
-                    🧪 Accéder aux <?= $totalLabs ?> Ateliers Docker
+                    <?= $courseDockerEnabled ? ('🧪 Accéder aux ' . $totalLabs . ' Ateliers Docker') : ('🧪 Accéder aux ' . $totalLabs . ' Ateliers Pratiques') ?>
                 </a>
             <?php endif; ?>
             <a href="index.php?page=documents&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline">
-                📥 Centre de Téléchargement (6 formats)
+                📥 Centre de Téléchargement (<?= $currentCourseSlug === 'postgresql-18' ? '6 formats' : 'Supports & Fiches' ?>)
             </a>
             <a href="index.php?page=diagnostic&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline">
-                🧭 Diagnostic Initial (15 QCM)
+                🧭 Diagnostic Initial (<?= $dashDiagCount ?> QCM)
             </a>
             <a href="index.php?page=exam&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline">
-                🏆 Examen Final (40 QCM)
+                🏆 Examen Final (<?= $dashExamCount ?> QCM)
             </a>
         </div>
     </div>
@@ -84,7 +92,7 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
         <span class="badge-code">▶️ REPRENDRE VOTRE ÉTUDE</span>
         <strong><?= Security::e($lvTitle) ?></strong>
         <span class="text-sm text-muted">
-            (<?= $lvType === 'lab' ? 'Atelier Pratique Docker' : 'Module de Cours' ?>)
+            (<?= $lvType === 'lab' ? ($courseDockerEnabled ? 'Atelier Pratique Docker' : 'Atelier Pratique') : 'Module de Cours' ?>)
         </span>
     </div>
     <div class="d-flex gap-xs flex-wrap">
@@ -107,7 +115,7 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
     <div class="kpi-card">
         <div class="kpi-label">🧪 Ateliers Pratiques (Labs)</div>
         <div class="kpi-value tabular-nums"><?= $doneLabs ?> <span class="kpi-denom">/ <?= $totalLabs ?></span></div>
-        <div class="kpi-sub">Validés sur conteneurs Docker & Base Sakila</div>
+        <div class="kpi-sub"><?= $courseDockerEnabled ? 'Validés sur conteneurs Docker & Base Sakila' : 'Ateliers pratiques pas-à-pas & grilles DoD' ?></div>
     </div>
     <div class="kpi-card">
         <div class="kpi-label">❓ Quiz QCM Réussis</div>
@@ -120,22 +128,22 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
         $toolsCount = count($currentCourse['tools'] ?? []);
         $examplesCount = count($currentCourse['examples'] ?? []);
         ?>
-        <div class="kpi-label">📑 Fiches Mémo & Outils DBA</div>
+        <div class="kpi-label"><?= $courseDockerEnabled ? '📑 Fiches Mémo & Outils DBA' : '📑 Fiches Mémo & Outils' ?></div>
         <div class="kpi-value tabular-nums"><?= $cheatsheetsCount + $toolsCount + $examplesCount ?></div>
         <div class="kpi-sub">
-            <?= $cheatsheetsCount ?> Cheatsheets + <?= $toolsCount ?> Scripts pgscripts<?= $examplesCount > 0 ? ' + ' . $examplesCount . ' Exemples Code' : '' ?>
+            <?= $cheatsheetsCount ?> Cheatsheets + <?= $toolsCount ?> <?= $currentCourseSlug === 'postgresql-18' ? 'Scripts pgscripts' : 'Scripts' ?><?= $examplesCount > 0 ? ' + ' . $examplesCount . ' Exemples Code' : '' ?>
         </div>
     </div>
 </div>
 
-<!-- DBA quick tools, optional gamification badges/XP, and bookmarks -->
+<!-- Quick tools, optional gamification badges/XP, and bookmarks -->
 <section class="lms-card mb-2">
     <div class="d-flex justify-between items-center flex-wrap gap-1 mb-1">
         <?php if ($gamificationEnabled): ?>
             <div>
-                <span class="badge-code">🏅 GAMIFICATION & CERTIFICATION DE COMPÉTENCES DBA</span>
+                <span class="badge-code"><?= $courseDockerEnabled ? '🏅 GAMIFICATION & CERTIFICATION DE COMPÉTENCES DBA' : '🏅 GAMIFICATION & VALIDATION DE COMPÉTENCES' ?></span>
                 <h2 class="section-heading-md mt-xxs mb-0">
-                    Grade : <span class="text-cyan"><?= Security::e($userGamification['rank'] ?? 'Apprenant DBA') ?></span>
+                    Grade : <span class="text-cyan"><?= Security::e($dashRankLabel) ?></span>
                     (<span class="tabular-nums"><?= (int)($userGamification['xp'] ?? 0) ?> XP</span> • Temps actif : <span class="tabular-nums"><?= Security::e($userGamification['learning_hours_formatted'] ?? '0 min') ?></span>)
                 </h2>
             </div>
@@ -150,7 +158,7 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
                 ✍️ Émargement (<?= count($userAttendance ?? []) ?>/<?= (int)$dashTotalHalfDays ?>)
             </a>
             <a href="index.php?page=flashcards&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">
-                🧠 Révision SRS (<?= count(\LightPath\LMS\Course\LmsCatalog::getFlashcards()) ?> cartes)
+                🧠 Révision SRS (<?= $dashFlashcardsCount ?> cartes)
             </a>
             <a href="index.php?page=notes&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">
                 📝 Carnet de Notes
@@ -200,12 +208,15 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
             <span class="badge-code">ARCHITECTURE PÉDAGOGIQUE QUALIOPI • <?= $dashTrackCount ?> PARCOURS MODULAIRES</span>
             <h2 class="section-heading-lg mt-xs mb-0">🧭 Choisissez votre Parcours de Formation</h2>
             <p class="hero-subtitle-sm mb-0">
-                Le cursus (<?= Security::e((string)($currentCourse['duration'] ?? '70h')) ?>) est structuré en <strong><?= $dashTrackCount ?> parcours complémentaires</strong> organisés par profil métier, niveau et journées pédagogiques. Chaque étape associe un <strong>Module de Cours (texte + slides 16:9)</strong> et un <strong>Atelier Pratique Docker</strong>.
+                Le cursus (<?= Security::e((string)($currentCourse['duration'] ?? '70h')) ?>) est structuré en <strong><?= $dashTrackCount ?> parcours <?= $dashTrackCount > 1 ? 'complémentaires' : 'structuré' ?></strong> organisés par profil métier, niveau et séquence pédagogique. Chaque étape associe un <strong>Module de Cours (texte + slides 16:9)</strong> et un <strong><?= $courseDockerEnabled ? 'Atelier Pratique Docker' : 'Atelier Pratique Guidé' ?></strong>.
             </p>
         </div>
-        <?php if (isset($currentCourse['referentiel']['GUIDE_PARCOURS'])): ?>
-            <a href="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=referentiel&id=GUIDE_PARCOURS&format=pdf" class="btn btn-outline btn-sm">
-                🗺️ Télécharger le Guide Officiel des Parcours (PDF)
+        <?php if (isset($currentCourse['referentiel']['GUIDE_PARCOURS'])):
+            $guideDownloads = $currentCourse['referentiel']['GUIDE_PARCOURS']['downloads'] ?? [];
+            $guideFormat = isset($guideDownloads['pdf']) ? 'pdf' : (isset($guideDownloads['md']) ? 'md' : (string)(array_key_first($guideDownloads) ?: 'md'));
+        ?>
+            <a href="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=referentiel&id=GUIDE_PARCOURS&format=<?= urlencode($guideFormat) ?>" class="btn btn-outline btn-sm">
+                🗺️ Télécharger le Guide Officiel des Parcours (<?= Security::e(strtoupper($guideFormat)) ?>)
             </a>
         <?php endif; ?>
     </div>
@@ -328,7 +339,7 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
     </div>
 </section>
 
-<?php if ($dockerLabsEnabled): ?>
+<?php if ($courseDockerEnabled): ?>
 <!-- Per-user isolated Docker container cockpit -->
 <section id="docker-panel" class="docker-cockpit">
     <div class="d-flex justify-between items-center flex-wrap gap-1">
@@ -410,7 +421,7 @@ $bookmarksList = $userProgress['bookmarks'] ?? [];
                     </a>
                     <?php if ($dockerLabsEnabled && !empty($mod['linked_lab_id'])): ?>
                         <a href="index.php?page=lab&id=<?= urlencode((string)$mod['linked_lab_id']) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald btn-sm">
-                            🧪 Lab Docker
+                            <?= $courseDockerEnabled ? '🧪 Lab Docker' : '🧪 Lab' ?>
                         </a>
                     <?php endif; ?>
                 </div>

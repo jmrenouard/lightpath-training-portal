@@ -66,6 +66,8 @@ $videoVariant = (string)($_GET['video_src'] ?? 'course');
 if (!in_array($videoVariant, ['course', 'slides'], true)) {
     $videoVariant = 'course';
 }
+$courseHasDocker = !isset($currentCourse['docker_enabled']) || !empty($currentCourse['docker_enabled']);
+$courseDockerEnabled = $courseHasDocker && (!isset($featureManager) || $featureManager->isEnabledForCourse('docker_labs', $currentCourseSlug));
 ?>
 
 <!-- Clear module header, track position & quick actions -->
@@ -111,9 +113,13 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
             </a>
         <?php endif; ?>
 
-        <?php if (!empty($mod['linked_cheatsheet_id'])): ?>
-            <a href="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=cheatsheet&id=<?= urlencode((string)$mod['linked_cheatsheet_id']) ?>&format=pdf" class="btn btn-outline btn-sm">
-                📑 Fiche Mémo PDF
+        <?php if (!empty($mod['linked_cheatsheet_id'])):
+            $modCsId = (string)$mod['linked_cheatsheet_id'];
+            $modCsDownloads = $currentCourse['cheatsheets'][$modCsId]['downloads'] ?? [];
+            $modCsFormat = isset($modCsDownloads['pdf']) ? 'pdf' : (isset($modCsDownloads['md']) ? 'md' : (string)(array_key_first($modCsDownloads) ?: 'md'));
+        ?>
+            <a href="index.php?action=download&course=<?= urlencode($currentCourseSlug) ?>&type=cheatsheet&id=<?= urlencode($modCsId) ?>&format=<?= urlencode($modCsFormat) ?>" class="btn btn-outline btn-sm">
+                📑 Fiche Mémo <?= Security::e(strtoupper($modCsFormat)) ?>
             </a>
         <?php endif; ?>
         <button type="button"
@@ -268,7 +274,8 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                             <?php else: ?>
                                 <header class="lms-slide-header">
                                     <div class="d-flex items-center gap-xs min-w-0">
-                                        <img src="assets/img/postgresql_elephant_dark.png" alt="PG18" class="slide-header-icon"/>
+                                        <?php $slideHeaderIcon = $currentCourseSlug === 'postgresql-18' ? 'assets/img/postgresql_elephant_dark.png' : ltrim((string)($currentCourse['icon'] ?? 'assets/img/postgresql_elephant_dark.png'), '/'); ?>
+                                        <img src="<?= Security::e($slideHeaderIcon) ?>" alt="<?= Security::e((string)($currentCourse['short_title'] ?? 'Course')) ?>" class="slide-header-icon"/>
                                         <span class="lms-slide-badge"><?= Security::formatInlineText($s['badge']) ?></span>
                                         <span class="lms-slide-chapter"><?= Security::formatInlineText($s['chapter']) ?></span>
                                     </div>
@@ -285,7 +292,7 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                                 </div>
 
                                 <footer class="lms-slide-footer">
-                                    <span>LightPath SARL • PostgreSQL 18 — Jean-Marie Renouard</span>
+                                    <span>LightPath SARL • <?= Security::e((string)($currentCourse['badge'] ?? 'LightPath LMS')) ?> — <?= Security::e((string)($appConfig['trainer_name'] ?? 'Jean-Marie Renouard')) ?></span>
                                     <span class="tabular-nums"><?= Security::e($mod['badge_code']) ?> • Étape <?= (int)($mod['track_position'] ?? 1) ?>/<?= (int)($mod['track_total'] ?? 20) ?></span>
                                 </footer>
                             <?php endif; ?>
@@ -523,7 +530,7 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                 <div class="d-flex gap-sm flex-wrap">
                     <?php if (!empty($mod['linked_lab_id'])): ?>
                         <a href="index.php?page=lab&id=<?= urlencode((string)$mod['linked_lab_id']) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald">
-                            🧪 Passer au Lab Pratique Docker (Lab <?= Security::e($mod['code']) ?>)
+                            <?= $courseDockerEnabled ? '🧪 Passer au Lab Pratique Docker' : '🧪 Passer à l\'Atelier Pratique' ?> (Lab <?= Security::e($mod['code']) ?>)
                         </a>
                     <?php endif; ?>
                     <?php if ($nextModId): ?>
@@ -583,7 +590,7 @@ if (!in_array($videoVariant, ['course', 'slides'], true)) {
                 <div class="sidebar-section-label mb-xs">
                     📝 Mes Notes Personnelles
                 </div>
-                <textarea id="user-personal-note" class="form-control" rows="4" aria-label="Mes notes personnelles sur ce module" placeholder="Notez vos points clés, paramètres postgresql.conf ou questions..."><?= Security::e($savedNote) ?></textarea>
+                <textarea id="user-personal-note" class="form-control" rows="4" aria-label="Mes notes personnelles sur ce module" placeholder="<?= $currentCourseSlug === 'postgresql-18' ? 'Notez vos points clés, paramètres postgresql.conf ou questions...' : 'Notez vos points clés, commandes et retours d\'expérience...' ?>"><?= Security::e($savedNote) ?></textarea>
                 <div class="d-flex justify-between items-center mt-xs">
                     <span id="note-save-status" class="text-xs text-emerald"></span>
                     <button type="button" id="btn-save-note" class="btn btn-primary btn-sm" data-id="<?= Security::e($moduleId) ?>" data-course="<?= Security::e($currentCourseSlug) ?>">

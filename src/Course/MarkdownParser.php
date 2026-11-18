@@ -33,12 +33,12 @@ class MarkdownParser
     }
 
     /**
-     * Checks whether the parser sourceRoot targets the bundled standalone demo course-pack.
+     * Checks whether the parser sourceRoot targets a bundled standalone example course-pack.
      */
     private function isDemoCourseRoot(): bool
     {
         $normalized = rtrim(str_replace('\\', '/', $this->sourceRoot), '/');
-        return str_ends_with($normalized, '/examples/demo-course');
+        return str_contains($normalized, '/examples/');
     }
 
     /**
@@ -61,7 +61,7 @@ class MarkdownParser
         $isDemoCourse = $this->isDemoCourseRoot();
         $manifestPath = dirname(__DIR__, 2) . '/public/assets/slides_cache/' . $moduleId . '/manifest.json';
         $manifestMtime = (!$isDemoCourse && is_file($manifestPath)) ? (int)@filemtime($manifestPath) : 0;
-        $cacheKey = md5('mod_v8_rca158:' . $courseSlug . ':' . $mdPath . ':' . $mtime . ':' . $manifestMtime . ':' . ($isDemoCourse ? 'demo' : 'full'));
+        $cacheKey = md5('mod_v9_rca173:' . $courseSlug . ':' . $mdPath . ':' . $mtime . ':' . $manifestMtime . ':' . ($isDemoCourse ? 'demo' : 'full'));
         $cacheFile = $this->cacheDir . '/' . $cacheKey . '.json';
         if (is_file($cacheFile)) {
             $cached = @json_decode((string)@file_get_contents($cacheFile), true);
@@ -99,7 +99,7 @@ class MarkdownParser
             ];
         }
         $mtime = (int)@filemtime($mdPath);
-        $cacheKey = md5('lab_v9_rca158:' . $courseSlug . ':' . $mdPath . ':' . $mtime);
+        $cacheKey = md5('lab_v10_rca173:' . $courseSlug . ':' . $mdPath . ':' . $mtime);
         $cacheFile = $this->cacheDir . '/' . $cacheKey . '.json';
         if (is_file($cacheFile)) {
             $cached = @json_decode((string)@file_get_contents($cacheFile), true);
@@ -800,7 +800,7 @@ class MarkdownParser
     }
 
     /**
-     * Renders a Mermaid diagram using a precomputed Retina 2x PNG (assets/mermaid_cache/mermaid_<hash>.png)
+     * Renders a Mermaid diagram using a precomputed PNG/SVG asset (assets/mermaid_cache/mermaid_<hash>.{png,svg})
      * or falls back to local vector rendering via mermaid.min.js (zero external CDN).
      */
     private function renderMermaidBlock(string $rawCode, string $courseSlug): string
@@ -816,23 +816,33 @@ class MarkdownParser
         $normalized = implode("\n", $normLines);
         $hash = substr(hash('sha256', $normalized), 0, 16);
 
+        $rootTrimmed = rtrim($this->sourceRoot, '/\\');
         $relPngPath = 'assets/mermaid_cache/mermaid_' . $hash . '.png';
-        $absPngPath = rtrim($this->sourceRoot, '/\\') . '/' . $relPngPath;
-        $hasCachedPng = is_file($absPngPath);
+        $relSvgPath = 'assets/mermaid_cache/mermaid_' . $hash . '.svg';
+        $relAssetPath = null;
+        if (is_file($rootTrimmed . '/' . $relPngPath)) {
+            $relAssetPath = $relPngPath;
+        } elseif (is_file($rootTrimmed . '/' . $relSvgPath)) {
+            $relAssetPath = $relSvgPath;
+        }
+        $hasCachedDiagram = $relAssetPath !== null;
+        $altLabel = $courseSlug === 'postgresql-18'
+            ? "Schéma d'Architecture PostgreSQL 18"
+            : ('Schéma Technique — ' . strtoupper(str_replace('-', ' ', $courseSlug)));
 
         $header = '<div class="lms-mermaid-header">'
             . '<span class="lms-mermaid-title">📐 Schéma d\'Architecture & Flux Technique</span>'
             . '<div class="lms-mermaid-actions">'
-            . ($hasCachedPng ? '<button type="button" class="btn-code-action btn-zoom-diagram" title="Agrandir le diagramme en plein écran">🔍 Agrandir</button>' : '')
+            . ($hasCachedDiagram ? '<button type="button" class="btn-code-action btn-zoom-diagram" title="Agrandir le diagramme en plein écran">🔍 Agrandir</button>' : '')
             . '<button type="button" class="btn-code-action btn-toggle-mermaid-src" title="Afficher/Masquer le code source Mermaid">Code Mermaid</button>'
             . '</div>'
             . '</div>';
 
-        if ($hasCachedPng) {
-            $imgUrl = $this->resolveAssetUrl($relPngPath, $courseSlug);
-            $fallbackRef = '?action=course_asset&course=' . urlencode($courseSlug) . '&path=' . urlencode($relPngPath);
+        if ($hasCachedDiagram) {
+            $imgUrl = $this->resolveAssetUrl($relAssetPath, $courseSlug);
+            $fallbackRef = 'index.php?action=course_asset&course=' . urlencode($courseSlug) . '&path=' . urlencode($relAssetPath);
             $canvas = '<div class="lms-mermaid-canvas">'
-                . '<img src="' . Security::e($imgUrl) . '" data-asset-ref="' . Security::e($fallbackRef) . '" alt="Schéma d\'Architecture PostgreSQL 18" class="lms-mermaid-img lms-zoomable-img" loading="lazy" decoding="async"/>'
+                . '<img src="' . Security::e($imgUrl) . '" data-asset-ref="' . Security::e($fallbackRef) . '" alt="' . Security::e($altLabel) . '" class="lms-mermaid-img lms-zoomable-img" loading="lazy" decoding="async"/>'
                 . '</div>';
         } else {
             $canvas = '<div class="lms-mermaid-canvas">'
@@ -1019,7 +1029,7 @@ class MarkdownParser
                 return $clean;
             }
         }
-        return '?action=course_asset&course=' . urlencode($courseSlug) . '&path=' . urlencode($clean);
+        return 'index.php?action=course_asset&course=' . urlencode($courseSlug) . '&path=' . urlencode($clean);
     }
 
     /**
@@ -1090,27 +1100,27 @@ class MarkdownParser
                 return '<span>' . $label . '</span>';
             }
 
-            // Route internal curriculum links directly to LMS views (modules, labs, cheatsheets, reference docs)
-            if (preg_match('/(module_(?:sql_\d{2}|\d{2})_[a-z0-9_]+)\.(?:md|html|pdf)(#.*)?$/i', $href, $mm)) {
-                $url = 'index.php?page=module&course=' . urlencode($courseSlug) . '&id=' . urlencode($mm[1]);
-                return '<a href="' . Security::e($url) . '" class="lms-link">' . $label . '</a>';
-            }
-            if (preg_match('/(lab_(?:sql_\d{2}|\d{2})_[a-z0-9_]+)\.(?:md|html|pdf)(#.*)?$/i', $href, $lm)) {
-                $url = 'index.php?page=lab&course=' . urlencode($courseSlug) . '&id=' . urlencode($lm[1]);
-                return '<a href="' . Security::e($url) . '" class="lms-link">' . $label . '</a>';
-            }
-            if (preg_match('/(cheatsheet_[a-z0-9_]+)\.(?:md|html|pdf)(#.*)?$/i', $href, $cm)) {
+            // Route internal curriculum links directly to LMS views (cheatsheets first, then modules, labs, reference docs)
+            if (preg_match('/(?:^|\/)(cheatsheet_[a-z0-9_]+)\.(?:md|html|pdf)(#.*)?$/i', $href, $cm)) {
                 $url = 'index.php?page=documents&tab=cheatsheets&course=' . urlencode($courseSlug) . '&id=' . urlencode($cm[1]);
                 return '<a href="' . Security::e($url) . '" class="lms-link">' . $label . '</a>';
             }
-            if (preg_match('/(GUIDE_PARCOURS|grille_evaluation_satisfaction_chaud_froid|guide_formateur_runbook_animation|modele_attestation_et_suivi_competences|programme_formation_postgresql_18|programme_specifique_[a-z0-9_]+|questionnaire_diagnostic_pre_formation|referentiel_competences_bloom|sujet_examen_evaluation_sommative|plan_formation|syllabus_detaille|timing|handbook|livret_exercices_complet)\.(?:md|html)(#.*)?$/i', $href, $rm)) {
+            if (preg_match('/(?:^|\/)(module_(?:sql_\d{2}|\d{2})_[a-z0-9_]+)\.(?:md|html|pdf)(#.*)?$/i', $href, $mm)) {
+                $url = 'index.php?page=module&course=' . urlencode($courseSlug) . '&id=' . urlencode($mm[1]);
+                return '<a href="' . Security::e($url) . '" class="lms-link">' . $label . '</a>';
+            }
+            if (preg_match('/(?:^|\/)(lab_(?:sql_\d{2}|\d{2})_[a-z0-9_]+)\.(?:md|html|pdf)(#.*)?$/i', $href, $lm)) {
+                $url = 'index.php?page=lab&course=' . urlencode($courseSlug) . '&id=' . urlencode($lm[1]);
+                return '<a href="' . Security::e($url) . '" class="lms-link">' . $label . '</a>';
+            }
+            if (preg_match('/(?:^|\/)(GUIDE_PARCOURS|grille_evaluation_satisfaction_chaud_froid|guide_formateur_runbook_animation|modele_attestation_et_suivi_competences|programme_formation_[a-z0-9_]+|programme_demo_[a-z0-9_]+|programme_specifique_[a-z0-9_]+|questionnaire_diagnostic_pre_formation|referentiel_competences_bloom|sujet_examen_evaluation_sommative|plan_formation|syllabus_detaille|timing|handbook|livret_exercices_complet)\.(?:md|html)(#.*)?$/i', $href, $rm)) {
                 $url = 'index.php?page=documents&tab=referentiel&course=' . urlencode($courseSlug) . '&id=' . urlencode($rm[1]);
                 return '<a href="' . Security::e($url) . '" class="lms-link">' . $label . '</a>';
             }
             if (!preg_match('/^(?:https?:|mailto:|tel:|#|\?|index\.php)/i', $href)) {
                 $resolvedRel = $this->resolveRelativeRepoPath($href);
                 if ($resolvedRel !== null) {
-                    $url = '?action=course_asset&course=' . urlencode($courseSlug) . '&path=' . urlencode($resolvedRel);
+                    $url = 'index.php?action=course_asset&course=' . urlencode($courseSlug) . '&path=' . urlencode($resolvedRel);
                     return '<a href="' . Security::e($url) . '" class="lms-link" target="_blank" rel="noopener">' . $label . '</a>';
                 }
             }

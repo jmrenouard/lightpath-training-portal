@@ -149,7 +149,7 @@ class JsonStorage implements StorageInterface
                 'role' => 'admin',
                 'company' => 'LightPath SARL',
                 'active' => true,
-                'enrolled_courses' => ['postgresql-18'],
+                'enrolled_courses' => ['postgresql-18', 'git-basics'],
                 'created_at' => $now,
                 'last_login' => $now,
             ],
@@ -161,7 +161,7 @@ class JsonStorage implements StorageInterface
                 'role' => 'trainer',
                 'company' => 'LightPath SARL',
                 'active' => true,
-                'enrolled_courses' => ['postgresql-18'],
+                'enrolled_courses' => ['postgresql-18', 'git-basics'],
                 'created_at' => $now,
                 'last_login' => $now,
             ],
@@ -173,7 +173,7 @@ class JsonStorage implements StorageInterface
                 'role' => 'student',
                 'company' => 'Client Entreprise',
                 'active' => true,
-                'enrolled_courses' => ['postgresql-18'],
+                'enrolled_courses' => ['postgresql-18', 'git-basics'],
                 'created_at' => $now,
                 'last_login' => $now,
             ],
@@ -670,8 +670,12 @@ class JsonStorage implements StorageInterface
             $attempt['course_slug'] = $courseSlug;
             $attempt['submitted_at'] = date('Y-m-d H:i:s');
             if (empty($attempt['certificate_id'])) {
+                $prefix = $courseSlug === 'postgresql-18'
+                    ? 'PG18'
+                    : (strtoupper(substr((string)preg_replace('/[^A-Z0-9]/i', '', $courseSlug), 0, 6)) ?: 'COURSE');
                 $attempt['certificate_id'] = sprintf(
-                    'LP-PG18-CERT-%d-%s',
+                    'LP-%s-CERT-%d-%s',
+                    $prefix,
                     $userId,
                     strtoupper(bin2hex(random_bytes(4)))
                 );
@@ -1097,23 +1101,38 @@ class JsonStorage implements StorageInterface
             return null;
         }
 
-        // Recognize Qualiopi training & attendance certificates (LP-PG18-ATT-<uid>-<date>)
-        if (preg_match('/^LP-(?:[A-Z0-9]+-)?ATT-(\d+)-(\d{6,8})$/i', $norm, $m)) {
-            $uid = (int)$m[1];
+        // Recognize Qualiopi training & attendance certificates (LP-PG18-ATT-<uid>-<date>, LP-GITBAS-ATT-<uid>-<date>)
+        if (preg_match('/^LP-(?:([A-Z0-9]+)-)?ATT-(\d+)-(\d{6,8})$/i', $norm, $m)) {
+            $prefix = strtoupper((string)$m[1]);
+            $uid = (int)$m[2];
             $user = $this->getUserById($uid);
             if ($user !== null) {
-                $rawDate = (string)$m[2];
+                $rawDate = (string)$m[3];
                 $formattedDate = strlen($rawDate) === 8
                     ? substr($rawDate, 0, 4) . '-' . substr($rawDate, 4, 2) . '-' . substr($rawDate, 6, 2)
                     : date('Y-m-d');
+                $courseMeta = match ($prefix) {
+                    'GITBAS' => [
+                        'slug' => 'git-basics',
+                        'title' => 'Git — Les Bases Essentielles du Versionnement & de la Collaboration',
+                    ],
+                    'PG18', '' => [
+                        'slug' => 'postgresql-18',
+                        'title' => 'PostgreSQL 18 — Cursus Complet (Administration & Optimisation)',
+                    ],
+                    default => [
+                        'slug' => strtolower($prefix),
+                        'title' => 'Formation Certifiante LightPath (' . $prefix . ')',
+                    ],
+                };
                 return [
                     'certificate_id' => $norm,
                     'user_id' => $uid,
                     'user_name' => (string)($user['name'] ?? 'Apprenant LightPath'),
                     'user_email' => (string)($user['email'] ?? ''),
                     'company' => (string)($user['company'] ?? ''),
-                    'course_slug' => 'postgresql-18',
-                    'course_title' => 'PostgreSQL 18 — Cursus Complet (Administration & Optimisation)',
+                    'course_slug' => $courseMeta['slug'],
+                    'course_title' => $courseMeta['title'],
                     'certificate_type' => 'attendance',
                     'mention' => 'Attestation de Formation & Assiduité Qualiopi',
                     'percentage' => 100,
@@ -1141,6 +1160,12 @@ class JsonStorage implements StorageInterface
                     $uid = (int)($attempt['user_id'] ?? explode(':', (string)$userCourseKey)[0]);
                     $user = $this->getUserById($uid);
                     $passed = !empty($attempt['passed']);
+                    $attemptCourseSlug = (string)($attempt['course_slug'] ?? 'postgresql-18');
+                    $defaultAttemptTitle = match ($attemptCourseSlug) {
+                        'git-basics' => 'Git — Les Bases Essentielles du Versionnement & de la Collaboration',
+                        'postgresql-18' => 'PostgreSQL 18 — Cursus Complet (Administration & Optimisation)',
+                        default => 'Formation Certifiante LightPath (' . strtoupper($attemptCourseSlug) . ')',
+                    };
                     return array_merge($attempt, [
                         'verified' => true,
                         'passed' => $passed,
@@ -1149,7 +1174,8 @@ class JsonStorage implements StorageInterface
                         'user_name' => (string)($user['name'] ?? 'Apprenant Certifié LightPath'),
                         'user_email' => (string)($user['email'] ?? ''),
                         'company' => (string)($user['company'] ?? ''),
-                        'course_slug' => (string)($attempt['course_slug'] ?? 'postgresql-18'),
+                        'course_slug' => $attemptCourseSlug,
+                        'course_title' => (string)($attempt['course_title'] ?? $defaultAttemptTitle),
                     ]);
                 }
             }

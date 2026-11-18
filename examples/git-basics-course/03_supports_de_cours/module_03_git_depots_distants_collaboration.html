@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Module 03 — Dépôts Distants &amp; Pull Requests (LightPath)</title>
+  <style>
+    :root {
+      --bg: #0b1120;
+      --surface: #0f172a;
+      --border: rgba(56, 189, 248, 0.25);
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #00b0f0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 2rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 920px;
+      margin: 0 auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 0.78rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--accent);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.2rem 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    h1 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1.75rem;
+      letter-spacing: -0.02em;
+    }
+    h2 {
+      margin-top: 1.5rem;
+      color: var(--accent);
+      font-size: 1.15rem;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 0.92rem;
+      margin-bottom: 1.25rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.75rem;
+      font-variant-numeric: tabular-nums;
+    }
+    th, td {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 0.55rem 0.75rem;
+      text-align: left;
+    }
+    th {
+      background: rgba(0, 176, 240, 0.12);
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: #38bdf8;
+    }
+    footer {
+      margin-top: 2rem;
+      padding-top: 1rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <span class="badge">Git Fondamentaux • Pack Open-Source MIT</span>
+    <h1>Module 03 : Dépôts Distants (<code>clone</code>, <code>remote</code>, <code>fetch</code>, <code>pull</code>, <code>push</code>) &amp; Pull Requests</h1>
+    <p class="meta">Formateur : Jean-Marie Renouard (LightPath SARL) • Durée : 2h30 • Niveau Bloom C3</p>
+
+    <h2>Points Clés de la Collaboration Distante</h2>
+    <ul>
+      <li>Références distantes : <code>origin</code> désigne le serveur distant et <code>refs/remotes/origin/*</code> son miroir local.</li>
+      <li>Observation sûre : <code>git fetch</code> récupère les commits distants sans modifier votre branche locale.</li>
+      <li>Intégration maîtrisée : <code>git pull --ff-only</code> ou <code>git pull --rebase</code> évite les commits de fusion superflus.</li>
+      <li>Pull Request : branche dédiée, <code>git push -u origin &lt;branche&gt;</code>, revue par les pairs, fusion et nettoyage.</li>
+    </ul>
+
+    <h2>Commandes de Référence</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Commande</th>
+          <th>Direction du Flux</th>
+          <th>Effet Opérationnel</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>git clone &lt;url&gt;</code></td>
+          <td>Serveur → Local</td>
+          <td>Copie le dépôt complet et configure le remote <code>origin</code></td>
+        </tr>
+        <tr>
+          <td><code>git fetch origin</code></td>
+          <td>Serveur → <code>origin/*</code></td>
+          <td>Met à jour les pointeurs distants sans toucher au Working Tree</td>
+        </tr>
+        <tr>
+          <td><code>git pull --rebase</code></td>
+          <td>Serveur → Branche active</td>
+          <td>Télécharge puis réapplique les commits locaux au-dessus de <code>origin</code></td>
+        </tr>
+        <tr>
+          <td><code>git push -u origin feat</code></td>
+          <td>Local → Serveur</td>
+          <td>Publie la branche et configure le suivi amont (<code>upstream</code>)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <footer>
+      LightPath Academy — Pack de Formation Git Open-Source (Licence MIT) • contact@lightpath.fr
+    </footer>
+  </main>
+</body>
+</html>

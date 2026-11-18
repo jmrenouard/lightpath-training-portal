@@ -6,8 +6,11 @@ use LightPath\LMS\Course\LmsCatalog;
 
 $activeTab = (string)($_GET['tab'] ?? 'flashcards');
 $filterQuery = trim((string)($_GET['q'] ?? ''));
-$flashcards = LmsCatalog::getFlashcards();
-$glossary = LmsCatalog::getGlossary();
+$flashcards = LmsCatalog::getFlashcards($currentCourseSlug);
+$glossary = LmsCatalog::getGlossary($currentCourseSlug);
+$fcCourseLabel = $currentCourseSlug === 'postgresql-18'
+    ? 'PostgreSQL 18'
+    : (string)($currentCourse['short_title'] ?? $currentCourse['title'] ?? 'Formation');
 $rawFcRatings = $userProgress['flashcard_confidence'] ?? $userProgress['flashcards'] ?? [];
 $userFcRatings = [];
 foreach ($rawFcRatings as $k => $v) {
@@ -33,15 +36,19 @@ $distinctModules = array_values($distinctModules);
             <span class="badge-code">MÉMORISATION ACTIVE SRS & RÉFÉRENTIEL TERMINOLOGIQUE</span>
             <span class="badge-phase tabular-nums"><?= count($flashcards) ?> Flashcards SRS • <?= count($glossary) ?> Termes Glossaire</span>
         </div>
-        <h1 class="hero-title-md mb-xs">🧠 Cartes Mémo SRS (Spaced Repetition) & Glossaire DBA</h1>
+        <h1 class="hero-title-md mb-xs">🧠 Cartes Mémo SRS (Spaced Repetition) & Glossaire<?= $currentCourseSlug === 'postgresql-18' ? ' DBA' : ' Technique' ?></h1>
         <p class="hero-subtitle-sm mb-0">
-            Révisez activement les concepts critiques de PostgreSQL 18 (MVCC, AIO, <code>pg_stat_io</code>, Indexation, Patroni, <code>pgBackRest</code>, Kernel Linux Module 20) et auto-évaluez votre niveau de maîtrise.
+            <?php if ($currentCourseSlug === 'postgresql-18'): ?>
+                Révisez activement les concepts critiques de PostgreSQL 18 (MVCC, AIO, <code>pg_stat_io</code>, Indexation, Patroni, <code>pgBackRest</code>, Kernel Linux Module 20) et auto-évaluez votre niveau de maîtrise.
+            <?php else: ?>
+                Révisez activement les concepts critiques de <?= Security::e($fcCourseLabel) ?> et auto-évaluez votre niveau de maîtrise.
+            <?php endif; ?>
         </p>
     </div>
 
     <div class="d-flex gap-xs flex-wrap">
         <a href="index.php?page=flashcards&tab=flashcards&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $activeTab === 'flashcards' ? 'btn-primary' : 'btn-outline' ?>">
-            🃏 Cartes Mémo SRS (<?= $masteredCount ?>/<?= count($flashcards) ?> maîtrisées)
+            🃏 Cartes Mémo SRS (<span id="fc-mastered-count"><?= $masteredCount ?></span>/<?= count($flashcards) ?> maîtrisées)
         </a>
         <a href="index.php?page=flashcards&tab=glossary&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $activeTab === 'glossary' ? 'btn-primary' : 'btn-outline' ?>">
             📖 Glossaire Technique (<?= count($glossary) ?> termes)
@@ -52,8 +59,8 @@ $distinctModules = array_values($distinctModules);
 <?php if ($activeTab === 'glossary'): ?>
     <div class="lms-card mb-lg">
         <div class="d-flex justify-between items-center flex-wrap gap-md mb-1">
-            <h2 class="section-heading-md mb-0">📖 Glossaire Technique PostgreSQL 18 (<?= count($glossary) ?> définitions)</h2>
-            <input type="search" id="glossary-filter-input" class="form-control search-inline-input" aria-label="Filtrer les termes du glossaire" placeholder="Filtrer un terme (ex: MVCC, HOT, AIO, WAL)..." value="<?= Security::e($filterQuery) ?>"/>
+            <h2 class="section-heading-md mb-0">📖 Glossaire Technique <?= Security::e($fcCourseLabel) ?> (<?= count($glossary) ?> définitions)</h2>
+            <input type="search" id="glossary-filter-input" class="form-control search-inline-input" aria-label="Filtrer les termes du glossaire" placeholder="<?= $currentCourseSlug === 'postgresql-18' ? 'Filtrer un terme (ex: MVCC, HOT, AIO, WAL)...' : 'Filtrer un terme (ex: commit, HEAD, merge, remote)...' ?>" value="<?= Security::e($filterQuery) ?>"/>
         </div>
 
         <div class="card-grid" id="glossary-cards-grid">
@@ -152,9 +159,7 @@ $distinctModules = array_values($distinctModules);
                     </h3>
                     <details class="lms-details mb-sm">
                         <summary class="lms-summary">👁️ Retourner la carte (Voir la réponse)</summary>
-                        <div class="lms-details-body text-sm text-secondary whitespace-pre-line">
-                            <?= Security::formatInlineText($fc['back']) ?>
-                        </div>
+                        <div class="lms-details-body text-sm text-secondary whitespace-pre-line"><?= Security::formatInlineText(str_replace('\n', "\n", (string)$fc['back'])) ?></div>
                     </details>
                 </div>
 

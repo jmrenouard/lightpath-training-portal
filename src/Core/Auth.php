@@ -247,7 +247,7 @@ class Auth
         string $password,
         string $role = 'student',
         string $company = '',
-        array $enrolledCourses = ['postgresql-18']
+        array $enrolledCourses = ['postgresql-18', 'git-basics']
     ): ?array {
         $email = strtolower(trim($email));
         if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($password) < 6) {

@@ -995,4 +995,44 @@ Valide avec php tests/run_tests.php.
   ```
 * **Statut :** ✅ Implémenté — voir Journal de Bord 2026-11-17
 
+---
+
+## Fiche d'Incident RCA-172 (`RCA-LMS-42`) : Cours Test Autonome `git-basics` (3 Modules), Moteur Multi-Cours Paramétrable, Port Docker `LMS_PORT` & Suite E2E Multi-Cours
+
+* **Date de détection :** 2026-11-18
+* **Issue GitHub associée :** `lightpath-training-portal#45` (branche `feat/git-basics-course-and-e2e`)
+* **Composant Affecté :** `examples/git-basics-course/**`, `examples/demo-course/assets/mermaid_cache/*.svg`, `public/assets/img/git_branch_icon.svg`, `config/courses.php`, `docker-compose.yml`, `.env.example`, `public/index.php`, `public/assets/{js/app.js,css/app.css}`, `src/Core/{Auth,Gamification,JsonStorage}.php`, `src/Course/{CourseRepository,LmsCatalog,MarkdownParser}.php`, `src/Http/LearnerController.php`, `templates/layout.php`, `templates/pages/{attendance,catalog,certificate,dashboard,diagnostic,documents,exam,flashcards,lab_view,login,module_view,notes,satisfaction,search,verify}.php`, `tests/{run_tests,test_functional_http}.php`, `docs/internal/{REGISTRE_RCA,JOURNAL_DE_BORD}.md`
+* **1. Mécanisme :**
+  Avant l'introduction et la stabilisation d'un second cursus complet distinct de PostgreSQL (`git-basics`), plusieurs limitations empêchaient de démontrer et tester de bout en bout le moteur multi-cours sur une formation non-Docker :
+  1) **Monoculture PostgreSQL dans `LmsCatalog`, `Gamification` & certificats :** Les QCM de positionnement (15), d'examen final (40), les flashcards SRS, le glossaire, les rangs/badges de gamification, le manifeste SCORM 1.2 et les préfixes `LP-PG18-CERT-...` / `LP-PG18-ATT-...` étaient couplés à `'postgresql-18'`.
+  2) **Couplage Docker & PG18 dans les vues, contrôleurs et parseurs (`Wave 4C` QA navigateur) :**
+     - `public/index.php` instancie `MarkdownParser()` avant la résolution du cours actif et sans auto-détection du cours lors d'une requête publique `?page=verify&code=LP-GITBAS-...`.
+     - `MarkdownParser::formatInline()` évaluait `lab_` avant `cheatsheet_` sans ancrage `(?:^|/)` (routant `cheatsheet_lab_01_init.md` vers `page=lab`), n'acceptait que `programme_formation_postgresql_18`, émettait `?action=course_asset` relatif, et `renderMermaidBlock()` n'exploitait pas de cache SVG vectoriel (tandis que `app.js` appelait `mermaid.run()` sur les diapositives cachées provoquant `translate(undefined, NaN)`).
+     - `templates/pages/attendance.php` figeait les 4 parcours / 10 jours / 20 demi-journées PG18, et `catalog`/`documents`/`notes`/`satisfaction`/`verify`/`login` conservaient des libellés PG18/Docker résiduels (et `CourseRepository::discoverTools`/`discoverExamples` marquaient les scripts Git en `DBA`/`psycopg3`).
+     - `LmsCatalog::getFlashcards()` contenait des chaînes simple-quote `'\n'` affichées littéralement et `#fc-mastered-count` n'était pas mis à jour en direct dans `app.js`.
+  3) **Port hôte figé dans `docker-compose.yml` :** Le port `8080:8080` n'était pas paramétrable par `LMS_PORT`, empêchant le démarrage conteneurisé lorsque le port `8080` de l'hôte est déjà occupé.
+  4) **Couverture multi-cours absente dans les suites de tests :** `tests/run_tests.php` et `tests/test_functional_http.php` ne vérifiaient pas la découverte complète d'un second cours non-Docker ni l'isolation stricte des données par `course_slug`.
+* **2. Hypothèse :**
+  Fournir un pack pédagogique Git autonome de 3 modules et 3 ateliers sous `examples/git-basics-course/` (`docker_enabled => false`, `attendance_days => 1`), pré-générer des diagrammes SVG vectoriels autonomes sans `<style>` ni `style=` (`assets/mermaid_cache/mermaid_<hash>.svg`), généraliser `MarkdownParser`, `Gamification`, `LmsCatalog`, `CourseRepository`, `JsonStorage`, `Auth`, `LearnerController`, `public/index.php`, `app.js`/`app.css` et l'ensemble des templates pour tout `course_slug` sans aucune régression sur `postgresql-18`, paramétrer `LMS_PORT` dans `docker-compose.yml`, et étendre `tests/run_tests.php` (Section 26) ainsi que `tests/test_functional_http.php` (Section `[7/7]`) avec validation sur conteneur Docker réel (`LMS_PORT=8098`).
+* **3. Contre-mesure :**
+  1) **Pack Cours Test `git-basics` & Caches SVG Vectoriels (`gitpack` + Wave 4C) :** Création de `examples/git-basics-course/**` (`GUIDE_PARCOURS.md`, `programme_formation_git_bases.md`, 3 modules `.md` + `.html` autonomes avec 15 slides / 3 QCM / Mermaid / callouts chacun, 3 ateliers Qualiopi avec `VALIDATION_OK`, 6 cheatsheets, `pgscripts/pg_git_repo_audit.py`, `pgexamples/python/check_commit_msg.py` & `README_git_examples.md`), création de `public/assets/img/git_branch_icon.svg` (0 `style=`), génération des 4 SVG vectoriels Studio Obsidian/Cyan strict-CSP (`0` `<style>`, `0` `style=`) dans `examples/git-basics-course/assets/mermaid_cache/` (3) et `examples/demo-course/assets/mermaid_cache/` (1), et déclaration dans `config/courses.php` (`fondamentaux-git`, `docker_enabled => false`, `attendance_days => 1`).
+  2) **Généralisation Moteur Multi-Cours, Correctifs Browser QA & Compose (`lmsmulti` + `uipolish` Wave 4C) :**
+     - `public/index.php` : résolution du cours actif (et auto-détection sur `?page=verify&code=...`) avant instanciation de `MarkdownParser($currentCourse['source_root'])`, ré-instanciation post-`enforceCourseAccess`, et passage de `$currentCourseSlug` à `Gamification::computeUserBadgesAndXp()`.
+     - `src/Course/MarkdownParser.php` : clés cache `mod_v9_rca173` / `lab_v10_rca173`, priorité `cheatsheet_` ancrée `(?:^|/)` avant `module_`/`lab_`, élargissement référentiel `programme_formation_[a-z0-9_]+|programme_demo_[a-z0-9_]+`, `index.php?action=course_asset&...`, et support `.png`/`.svg` avec `alt` adapté au cours dans `renderMermaidBlock()`.
+     - `public/assets/js/app.js` & `public/assets/css/app.css` : `startOnLoad: false` + `initMermaid()` filtré sur nœuds visibles (`offsetParent !== null`) appelé dans `goToSlide()`, légende Lightbox contextualisée au cours, mise à jour live de `#fc-mastered-count` au clic `.btn-fc-rate`, et règle `.lms-mermaid-canvas .mermaid svg`.
+     - `src/Core/Gamification.php`, `src/Course/{CourseRepository,LmsCatalog}.php` & templates (`attendance`, `catalog`, `documents`, `notes`, `satisfaction`, `verify`, `login`, `flashcards`, `dashboard`, `layout`) : 8 badges et rangs Git dédiés sans fuite PG18/Docker/Sakila, planning d'émargement dynamique 1 jour / 2 demi-journées (7h) pour `git-basics`, en-tête `satisfaction.php` en colonne (`.hero-content-col` sans compression flex), validation XML stricte des SVG vectoriels (sans `--` en commentaire), libellés multi-cours sur `catalog`/`documents`/`notes`/`satisfaction`/`verify`/`login`, et conversion des `'\n'` littéraux en vrais sauts de ligne dans `LmsCatalog.php` + `flashcards.php`.
+     - `docker-compose.yml` & `.env.example` : paramétrage `${LMS_PORT:-8080}:8080`.
+  3) **Tests Unitaires, HTTP E2E & Validation Docker (`funcqa` + Wave 4C) :** Extension de `tests/run_tests.php` (Section 8.1 & Section 26 : SVG `course_asset` sans `<div class="mermaid">`, liens `GUIDE_PARCOURS`, `Gamification`, `LmsCatalog` sans `\n`, isolation multi-cours) et `tests/test_functional_http.php` (`[1/7]`, `[3/7]`, `[7/7]` : vérification HTTP `200 image/svg+xml`, zéro régression PG18, parcours complet `git-basics` avec `0` `style=`), validation conteneur Docker Compose port `8098`.
+* **4. Prompt LLM :**
+  ```text
+  Contexte : dépôt lightpath-training-portal (branche feat/git-basics-course-and-e2e, Issue #45). Lis la fiche RCA-172 (RCA-LMS-42) dans docs/internal/REGISTRE_RCA.md.
+  Tâche : Vérifier les invariants multi-cours sur git-basics et postgresql-18 :
+  1) public/index.php résout $currentCourse (y compris auto-détection ?page=verify&code=LP-GITBAS-...) avant d'instancier MarkdownParser($currentCourse['source_root']) et transmet $currentCourseSlug à Gamification::computeUserBadgesAndXp().
+  2) src/Course/MarkdownParser.php route cheatsheet_* avant module_*/lab_* avec ancrage (?:^|/), sert les diagrammes vectoriels SVG/PNG depuis $sourceRoot/assets/mermaid_cache/ via index.php?action=course_asset, et public/assets/js/app.js initialise Mermaid uniquement sur nœuds visibles (startOnLoad: false) et met à jour #fc-mastered-count en direct.
+  3) templates/pages/{attendance,catalog,documents,notes,satisfaction,verify,login,flashcards}.php et src/Core/Gamification.php adaptent dynamiquement planning, badges, wording et sauts de ligne sans régression sur postgresql-18 ni nouvelle méthode publique non couverte.
+  4) tests/run_tests.php (Section 26) et tests/test_functional_http.php ([7/7]) valident le cycle complet et l'isolation des deux cours.
+  Valide avec : php tests/run_tests.php && php tests/test_functional_http.php && php tests/test_coverage_audit.php
+  ```
+* **Statut :** ✅ Implémenté — voir Journal de Bord 2026-11-18
+
 
