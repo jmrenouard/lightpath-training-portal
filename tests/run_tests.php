@@ -256,7 +256,11 @@ $t->assertTrue(str_contains($parsedMod['html'], 'lms-mermaid-card'), "RCA-LMS-01
 if ($isFullPg18Course) {
     $t->assertTrue(str_contains($parsedMod['html'], 'assets%2Fmermaid_cache%2Fmermaid_'), "RCA-LMS-01 : Module 01 résout l'image Retina pré-calculée mermaid_<hash>.png");
 } else {
-    $t->assertTrue(str_contains($parsedMod['html'], '<div class="mermaid">'), "Demo Module 01 renders inline Mermaid container inside .lms-mermaid-card");
+    $t->assertTrue(
+        str_contains($parsedMod['html'], '<img src="index.php?action=course_asset&amp;course=postgresql-18&amp;path=assets%2Fmermaid_cache%2Fmermaid_')
+        && !str_contains($parsedMod['html'], '<div class="mermaid">'),
+        "Demo Module 01 renders precomputed vector SVG via course_asset with zero fallback mermaid div"
+    );
 }
 $t->assertTrue(!str_contains($parsedMod['html'], 'lms-mermaid-code'), "RCA-LMS-01 : Zéro bloc Mermaid brut non transformé (.lms-mermaid-code)");
 $t->assertTrue(str_contains($parsedMod['html'], 'lms-doc-meta-grid'), "RCA-LMS-01 : En-tête de métadonnées transformé en grille .lms-doc-meta-grid");
@@ -2976,6 +2980,295 @@ try {
         }
     }
     $s25CleanupDir($s25RandomBootDir);
+}
+
+// ============================================================================
+// 26. Multi-Course Git Basics Pack, Markdown Parsing, LmsCatalog & Isolation
+// ============================================================================
+echo "\n--- 26. Multi-Course Git Basics Pack, LmsCatalog & Data Isolation ---\n";
+$s26RepoRoot = realpath(__DIR__ . '/..') ?: dirname(__DIR__);
+$s26Root = sys_get_temp_dir() . '/lp_git_basics_s26_' . bin2hex(random_bytes(4));
+$s26DataDir = $s26Root . '/data';
+$s26CacheDir = $s26Root . '/cache';
+$s26ParsedDir = $s26Root . '/parsed';
+@mkdir($s26DataDir, 0775, true);
+@mkdir($s26CacheDir, 0775, true);
+@mkdir($s26ParsedDir, 0775, true);
+
+try {
+    putenv('LMS_INIT_ADMIN_PASSWORD=LightPath2026!');
+    putenv('LMS_INIT_TRAINER_PASSWORD=Formateur2026!');
+    putenv('LMS_INIT_STUDENT_PASSWORD=Stagiaire2026!');
+
+    $s26CoursesCfg = require $s26RepoRoot . '/config/courses.php';
+    $s26Repo = new CourseRepository($s26CoursesCfg, [], $s26CacheDir);
+    $s26AllCourses = $s26Repo->getAllCourses();
+
+    $t->assertTrue(
+        isset($s26AllCourses['postgresql-18']) && isset($s26AllCourses['git-basics']),
+        "Section 26: CourseRepository::getAllCourses() includes both 'postgresql-18' and 'git-basics'"
+    );
+
+    $gitCourse = $s26Repo->getCourse('git-basics');
+    $t->assertTrue(is_array($gitCourse), "Section 26: getCourse('git-basics') returns valid course array");
+    if (is_array($gitCourse)) {
+        $t->assertEquals(3, count($gitCourse['modules'] ?? []), "Section 26: git-basics discovers 3 modules (01..03)");
+        $t->assertEquals(3, count($gitCourse['labs'] ?? []), "Section 26: git-basics discovers 3 labs (01..03)");
+        $t->assertEquals(6, count($gitCourse['cheatsheets'] ?? []), "Section 26: git-basics discovers 6 cheatsheets (3 mod + 3 lab)");
+        $t->assertGreaterThanOrEqual(2, count($gitCourse['referentiel'] ?? []), "Section 26: git-basics discovers >= 2 referentiel docs");
+        $t->assertTrue(
+            isset($gitCourse['referentiel']['GUIDE_PARCOURS'], $gitCourse['referentiel']['programme_formation_git_bases']),
+            "Section 26: git-basics referentiel includes GUIDE_PARCOURS and programme_formation_git_bases"
+        );
+        $t->assertGreaterThanOrEqual(1, count($gitCourse['tools'] ?? []), "Section 26: git-basics discovers >= 1 tool");
+        $t->assertTrue(isset($gitCourse['tools']['pg_git_repo_audit_py']), "Section 26: git-basics tools include pg_git_repo_audit_py");
+        $t->assertGreaterThanOrEqual(2, count($gitCourse['examples'] ?? []), "Section 26: git-basics discovers >= 2 examples");
+        $t->assertTrue(
+            isset($gitCourse['examples']['python_check_commit_msg_py'], $gitCourse['examples']['pgexamples_README_git_examples_md']),
+            "Section 26: git-basics examples include check_commit_msg.py and README_git_examples.md"
+        );
+        $t->assertEquals(false, $gitCourse['docker_enabled'] ?? true, "Section 26: git-basics declares docker_enabled === false");
+        $t->assertEquals(1, (int)($gitCourse['attendance_days'] ?? 0), "Section 26: git-basics declares attendance_days === 1");
+        $t->assertTrue(isset($gitCourse['tracks']['fondamentaux-git']), "Section 26: git-basics exposes track 'fondamentaux-git'");
+
+        // Parse all 3 Git modules and verify slides, quizzes, Mermaid cards, callouts, and clean rendering.
+        $gitParser = new MarkdownParser((string)$gitCourse['source_root'], $s26ParsedDir);
+        foreach ($gitCourse['modules'] as $gModId => $gMod) {
+            $parsedMod = $gitParser->parseModuleFile((string)$gMod['source_md_path'], 'git-basics');
+            $t->assertGreaterThanOrEqual(10, count($parsedMod['slides'] ?? []), "Section 26: {$gModId} has >= 10 slides");
+            $t->assertEquals(3, count($parsedMod['quiz'] ?? []), "Section 26: {$gModId} has 3 quiz questions");
+            $modHtml = (string)($parsedMod['html'] ?? '');
+            $t->assertTrue(str_contains($modHtml, 'lms-mermaid-card'), "Section 26: {$gModId} renders .lms-mermaid-card");
+            $t->assertTrue(
+                str_contains($modHtml, '<img src="index.php?action=course_asset&amp;course=git-basics&amp;path=assets%2Fmermaid_cache%2Fmermaid_')
+                && str_contains($modHtml, '.svg"')
+                && !str_contains($modHtml, '<div class="mermaid">'),
+                "Section 26: {$gModId} renders vector SVG via course_asset with zero fallback mermaid div"
+            );
+            $t->assertTrue(str_contains($modHtml, 'lms-callout-list'), "Section 26: {$gModId} renders .lms-callout-list");
+            $modProse = strip_tags((string)preg_replace('/<(pre|code)\b[^>]*>.*?<\/\1>/is', '', $modHtml));
+            $t->assertEquals(0, preg_match_all('/\*\*/', $modProse), "Section 26: {$gModId} HTML contains 0 raw ** tokens");
+            $t->assertEquals(0, preg_match_all('/`/', $modProse), "Section 26: {$gModId} HTML contains 0 stray backticks");
+        }
+
+        // Verify GUIDE_PARCOURS.md internal route mapping and relative repository asset links.
+        $guideMdPath = (string)($gitCourse['referentiel']['GUIDE_PARCOURS']['source_md_path'] ?? '');
+        $t->assertTrue($guideMdPath !== '' && is_file($guideMdPath), "Section 26: GUIDE_PARCOURS.md exists");
+        if ($guideMdPath !== '' && is_file($guideMdPath)) {
+            $parsedGuide = $gitParser->renderMarkdown((string)file_get_contents($guideMdPath), 'git-basics', false);
+            $guideHtml = (string)($parsedGuide['html'] ?? '');
+            $t->assertTrue(
+                str_contains($guideHtml, 'index.php?page=documents&amp;tab=cheatsheets&amp;course=git-basics&amp;id=cheatsheet_lab_01_init')
+                && !str_contains($guideHtml, 'page=lab&amp;course=git-basics&amp;id=lab_01_init'),
+                "Section 26: GUIDE_PARCOURS routes cheatsheet_lab_01_init to tab=cheatsheets instead of page=lab"
+            );
+            $t->assertTrue(
+                str_contains($guideHtml, 'index.php?action=course_asset&amp;course=git-basics&amp;path=04_ateliers_et_tp%2Fpgexamples%2FREADME_git_examples.md'),
+                "Section 26: GUIDE_PARCOURS resolves README_git_examples.md to index.php?action=course_asset"
+            );
+            $t->assertTrue(
+                str_contains($guideHtml, 'index.php?page=module&amp;course=git-basics&amp;id=module_01_git_init_commits_historique')
+                && str_contains($guideHtml, 'index.php?page=lab&amp;course=git-basics&amp;id=lab_01_premier_depot_et_commits')
+                && str_contains($gitParser->renderMarkdown('[Prog](01_programme_et_referentiel/programme_formation_git_bases.md)', 'git-basics')['html'], 'tab=referentiel'),
+                "Section 26: GUIDE_PARCOURS resolves Git modules, labs, and referentiel links cleanly"
+            );
+        }
+
+        // Verify vector SVG cache files are valid XML without <style>, style=, or malformed comments.
+        $svgCheckList = array_merge(
+            glob($s26RepoRoot . '/examples/git-basics-course/assets/mermaid_cache/*.svg') ?: [],
+            glob($s26RepoRoot . '/examples/demo-course/assets/mermaid_cache/*.svg') ?: []
+        );
+        $t->assertEquals(4, count($svgCheckList), "Section 26: All 4 Mermaid vector SVGs exist across git-basics (3) and demo-course (1)");
+        $prevLibxml = libxml_use_internal_errors(true);
+        foreach ($svgCheckList as $svgFile) {
+            $svgBody = (string)file_get_contents($svgFile);
+            libxml_clear_errors();
+            $svgDom = new \DOMDocument();
+            $xmlOk = $svgDom->load($svgFile) && empty(libxml_get_errors());
+            $t->assertTrue(
+                $xmlOk
+                && str_contains($svgBody, '<svg')
+                && !str_contains($svgBody, '<style')
+                && !preg_match('/\bstyle\s*=/i', $svgBody),
+                "Section 26: " . basename($svgFile) . " parses as valid XML with zero <style> or style="
+            );
+        }
+        libxml_clear_errors();
+        libxml_use_internal_errors($prevLibxml);
+
+        // Parse all 3 Git labs and verify prompt, solution, validation oracle, and clean rendering.
+        foreach ($gitCourse['labs'] as $gLabId => $gLab) {
+            $parsedLab = $gitParser->parseLabFile((string)$gLab['source_md_path'], 'git-basics');
+            $enonceHtml = (string)($parsedLab['enonce_html'] ?? '');
+            $corrigeHtml = (string)($parsedLab['corrige_html'] ?? '');
+            $t->assertTrue(trim($enonceHtml) !== '', "Section 26: {$gLabId} produces non-empty enonce_html");
+            $t->assertTrue(trim($corrigeHtml) !== '', "Section 26: {$gLabId} produces non-empty corrige_html");
+            $t->assertTrue(
+                str_contains($corrigeHtml, 'VALIDATION_OK') || str_contains((string)($parsedLab['html'] ?? ''), 'VALIDATION_OK'),
+                "Section 26: {$gLabId} includes VALIDATION_OK verification oracle"
+            );
+            foreach (['enonce_html' => $enonceHtml, 'corrige_html' => $corrigeHtml] as $partName => $partHtml) {
+                $labProse = strip_tags((string)preg_replace('/<(pre|code)\b[^>]*>.*?<\/\1>/is', '', $partHtml));
+                $t->assertEquals(0, preg_match_all('/\*\*/', $labProse), "Section 26: {$gLabId} {$partName} contains 0 raw ** tokens");
+                $t->assertEquals(0, preg_match_all('/`/', $labProse), "Section 26: {$gLabId} {$partName} contains 0 stray backticks");
+            }
+        }
+
+        // Verify LmsCatalog multi-course methods for git-basics.
+        $gitDiagQuestions = LmsCatalog::getDiagnosticQuestions('git-basics');
+        $t->assertEquals(6, count($gitDiagQuestions), "Section 26: LmsCatalog returns 6 Git diagnostic MCQs");
+        $gitDiagAnswers = [];
+        foreach ($gitDiagQuestions as $dq) {
+            $gitDiagAnswers[$dq['id']] = $dq['correct'];
+        }
+        $gitDiagEval = LmsCatalog::evaluateDiagnostic($gitDiagAnswers, 'git-basics');
+        $t->assertEquals('fondamentaux-git', $gitDiagEval['recommended_track'] ?? '', "Section 26: evaluateDiagnostic('git-basics') recommends 'fondamentaux-git'");
+
+        $gitExamQuestions = LmsCatalog::getFinalExamQuestions('git-basics');
+        $t->assertEquals(10, count($gitExamQuestions), "Section 26: LmsCatalog returns 10 Git final exam MCQs");
+        $gitExamAnswers = [];
+        foreach ($gitExamQuestions as $eq) {
+            $gitExamAnswers[$eq['id']] = $eq['correct'];
+        }
+        $gitExamEval = LmsCatalog::evaluateFinalExam($gitExamAnswers, 95, 'git-basics');
+        $t->assertTrue(
+            ($gitExamEval['passed'] ?? false) === true && (int)($gitExamEval['percent'] ?? 0) >= 75,
+            "Section 26: evaluateFinalExam('git-basics') passes at >= 75%"
+        );
+
+        $s26Storage = new JsonStorage($s26DataDir);
+        $s26Uid = 3;
+        $savedGitExam = $s26Storage->saveExamAttempt($s26Uid, 'git-basics', $gitExamEval);
+        $gitCertId = (string)($savedGitExam['certificate_id'] ?? '');
+        $t->assertTrue(str_starts_with($gitCertId, 'LP-GITBAS-CERT-'), "Section 26: saveExamAttempt creates LP-GITBAS-CERT-... certificate ID");
+
+        $resolvedGitCert = $s26Storage->findCertificateByCode($gitCertId);
+        $t->assertTrue(
+            is_array($resolvedGitCert)
+            && ($resolvedGitCert['course_slug'] ?? '') === 'git-basics'
+            && ($resolvedGitCert['passed'] ?? false) === true,
+            "Section 26: findCertificateByCode resolves LP-GITBAS-CERT-... for git-basics"
+        );
+
+        $gitAttCode = sprintf('LP-GITBAS-ATT-%d-%s', $s26Uid, date('Ymd'));
+        $resolvedGitAtt = $s26Storage->findCertificateByCode($gitAttCode);
+        $t->assertTrue(
+            is_array($resolvedGitAtt)
+            && ($resolvedGitAtt['course_slug'] ?? '') === 'git-basics'
+            && ($resolvedGitAtt['certificate_type'] ?? '') === 'attendance',
+            "Section 26: findCertificateByCode resolves LP-GITBAS-ATT-... attendance certificate"
+        );
+
+        $t->assertEquals(12, count(LmsCatalog::getFlashcards('git-basics')), "Section 26: LmsCatalog returns 12 Git SRS flashcards");
+        $t->assertEquals(12, count(LmsCatalog::getGlossary('git-basics')), "Section 26: LmsCatalog returns 12 Git glossary terms");
+
+        // Verify zero literal \n sequences in both PostgreSQL and Git Basics flashcards.
+        $literalBackslashN = 0;
+        foreach (array_merge(LmsCatalog::getFlashcards('postgresql-18'), LmsCatalog::getFlashcards('git-basics')) as $fcCheck) {
+            if (str_contains((string)($fcCheck['front'] ?? ''), '\n') || str_contains((string)($fcCheck['back'] ?? ''), '\n')) {
+                $literalBackslashN++;
+            }
+        }
+        $t->assertEquals(0, $literalBackslashN, "Section 26: LmsCatalog flashcards contain zero literal \\n escape sequences");
+
+        // Verify course-aware Gamification badges & ranks without PG18 regression.
+        $gitGamif = Gamification::computeUserBadgesAndXp(
+            ['completed_modules' => ['module_01_git_init_commits_historique'], 'completed_labs' => ['lab_01_premier_depot_et_commits', 'lab_02_branches_et_conflit_merge', 'lab_03_synchronisation_remote_pull_request'], 'quiz_scores' => ['m1' => [], 'm2' => [], 'm3' => []]],
+            null,
+            ['passed' => true],
+            [],
+            3,
+            3,
+            'git-basics'
+        );
+        $gitBadgeIds = array_map(static fn(array $b): string => (string)$b['id'], $gitGamif['badges'] ?? []);
+        $gitBadgeJson = json_encode($gitGamif, JSON_UNESCAPED_UNICODE) ?: '';
+        $t->assertTrue(
+            count($gitBadgeIds) === 8
+            && in_array('first_step_git', $gitBadgeIds, true)
+            && in_array('git_labs_grandmaster', $gitBadgeIds, true)
+            && in_array('git_certified', $gitBadgeIds, true)
+            && str_contains((string)($gitGamif['rank'] ?? ''), 'Git')
+            && !str_contains($gitBadgeJson, 'PostgreSQL')
+            && !str_contains($gitBadgeJson, 'Sakila')
+            && !str_contains($gitBadgeJson, 'Docker'),
+            "Section 26: Gamification::computeUserBadgesAndXp('git-basics') returns 8 Git badges and ranks without PG18/Docker/Sakila text"
+        );
+        $pgGamifCheck = Gamification::computeUserBadgesAndXp([], null, null, [], 34, 34, 'postgresql-18');
+        $pgBadgeIds = array_map(static fn(array $b): string => (string)$b['id'], $pgGamifCheck['badges'] ?? []);
+        $t->assertTrue(
+            in_array('first_step_pg18', $pgBadgeIds, true) && in_array('sakila_grandmaster', $pgBadgeIds, true),
+            "Section 26: Gamification::computeUserBadgesAndXp('postgresql-18') preserves PG18 badges intact"
+        );
+
+        $gitManifest = LmsCatalog::generateScormManifest($gitCourse);
+        $t->assertTrue(str_contains($gitManifest, '&amp;course=git-basics'), "Section 26: generateScormManifest includes &amp;course=git-basics");
+
+        $s26Downloader = new DownloadController($s26Repo);
+        $gitScormZip = $s26Downloader->buildScorm12ZipPackage('git-basics', $gitCourse);
+        $gitZipValid = is_string($gitScormZip) && is_file($gitScormZip) && str_starts_with((string)@file_get_contents($gitScormZip, false, null, 0, 4), "PK\x03\x04");
+        if ($gitZipValid && class_exists(\ZipArchive::class)) {
+            $za = new \ZipArchive();
+            $gitZipValid = ($za->open($gitScormZip) === true) && ($za->locateName('imsmanifest.xml') !== false);
+            @$za->close();
+        }
+        $t->assertTrue($gitZipValid, "Section 26: buildScorm12ZipPackage('git-basics') creates a valid SCORM 1.2 ZIP");
+        if (is_string($gitScormZip) && is_file($gitScormZip)) {
+            @unlink($gitScormZip);
+        }
+
+        // Verify per-course state isolation (progress, quiz, exam, attendance) for the same user ID.
+        $s26Storage->markItemCompleted($s26Uid, 'git-basics', 'module', 'module_01_git_init_commits_historique', true);
+        $s26Storage->markItemCompleted($s26Uid, 'git-basics', 'lab', 'lab_01_premier_depot_et_commits', true);
+        $s26Storage->saveQuizScore($s26Uid, 'git-basics', 'module_01_git_init_commits_historique', 3, 3);
+        $s26Storage->signAttendance($s26Uid, 'git-basics', 'J1_AM', 'Git Student Sig', '127.0.0.1');
+
+        $s26Storage->markItemCompleted($s26Uid, 'postgresql-18', 'module', 'module_01_introduction_postgresql_18', true);
+        $s26Storage->saveQuizScore($s26Uid, 'postgresql-18', 'module_01_introduction_postgresql_18', 2, 3);
+        $s26Storage->signAttendance($s26Uid, 'postgresql-18', 'J2_PM', 'PG18 Student Sig', '127.0.0.1');
+
+        $gitProg = $s26Storage->getUserProgress($s26Uid, 'git-basics');
+        $pgProg = $s26Storage->getUserProgress($s26Uid, 'postgresql-18');
+        $gitAtt = $s26Storage->getUserAttendance($s26Uid, 'git-basics');
+        $pgAtt = $s26Storage->getUserAttendance($s26Uid, 'postgresql-18');
+        $gitExams = $s26Storage->getExamAttempts($s26Uid, 'git-basics');
+        $pgExams = $s26Storage->getExamAttempts($s26Uid, 'postgresql-18');
+
+        $t->assertTrue(
+            ($gitProg['completed_modules'] ?? []) === ['module_01_git_init_commits_historique']
+            && ($gitProg['completed_labs'] ?? []) === ['lab_01_premier_depot_et_commits']
+            && in_array('module_01_introduction_postgresql_18', $pgProg['completed_modules'] ?? [], true)
+            && !in_array('module_01_git_init_commits_historique', $pgProg['completed_modules'] ?? [], true)
+            && !in_array('lab_01_premier_depot_et_commits', $pgProg['completed_labs'] ?? [], true),
+            "Section 26: Module and lab completion is strictly isolated between 'git-basics' and 'postgresql-18'"
+        );
+        $t->assertTrue(
+            isset($gitProg['quiz_scores']['module_01_git_init_commits_historique'])
+            && !isset($gitProg['quiz_scores']['module_01_introduction_postgresql_18'])
+            && isset($pgProg['quiz_scores']['module_01_introduction_postgresql_18'])
+            && !isset($pgProg['quiz_scores']['module_01_git_init_commits_historique']),
+            "Section 26: Quiz scores remain strictly isolated per course slug"
+        );
+        $t->assertTrue(
+            isset($gitAtt['J1_AM']) && !isset($gitAtt['J2_PM'])
+            && isset($pgAtt['J2_PM']) && !isset($pgAtt['J1_AM']),
+            "Section 26: Attendance records remain strictly isolated per course slug"
+        );
+        $t->assertTrue(
+            count($gitExams) === 1 && count($pgExams) === 0,
+            "Section 26: Exam attempts on 'git-basics' do not leak into 'postgresql-18'"
+        );
+    }
+} finally {
+    foreach ($savedInitPasswords as $envKey => $envVal) {
+        if ($envVal === false) {
+            putenv($envKey);
+        } else {
+            putenv($envKey . '=' . $envVal);
+        }
+    }
+    $s25CleanupDir($s26Root);
 }
 
 exit($t->summary());

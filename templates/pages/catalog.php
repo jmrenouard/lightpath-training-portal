@@ -14,6 +14,8 @@ $allLabs = $currentCourse['labs'] ?? [];
 $totalTracksCount = count($tracks);
 $totalModulesCount = count($allModules);
 $totalLabsCount = count($allLabs);
+$courseHasDocker = !isset($currentCourse['docker_enabled']) || !empty($currentCourse['docker_enabled']);
+$courseDockerEnabled = $courseHasDocker && (!isset($featureManager) || $featureManager->isEnabledForCourse('docker_labs', $currentCourseSlug));
 
 // Index modules by code ('01', '02', ..., 'sql_01') for structured track & phase rendering
 $modulesByCode = [];
@@ -27,11 +29,11 @@ foreach ($allModules as $mId => $mObj) {
         <span class="badge-code">CATALOGUE STRUCTURÉ PAR PARCOURS & JOURNÉES • QUALIOPI</span>
         <h1 class="hero-title-lg mt-xs mb-xxs">
             <?= $activeTab === 'labs'
-                ? '🧪 Les ' . $totalLabsCount . ' Ateliers Pratiques & Labs Docker'
+                ? '🧪 Les ' . $totalLabsCount . ($courseDockerEnabled ? ' Ateliers Pratiques & Labs Docker' : ' Ateliers Pratiques Guidés')
                 : '📚 Les ' . $totalTracksCount . ' Parcours & ' . $totalModulesCount . ' Modules de Formation' ?>
         </h1>
         <p class="hero-subtitle-sm">
-            Chaque étape couple un <strong>Module de Cours</strong> (lisible en mode texte interactif ou en <strong>Diaporama 16:9</strong>) et un <strong>Atelier Pratique Docker</strong>, avec téléchargement direct en <code>PDF</code>, <code>Slides PDF</code>, <code>PPTX</code>, <code>MD</code>, <code>HTML</code> et <code>DOCX</code>.
+            Chaque étape couple un <strong>Module de Cours</strong> (lisible en mode texte interactif ou en <strong>Diaporama 16:9</strong>) et un <strong><?= $courseDockerEnabled ? 'Atelier Pratique Docker' : 'Atelier Pratique Guidé' ?></strong>, avec téléchargement direct en <code>PDF</code>, <code>Slides PDF</code>, <code>PPTX</code>, <code>MD</code>, <code>HTML</code> et <code>DOCX</code>.
         </p>
     </div>
 
@@ -40,7 +42,7 @@ foreach ($allModules as $mId => $mObj) {
             📚 Modules & Parcours (<?= $totalModulesCount ?>)
         </a>
         <a href="index.php?page=catalog&tab=labs&track=<?= urlencode($selectedTrack) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn <?= $activeTab === 'labs' ? 'btn-emerald' : 'btn-outline' ?>">
-            🧪 Ateliers & TP Docker (<?= $totalLabsCount ?>)
+            <?= $courseDockerEnabled ? '🧪 Ateliers & TP Docker' : '🧪 Ateliers Pratiques' ?> (<?= $totalLabsCount ?>)
         </a>
     </div>
 </div>
@@ -218,7 +220,7 @@ foreach ($allModules as $mId => $mObj) {
                                             🖥️ Slides 16:9
                                         </a>
                                         <?php if ($linkedLabId !== ''): ?>
-                                            <a href="index.php?page=lab&id=<?= urlencode($linkedLabId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald btn-sm" title="Ouvrir l'Atelier Pratique Docker associé">
+                                            <a href="index.php?page=lab&id=<?= urlencode($linkedLabId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald btn-sm" title="<?= $courseDockerEnabled ? "Ouvrir l'Atelier Pratique Docker associé" : "Ouvrir l'Atelier Pratique associé" ?>">
                                                 🧪 Atelier
                                             </a>
                                         <?php endif; ?>
@@ -276,7 +278,7 @@ foreach ($allModules as $mId => $mObj) {
                 <div>
                     <div class="d-flex gap-xs flex-wrap">
                         <a href="index.php?page=lab&id=<?= urlencode($labId) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-emerald btn-sm flex-1">
-                            🐳 Studio Lab & Console SQL
+                            <?= $courseDockerEnabled ? '🐳 Studio Lab & Console SQL' : "🧪 Ouvrir l'Atelier & Corrigé" ?>
                         </a>
                         <?php if (!empty($lab['linked_module_id'])): ?>
                             <a href="index.php?page=module&id=<?= urlencode((string)$lab['linked_module_id']) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-outline btn-sm">

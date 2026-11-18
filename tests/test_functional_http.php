@@ -428,7 +428,7 @@ try {
     // ------------------------------------------------------------------------
     // 1. Public Unauthenticated Endpoints & Security Headers
     // ------------------------------------------------------------------------
-    echo "[1/6] Public pages (?page=verify, ?page=login) & security headers...\n";
+    echo "[1/7] Public pages (?page=verify, ?page=login) & security headers...\n";
     $client = new EphemeralHttpClient('127.0.0.1', $port);
 
     $verifyResp = $client->request('GET', '/index.php?page=verify');
@@ -508,6 +508,13 @@ try {
         preg_match_all('/\bstyle\s*=/i', $loginPage['body']),
         'GET ?page=login HTML contains zero inline style= attributes'
     );
+    $runner->assertTrue(
+        str_contains($loginPage['body'], 'Formations')
+        && str_contains($loginPage['body'], 'Modules de cours')
+        && str_contains($loginPage['body'], 'Ateliers pratiques')
+        && !str_contains($loginPage['body'], '1 Ateliers Docker'),
+        'GET ?page=login displays dynamic multi-course totals without stale PG18-only counters'
+    );
 
     // Cross-origin POST rejection checks (form login + JSON API).
     $crossOriginLogin = $client->request(
@@ -526,7 +533,7 @@ try {
     // ------------------------------------------------------------------------
     // 2. Cookie-less Brute-Force Lockout Across Fresh HTTP Clients
     // ------------------------------------------------------------------------
-    echo "[2/6] Cookie-less brute-force lockout across 6 rapid failed logins...\n";
+    echo "[2/7] Cookie-less brute-force lockout across 6 rapid failed logins...\n";
     $lockedDetected = false;
     for ($attempt = 1; $attempt <= 6; $attempt++) {
         $freshClient = new EphemeralHttpClient('127.0.0.1', $port);
@@ -550,7 +557,7 @@ try {
     // ------------------------------------------------------------------------
     // 3. Student Workflow (Login, Module, Lab, JSON APIs, Profile Password, RBAC)
     // ------------------------------------------------------------------------
-    echo "[3/6] Student E2E workflow (stagiaire@lightpath.fr)...\n";
+    echo "[3/7] Student E2E workflow (stagiaire@lightpath.fr)...\n";
     $studentClient = new EphemeralHttpClient('127.0.0.1', $port);
     $sLoginPage = $studentClient->request('GET', '/index.php?page=login');
     $sCsrfLogin = EphemeralHttpClient::extractCsrf($sLoginPage['body']);
@@ -567,6 +574,11 @@ try {
 
     $modView = $studentClient->request('GET', '/index.php?page=module&course=postgresql-18&id=module_01_introduction_postgresql_18');
     $runner->assertEquals(200, $modView['status'], 'Student accesses module view HTTP 200');
+    $runner->assertTrue(
+        str_contains($modView['body'], 'mermaid_')
+        && !str_contains($modView['body'], '<div class="mermaid">'),
+        'PG18 Module 01 renders cached Mermaid diagram without fallback div'
+    );
 
     $labView = $studentClient->request('GET', '/index.php?page=lab&course=postgresql-18&id=lab_01_introduction_setup_postgresql_18');
     $runner->assertEquals(200, $labView['status'], 'Student accesses lab view HTTP 200');
@@ -949,7 +961,7 @@ try {
     // ------------------------------------------------------------------------
     // 4. Trainer RBAC Verification
     // ------------------------------------------------------------------------
-    echo "[4/6] Trainer RBAC checks (formateur@lightpath.fr)...\n";
+    echo "[4/7] Trainer RBAC checks (formateur@lightpath.fr)...\n";
     $trainerClient = new EphemeralHttpClient('127.0.0.1', $port);
     $tLogin = $trainerClient->request('GET', '/index.php?page=login');
     $tDash = $trainerClient->request('POST', '/index.php?action=login', [
@@ -1011,7 +1023,7 @@ try {
     // ------------------------------------------------------------------------
     // 5. Admin Verification (jmrenouard@lightpath.fr) — All 7 Tabs, Role Guard, Audit CSV, Feature Toggle
     // ------------------------------------------------------------------------
-    echo "[5/6] Admin E2E checks (jmrenouard@lightpath.fr)...\n";
+    echo "[5/7] Admin E2E checks (jmrenouard@lightpath.fr)...\n";
     $adminClient = new EphemeralHttpClient('127.0.0.1', $port);
     $aLogin = $adminClient->request('GET', '/index.php?page=login');
     $aDash = $adminClient->request('POST', '/index.php?action=login', [
@@ -1508,7 +1520,7 @@ try {
     // ------------------------------------------------------------------------
     // 6. Verify Child Server Error Stream Has Zero PHP Warnings/Fatals
     // ------------------------------------------------------------------------
-    echo "[6/6] Inspecting server error output stream...\n";
+    echo "[6/7] Inspecting server error output stream...\n";
     $serverStderr = is_file($serverErrLog) ? (string)file_get_contents($serverErrLog) : '';
     $runner->assertTrue(
         !str_contains($serverStderr, 'Fatal error')
@@ -1517,6 +1529,500 @@ try {
         && !str_contains($serverStderr, 'PHP Notice:'),
         'PHP built-in server stderr contains zero fatal/parse/warning/notice errors',
         substr(trim($serverStderr), 0, 200)
+    );
+
+    // ------------------------------------------------------------------------
+    // 7. Full Multi-Course E2E Journey on Git Basics (course=git-basics)
+    // ------------------------------------------------------------------------
+    echo "[7/7] Full multi-course E2E journey on Git Basics (course=git-basics)...\n";
+
+    $checkCleanHtml = static function (array $resp, string $label) use ($runner): void {
+        $runner->assertEquals(200, $resp['status'], "{$label} returns HTTP 200");
+        $runner->assertTrue(
+            !str_contains($resp['body'], 'Fatal error') && !str_contains($resp['body'], 'Uncaught'),
+            "{$label} contains zero PHP fatal/uncaught errors"
+        );
+        $runner->assertEquals(
+            0,
+            preg_match_all('/\bstyle\s*=/i', $resp['body']),
+            "{$label} HTML contains zero inline style= attributes"
+        );
+    };
+
+    // Re-enroll student #3 into both postgresql-18 and git-basics before starting Git Basics E2E.
+    $gitUsersBeforeEnroll = $adminClient->request('GET', '/index.php?page=admin&tab=users&course=git-basics');
+    $checkCleanHtml($gitUsersBeforeEnroll, 'Admin users tab before Git Basics enrollment');
+    $gitEnrollResp = $adminClient->request('POST', '/index.php?page=admin&tab=users&action=admin_update_enrollments&course=git-basics', [
+        'csrf_token' => EphemeralHttpClient::extractCsrf($gitUsersBeforeEnroll['body']),
+        'user_id' => '3',
+        'enrolled_courses' => ['postgresql-18', 'git-basics'],
+    ]);
+    $checkCleanHtml($gitEnrollResp, 'Admin enrolls student #3 into postgresql-18 and git-basics');
+
+    $gitStudent = new EphemeralHttpClient('127.0.0.1', $port);
+    $gsLoginPage = $gitStudent->request('GET', '/index.php?page=login');
+    $gsDashLogin = $gitStudent->request('POST', '/index.php?action=login', [
+        'csrf_token' => EphemeralHttpClient::extractCsrf($gsLoginPage['body']),
+        'email' => 'stagiaire@lightpath.fr',
+        'password' => 'Stagiaire2026!',
+    ]);
+    $checkCleanHtml($gsDashLogin, 'Git student post-login dashboard');
+
+    // Dashboard on course=git-basics
+    $gDash = $gitStudent->request('GET', '/index.php?page=dashboard&course=git-basics');
+    $checkCleanHtml($gDash, 'Git Basics dashboard');
+    $runner->assertTrue(
+        str_contains($gDash['body'], 'id="course-switcher"')
+        && str_contains($gDash['body'], 'value="git-basics"')
+        && str_contains($gDash['body'], 'git_branch_icon.svg')
+        && str_contains($gDash['body'], '/3 Modules')
+        && str_contains($gDash['body'], '/3 Labs')
+        && str_contains($gDash['body'], 'Premier Pas Git')
+        && !str_contains($gDash['body'], 'Premier Pas PG 18')
+        && !str_contains($gDash['body'], 'Grand Maître Sakila')
+        && !str_contains($gDash['body'], 'id="docker-panel"')
+        && !str_contains($gDash['body'], 'id="topbar-docker-pill"'),
+        'Git Basics dashboard renders course-switcher, git badges (no PG18/Sakila), 3/3 counts, and omits Docker panels'
+    );
+    $gStudentCsrf = EphemeralHttpClient::extractCsrf($gDash['body']);
+    $runner->assertTrue($gStudentCsrf !== '', 'Git Basics dashboard embeds CSRF token');
+
+    // Catalog modules & labs (zero Docker wording leakage on non-Docker course)
+    $gCatMods = $gitStudent->request('GET', '/index.php?page=catalog&course=git-basics');
+    $checkCleanHtml($gCatMods, 'Git Basics catalog (modules)');
+    $runner->assertTrue(
+        str_contains($gCatMods['body'], 'module_01_git_init_commits_historique')
+        && str_contains($gCatMods['body'], 'module_02_git_branches_fusion_conflits')
+        && str_contains($gCatMods['body'], 'module_03_git_depots_distants_collaboration')
+        && !str_contains($gCatMods['body'], 'Ateliers &amp; TP Docker')
+        && !str_contains($gCatMods['body'], 'Ateliers & TP Docker'),
+        'Git Basics catalog lists all 3 Git modules without Docker CTA copy'
+    );
+
+    $gCatLabs = $gitStudent->request('GET', '/index.php?page=catalog&tab=labs&course=git-basics');
+    $checkCleanHtml($gCatLabs, 'Git Basics catalog (labs)');
+    $runner->assertTrue(
+        str_contains($gCatLabs['body'], 'lab_01_premier_depot_et_commits')
+        && str_contains($gCatLabs['body'], 'lab_02_branches_et_conflit_merge')
+        && str_contains($gCatLabs['body'], 'lab_03_synchronisation_remote_pull_request')
+        && !str_contains($gCatLabs['body'], 'Studio Lab &amp; Console SQL')
+        && !str_contains($gCatLabs['body'], 'Studio Lab & Console SQL'),
+        'Git Basics catalog lists all 3 Git labs without Studio Lab & Console SQL copy'
+    );
+
+    // All 3 Git modules (reader, slides, html_preview, linked cheatsheet, quiz, complete, note, bookmark, Q&A)
+    $gitModulesMap = [
+        'module_01_git_init_commits_historique' => [
+            'cs' => 'cheatsheet_mod_01_commandes_locales',
+            'answers' => [1 => 'B', 2 => 'C', 3 => 'A'],
+        ],
+        'module_02_git_branches_fusion_conflits' => [
+            'cs' => 'cheatsheet_mod_02_branches_merge',
+            'answers' => [1 => 'B', 2 => 'B', 3 => 'B'],
+        ],
+        'module_03_git_depots_distants_collaboration' => [
+            'cs' => 'cheatsheet_mod_03_remotes_pr',
+            'answers' => [1 => 'B', 2 => 'B', 3 => 'A'],
+        ],
+    ];
+    foreach ($gitModulesMap as $gModId => $gModSpec) {
+        $mReader = $gitStudent->request('GET', '/index.php?page=module&course=git-basics&id=' . urlencode($gModId));
+        $checkCleanHtml($mReader, "Git module {$gModId} reader");
+        $runner->assertTrue(
+            str_contains($mReader['body'], '<img src="index.php?action=course_asset&amp;course=git-basics&amp;path=assets%2Fmermaid_cache%2Fmermaid_')
+            && !str_contains($mReader['body'], '<div class="mermaid">'),
+            "Git module {$gModId} reader renders vector SVG via course_asset with zero fallback mermaid div"
+        );
+        if (preg_match('/src="(index\.php\?action=course_asset&amp;course=git-basics&amp;path=assets%2Fmermaid_cache%2Fmermaid_[^"]+\.svg)"/', $mReader['body'], $svgUrlMatch)) {
+            $svgAssetPath = '/' . html_entity_decode($svgUrlMatch[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $svgAssetResp = $gitStudent->request('GET', $svgAssetPath);
+            $svgMime = (string)($client->firstHeader($svgAssetResp['headers'], 'content-type') ?? '');
+            $prevXmlMode = libxml_use_internal_errors(true);
+            libxml_clear_errors();
+            $svgDom = new \DOMDocument();
+            $svgXmlValid = $svgDom->loadXML($svgAssetResp['body']) && empty(libxml_get_errors());
+            libxml_clear_errors();
+            libxml_use_internal_errors($prevXmlMode);
+            $runner->assertTrue(
+                $svgAssetResp['status'] === 200
+                && str_contains($svgMime, 'image/svg+xml')
+                && $svgXmlValid
+                && str_contains($svgAssetResp['body'], '<svg')
+                && !str_contains($svgAssetResp['body'], '<style')
+                && !preg_match('/\bstyle\s*=/i', $svgAssetResp['body']),
+                "Git module {$gModId} Mermaid SVG asset returns HTTP 200 valid XML image/svg+xml without <style> or style="
+            );
+        } else {
+            $runner->assertTrue(false, "Git module {$gModId} Mermaid SVG asset URL extracted");
+        }
+
+        $mSlides = $gitStudent->request('GET', '/index.php?page=module&course=git-basics&id=' . urlencode($gModId) . '&mode=slides');
+        $checkCleanHtml($mSlides, "Git module {$gModId} slides");
+        $runner->assertTrue(str_contains($mSlides['body'], 'id="lms-slide-deck-wrapper"'), "Git module {$gModId} slides renders deck wrapper");
+
+        $mPreview = $gitStudent->request('GET', '/index.php?page=module&course=git-basics&id=' . urlencode($gModId) . '&mode=html_preview');
+        $checkCleanHtml($mPreview, "Git module {$gModId} html_preview");
+
+        $mInlineHtml = $gitStudent->request('GET', '/index.php?action=download&course=git-basics&type=module&id=' . urlencode($gModId) . '&format=html&inline=1');
+        $runner->assertEquals(200, $mInlineHtml['status'], "Git module {$gModId} inline HTML stream returns HTTP 200");
+
+        $mCsDl = $gitStudent->request('GET', '/index.php?action=download&course=git-basics&type=cheatsheet&id=' . urlencode($gModSpec['cs']) . '&format=md');
+        $runner->assertEquals(200, $mCsDl['status'], "Git module {$gModId} linked cheatsheet download returns HTTP 200");
+
+        $mQuizResp = $gitStudent->request(
+            'POST',
+            '/index.php?action=api_submit_quiz&course=git-basics',
+            ['module_id' => $gModId, 'answers' => $gModSpec['answers']],
+            ['Content-Type' => 'application/json', 'X-CSRF-Token' => $gStudentCsrf]
+        );
+        $mQuizJson = json_decode($mQuizResp['body'], true);
+        $runner->assertTrue(
+            $mQuizResp['status'] === 200 && ($mQuizJson['success'] ?? false) === true && (int)($mQuizJson['quiz_result']['percentage'] ?? 0) === 100,
+            "Git module {$gModId} api_submit_quiz grades 100%"
+        );
+
+        $mCompResp = $gitStudent->request(
+            'POST',
+            '/index.php?action=api_toggle_complete&course=git-basics',
+            ['item_type' => 'module', 'item_id' => $gModId, 'completed' => true],
+            ['Content-Type' => 'application/json', 'X-CSRF-Token' => $gStudentCsrf]
+        );
+        $mCompJson = json_decode($mCompResp['body'], true);
+        $runner->assertTrue(
+            $mCompResp['status'] === 200 && ($mCompJson['success'] ?? false) === true,
+            "Git module {$gModId} api_toggle_complete succeeds"
+        );
+
+        $mNoteResp = $gitStudent->request(
+            'POST',
+            '/index.php?action=api_save_note&course=git-basics',
+            ['item_id' => $gModId, 'note' => "Git study note for {$gModId}"],
+            ['Content-Type' => 'application/json', 'X-CSRF-Token' => $gStudentCsrf]
+        );
+        $mNoteJson = json_decode($mNoteResp['body'], true);
+        $runner->assertTrue(
+            $mNoteResp['status'] === 200 && ($mNoteJson['success'] ?? false) === true,
+            "Git module {$gModId} api_save_note succeeds"
+        );
+
+        $mBmResp = $gitStudent->request(
+            'POST',
+            '/index.php?action=api_toggle_bookmark&course=git-basics',
+            ['item_type' => 'module', 'item_id' => $gModId, 'title' => "Git {$gModId}"],
+            ['Content-Type' => 'application/json', 'X-CSRF-Token' => $gStudentCsrf]
+        );
+        $mBmJson = json_decode($mBmResp['body'], true);
+        $runner->assertTrue(
+            $mBmResp['status'] === 200 && ($mBmJson['success'] ?? false) === true,
+            "Git module {$gModId} api_toggle_bookmark succeeds"
+        );
+
+        $mDiscResp = $gitStudent->request(
+            'POST',
+            '/index.php?page=module&action=post_discussion&course=git-basics',
+            [
+                'csrf_token' => $gStudentCsrf,
+                'item_id' => $gModId,
+                'return_page' => 'module',
+                'message' => "Question Git {$gModId}",
+            ]
+        );
+        $checkCleanHtml($mDiscResp, "Git module {$gModId} post_discussion");
+        $runner->assertTrue(
+            str_contains($mDiscResp['body'], "Question Git {$gModId}"),
+            "Git module {$gModId} post_discussion persists question in thread"
+        );
+    }
+
+    // All 3 Git labs (enonce, corrige, full, linked cheatsheet, zero #lab-sql-editor)
+    $gitLabsMap = [
+        'lab_01_premier_depot_et_commits' => 'cheatsheet_lab_01_init',
+        'lab_02_branches_et_conflit_merge' => 'cheatsheet_lab_02_conflits',
+        'lab_03_synchronisation_remote_pull_request' => 'cheatsheet_lab_03_remotes',
+    ];
+    foreach ($gitLabsMap as $gLabId => $gLabCsId) {
+        foreach (['enonce', 'corrige', 'full'] as $gLabMode) {
+            $lResp = $gitStudent->request('GET', '/index.php?page=lab&course=git-basics&id=' . urlencode($gLabId) . '&mode=' . urlencode($gLabMode));
+            $checkCleanHtml($lResp, "Git lab {$gLabId} mode={$gLabMode}");
+            $runner->assertTrue(
+                !str_contains($lResp['body'], 'id="lab-sql-editor"'),
+                "Git lab {$gLabId} mode={$gLabMode} omits #lab-sql-editor"
+            );
+        }
+        $lCsDl = $gitStudent->request('GET', '/index.php?action=download&course=git-basics&type=cheatsheet&id=' . urlencode($gLabCsId) . '&format=md');
+        $runner->assertEquals(200, $lCsDl['status'], "Git lab {$gLabId} linked cheatsheet download returns HTTP 200");
+    }
+
+    // Documents, GUIDE_PARCOURS, Markdown notes export, and staff SCORM exports
+    foreach (['referentiel', 'cheatsheets', 'tools', 'examples'] as $docTab) {
+        $docResp = $gitStudent->request('GET', '/index.php?page=documents&tab=' . urlencode($docTab) . '&course=git-basics');
+        $checkCleanHtml($docResp, "Git Basics documents tab={$docTab}");
+        $runner->assertTrue(
+            !str_contains($docResp['body'], 'Scripts DBA')
+            && !str_contains($docResp['body'], 'Script Python DBA')
+            && !str_contains($docResp['body'], 'psycopg3')
+            && !str_contains($docResp['body'], 'pgx/v5'),
+            "Git Basics documents tab={$docTab} omits PG18 Scripts DBA and psycopg3/pgx/v5 wording"
+        );
+    }
+    $guidePreview = $gitStudent->request('GET', '/index.php?page=documents&tab=referentiel&id=GUIDE_PARCOURS&course=git-basics');
+    $checkCleanHtml($guidePreview, 'Git Basics GUIDE_PARCOURS integrated preview');
+    $runner->assertTrue(
+        str_contains($guidePreview['body'], 'index.php?page=documents&amp;tab=cheatsheets&amp;course=git-basics&amp;id=cheatsheet_lab_01_init')
+        && !str_contains($guidePreview['body'], 'page=lab&amp;course=git-basics&amp;id=lab_01_init')
+        && str_contains($guidePreview['body'], 'index.php?action=course_asset&amp;course=git-basics&amp;path=04_ateliers_et_tp%2Fpgexamples%2FREADME_git_examples.md'),
+        'GUIDE_PARCOURS preview routes cheatsheet_lab_01_init to tab=cheatsheets and README_git_examples.md to course_asset'
+    );
+    $readmeAssetResp = $gitStudent->request('GET', '/index.php?action=course_asset&course=git-basics&path=04_ateliers_et_tp%2Fpgexamples%2FREADME_git_examples.md');
+    $runner->assertTrue(
+        $readmeAssetResp['status'] === 200 && str_contains($readmeAssetResp['body'], 'commit-msg'),
+        'README_git_examples.md course_asset link returns HTTP 200'
+    );
+    $guideDl = $gitStudent->request('GET', '/index.php?action=download&course=git-basics&type=referentiel&id=GUIDE_PARCOURS&format=md');
+    $runner->assertEquals(200, $guideDl['status'], 'Git Basics GUIDE_PARCOURS download returns HTTP 200');
+
+    $notesMdExport = $gitStudent->request('GET', '/index.php?action=export_notes_md&course=git-basics');
+    $runner->assertTrue(
+        $notesMdExport['status'] === 200 && str_contains($notesMdExport['body'], 'Git study note for module_01_git_init_commits_historique'),
+        'Git Basics export_notes_md returns HTTP 200 with saved Git notes'
+    );
+
+    $gitScormManifestResp = $adminClient->request('GET', '/index.php?action=export_scorm_manifest&course=git-basics');
+    $runner->assertTrue(
+        $gitScormManifestResp['status'] === 200 && str_contains($gitScormManifestResp['body'], '&amp;course=git-basics'),
+        'Staff export_scorm_manifest for git-basics returns HTTP 200 with course manifest'
+    );
+    $gitScormZipResp = $adminClient->request('GET', '/index.php?action=export_scorm_zip&course=git-basics');
+    $runner->assertTrue(
+        $gitScormZipResp['status'] === 200 && str_starts_with($gitScormZipResp['body'], "PK\x03\x04"),
+        'Staff export_scorm_zip for git-basics returns HTTP 200 PKZIP package'
+    );
+
+    // Diagnostic (6 MCQs), Final Exam (10 MCQs), Certificate & Public Verify (with SVG QR)
+    $gDiagGet = $gitStudent->request('GET', '/index.php?page=diagnostic&course=git-basics');
+    $checkCleanHtml($gDiagGet, 'Git Basics diagnostic GET');
+    $gDiagPost = $gitStudent->request('POST', '/index.php?page=diagnostic&action=submit_diagnostic&course=git-basics', [
+        'csrf_token' => EphemeralHttpClient::extractCsrf($gDiagGet['body']),
+        'answers' => [
+            'git_diag_01' => 'B',
+            'git_diag_02' => 'D',
+            'git_diag_03' => 'A',
+            'git_diag_04' => 'C',
+            'git_diag_05' => 'B',
+            'git_diag_06' => 'A',
+        ],
+    ]);
+    $checkCleanHtml($gDiagPost, 'Git Basics diagnostic POST');
+    $runner->assertTrue(
+        str_contains($gDiagPost['body'], 'Fondamentaux Git') || str_contains($gDiagPost['body'], 'fondamentaux-git'),
+        'Git Basics diagnostic POST recommends fondamentaux-git track'
+    );
+
+    $gExamGet = $gitStudent->request('GET', '/index.php?page=exam&course=git-basics');
+    $checkCleanHtml($gExamGet, 'Git Basics exam GET');
+    $gExamPost = $gitStudent->request('POST', '/index.php?page=exam&action=submit_exam&course=git-basics', [
+        'csrf_token' => EphemeralHttpClient::extractCsrf($gExamGet['body']),
+        'duration_seconds' => '120',
+        'answers' => [
+            'git_exam_01' => 'B',
+            'git_exam_02' => 'D',
+            'git_exam_03' => 'A',
+            'git_exam_04' => 'C',
+            'git_exam_05' => 'C',
+            'git_exam_06' => 'A',
+            'git_exam_07' => 'D',
+            'git_exam_08' => 'B',
+            'git_exam_09' => 'D',
+            'git_exam_10' => 'A',
+        ],
+    ]);
+    $checkCleanHtml($gExamPost, 'Git Basics exam POST');
+    $runner->assertTrue(str_contains($gExamPost['body'], 'LP-GITBAS-CERT-'), 'Git Basics exam POST issues LP-GITBAS-CERT-... certificate');
+
+    $gCertGet = $gitStudent->request('GET', '/index.php?page=certificate&course=git-basics');
+    $checkCleanHtml($gCertGet, 'Git Basics certificate GET');
+    $gitCertCode = '';
+    if (preg_match('/LP-GITBAS-CERT-3-[A-F0-9]+/i', $gCertGet['body'], $certMatch)) {
+        $gitCertCode = strtoupper($certMatch[0]);
+    }
+    $runner->assertTrue($gitCertCode !== '', 'Git Basics certificate displays LP-GITBAS-CERT-3-... reference code');
+
+    $anonVerifyGit = new EphemeralHttpClient('127.0.0.1', $port);
+    $gVerifyGet = $anonVerifyGit->request('GET', '/index.php?page=verify&code=' . urlencode($gitCertCode));
+    $checkCleanHtml($gVerifyGet, 'Public unauthenticated verify for LP-GITBAS-CERT-...');
+    $runner->assertTrue(
+        str_contains($gVerifyGet['body'], $gitCertCode)
+        && str_contains($gVerifyGet['body'], 'LP-GITBAS-CERT-...')
+        && str_contains($gVerifyGet['body'], 'Git — Les Bases')
+        && str_contains($gVerifyGet['body'], '<svg')
+        && str_contains($gVerifyGet['body'], 'lms-qr-verify-svg'),
+        'Public verify auto-detects git-basics course without &course= and resolves LP-GITBAS-CERT-... with SVG QR'
+    );
+
+    // Attendance GET, student POST J1_AM, trainer countersign J1_DAY, and export_attendance_csv
+    $gAttGet = $gitStudent->request('GET', '/index.php?page=attendance&course=git-basics');
+    $checkCleanHtml($gAttGet, 'Git Basics student attendance GET');
+    $runner->assertTrue(
+        str_contains($gAttGet['body'], '2 demi-journées')
+        && str_contains($gAttGet['body'], '7h')
+        && !str_contains($gAttGet['body'], '20 demi-journées')
+        && !str_contains($gAttGet['body'], 'pgBackRest')
+        && !str_contains($gAttGet['body'], 'MVCC')
+        && !str_contains($gAttGet['body'], 'PgBouncer'),
+        'Git Basics attendance displays dynamic 1-day/2-half-day schedule without PG18 DBA leakage'
+    );
+    $gAttPost = $gitStudent->request('POST', '/index.php?page=attendance&action=sign_attendance&course=git-basics', [
+        'csrf_token' => EphemeralHttpClient::extractCsrf($gAttGet['body']),
+        'half_day_key' => 'J1_AM',
+        'signature_text' => 'Lu et approuve — Git Basics',
+    ]);
+    $checkCleanHtml($gAttPost, 'Git Basics student attendance POST J1_AM');
+    $runner->assertTrue(str_contains($gAttPost['body'], 'Lu et approuve — Git Basics'), 'Git Basics attendance records J1_AM signature');
+
+    $gitTrainer = new EphemeralHttpClient('127.0.0.1', $port);
+    $gtLoginPage = $gitTrainer->request('GET', '/index.php?page=login');
+    $gitTrainer->request('POST', '/index.php?action=login', [
+        'csrf_token' => EphemeralHttpClient::extractCsrf($gtLoginPage['body']),
+        'email' => 'formateur@lightpath.fr',
+        'password' => 'Formateur2026!',
+    ]);
+    $gtAttInspect = $gitTrainer->request('GET', '/index.php?page=attendance&course=git-basics&student_id=3');
+    $checkCleanHtml($gtAttInspect, 'Git Basics trainer attendance inspection GET');
+    $gtCountersignResp = $gitTrainer->request('POST', '/index.php?page=attendance&action=sign_trainer_attendance&course=git-basics', [
+        'csrf_token' => EphemeralHttpClient::extractCsrf($gtAttInspect['body']),
+        'target_user_id' => '3',
+        'half_day_key' => 'J1_DAY',
+        'return_student_id' => '3',
+        'return_track' => 'cursus-complet',
+    ]);
+    $checkCleanHtml($gtCountersignResp, 'Git Basics trainer attendance countersign J1_DAY');
+    $runner->assertTrue(
+        str_contains($gtCountersignResp['body'], 'contre-sign'),
+        'Git Basics trainer countersigns J1_DAY cleanly'
+    );
+
+    $gtAttCsv = $gitTrainer->request('GET', '/index.php?action=export_attendance_csv&course=git-basics');
+    $runner->assertTrue(
+        $gtAttCsv['status'] === 200
+        && str_starts_with($gtAttCsv['body'], "\xEF\xBB\xBF")
+        && str_contains($gtAttCsv['body'], 'J1_AM'),
+        'Git Basics export_attendance_csv returns HTTP 200 BOM CSV containing J1_AM'
+    );
+
+    // Flashcards (12 cards), glossary (12 terms), api_flashcard_rate, satisfaction (hot & cold), notes, search, profile
+    $gFlashGet = $gitStudent->request('GET', '/index.php?page=flashcards&course=git-basics');
+    $checkCleanHtml($gFlashGet, 'Git Basics flashcards GET');
+    $runner->assertTrue(
+        str_contains($gFlashGet['body'], '12 Flashcards SRS')
+        && str_contains($gFlashGet['body'], '12 cartes affichées')
+        && str_contains($gFlashGet['body'], 'id="fc-mastered-count"')
+        && !str_contains($gFlashGet['body'], '\n2. **Staging'),
+        'Git Basics flashcards renders 12 SRS cards with #fc-mastered-count and zero literal backslash-n'
+    );
+
+    $gGlossGet = $gitStudent->request('GET', '/index.php?page=flashcards&tab=glossary&course=git-basics');
+    $checkCleanHtml($gGlossGet, 'Git Basics glossary GET');
+    $runner->assertTrue(
+        str_contains($gGlossGet['body'], '12 définitions'),
+        'Git Basics glossary renders 12 terms'
+    );
+
+    $gFcRateResp = $gitStudent->request(
+        'POST',
+        '/index.php?action=api_flashcard_rate&course=git-basics',
+        ['card_id' => 'git_fc_01', 'level' => 3],
+        ['Content-Type' => 'application/json', 'X-CSRF-Token' => $gStudentCsrf]
+    );
+    $gFcRateJson = json_decode($gFcRateResp['body'], true);
+    $runner->assertTrue(
+        $gFcRateResp['status'] === 200 && ($gFcRateJson['success'] ?? false) === true,
+        'Git Basics api_flashcard_rate persists card rating'
+    );
+
+    $gSatHotGet = $gitStudent->request('GET', '/index.php?page=satisfaction&course=git-basics');
+    $checkCleanHtml($gSatHotGet, 'Git Basics hot satisfaction GET');
+    $runner->assertTrue(
+        str_contains($gSatHotGet['body'], 'hero-banner hero-banner-compact d-flex flex-col items-start gap-md')
+        && str_contains($gSatHotGet['body'], 'hero-content-col')
+        && !str_contains($gSatHotGet['body'], 'Sakila')
+        && !str_contains($gSatHotGet['body'], 'pgbench')
+        && !str_contains($gSatHotGet['body'], 'Docker')
+        && !str_contains($gSatHotGet['body'], 'Console SQL'),
+        'Git Basics hot satisfaction wraps hero-content-col cleanly and omits Sakila/pgbench/Docker/Console SQL wording'
+    );
+    $gSatHotPost = $gitStudent->request('POST', '/index.php?page=satisfaction&action=submit_satisfaction&course=git-basics', [
+        'csrf_token' => EphemeralHttpClient::extractCsrf($gSatHotGet['body']),
+        'content_quality' => '5',
+        'labs_docker' => '5',
+        'trainer_pedagogy' => '5',
+        'lms_ergonomics' => '5',
+        'objectives_met' => '5',
+        'nps_score' => '10',
+        'strengths' => 'Ateliers Git tres progressifs',
+        'improvements' => 'RAS',
+    ]);
+    $checkCleanHtml($gSatHotPost, 'Git Basics hot satisfaction POST');
+    $runner->assertTrue(
+        str_contains($gSatHotPost['body'], 'Évaluation à chaud enregistrée'),
+        'Git Basics hot satisfaction survey persists cleanly'
+    );
+
+    $gSatColdGet = $gitStudent->request('GET', '/index.php?page=satisfaction&tab=cold&course=git-basics');
+    $checkCleanHtml($gSatColdGet, 'Git Basics cold satisfaction GET');
+    $gSatColdMain = preg_match('/<main\b[^>]*>(.*?)<\/main>/is', $gSatColdGet['body'], $coldMainMatch) ? $coldMainMatch[1] : $gSatColdGet['body'];
+    $runner->assertTrue(
+        !str_contains($gSatColdMain, 'pgBackRest')
+        && !str_contains($gSatColdMain, 'PostgreSQL 18')
+        && !str_contains($gSatColdMain, 'pgscripts'),
+        'Git Basics cold satisfaction main content omits PG18 DBA references'
+    );
+    $gSatColdPost = $gitStudent->request('POST', '/index.php?page=satisfaction&tab=cold&action=submit_cold_satisfaction&course=git-basics', [
+        'csrf_token' => EphemeralHttpClient::extractCsrf($gSatColdGet['body']),
+        'prod_application' => '5',
+        'perf_gains' => '5',
+        'autonomy_level' => '5',
+        'tools_adoption' => '5',
+        'career_impact' => '5',
+        'concrete_projects' => 'Mise en place PR equipe',
+        'further_needs' => 'Rebase interactif avance',
+    ]);
+    $checkCleanHtml($gSatColdPost, 'Git Basics cold satisfaction POST');
+    $runner->assertTrue(
+        str_contains($gSatColdPost['body'], 'Évaluation à froid J+60 enregistrée'),
+        'Git Basics cold satisfaction survey persists cleanly'
+    );
+
+    $gNotesGet = $gitStudent->request('GET', '/index.php?page=notes&course=git-basics');
+    $checkCleanHtml($gNotesGet, 'Git Basics notes GET');
+    $runner->assertTrue(
+        str_contains($gNotesGet['body'], 'Git study note for module_01_git_init_commits_historique')
+        && !str_contains($gNotesGet['body'], 'ateliers pratiques Docker')
+        && !str_contains($gNotesGet['body'], 'commandes SQL clés'),
+        'Git Basics notes displays saved Git note without PG18/Docker placeholders'
+    );
+
+    $gSearchGet = $gitStudent->request('GET', '/index.php?page=search&course=git-basics&q=merge');
+    $checkCleanHtml($gSearchGet, 'Git Basics search&q=merge GET');
+    $runner->assertTrue(str_contains($gSearchGet['body'], 'merge'), 'Git Basics search returns merge results');
+
+    $gProfileGet = $gitStudent->request('GET', '/index.php?page=profile&course=git-basics');
+    $checkCleanHtml($gProfileGet, 'Git Basics profile GET');
+
+    // Admin all 7 tabs with &course=git-basics
+    foreach (['cohort', 'users', 'qna', 'docker', 'courses', 'audit', 'system'] as $gAdminTab) {
+        $gaResp = $adminClient->request('GET', '/index.php?page=admin&tab=' . urlencode($gAdminTab) . '&course=git-basics');
+        $checkCleanHtml($gaResp, "Admin tab={$gAdminTab} on course=git-basics");
+    }
+
+    // Re-check child server stderr after all [7/7] Git Basics HTTP traffic.
+    $serverStderrFinal = is_file($serverErrLog) ? (string)file_get_contents($serverErrLog) : '';
+    $runner->assertTrue(
+        !str_contains($serverStderrFinal, 'Fatal error')
+        && !str_contains($serverStderrFinal, 'Parse error')
+        && !str_contains($serverStderrFinal, 'PHP Warning:')
+        && !str_contains($serverStderrFinal, 'PHP Notice:'),
+        'PHP built-in server stderr contains zero fatal/parse/warning/notice errors after [7/7] Git Basics suite',
+        substr(trim($serverStderrFinal), 0, 200)
     );
 } catch (\Throwable $ex) {
     $serverStderr = is_file($serverErrLog) ? (string)file_get_contents($serverErrLog) : '';

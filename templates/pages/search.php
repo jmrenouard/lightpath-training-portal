@@ -8,7 +8,9 @@ $results = $searchQuery !== '' ? $courseRepo->searchContent($currentCourseSlug, 
 $searchModulesCount = count($currentCourse['modules'] ?? []);
 $searchLabsCount = count($currentCourse['labs'] ?? []);
 $searchCheatsheetsCount = count($currentCourse['cheatsheets'] ?? []);
-$searchGlossaryCount = count(\LightPath\LMS\Course\LmsCatalog::getGlossary());
+$searchGlossaryCount = count(\LightPath\LMS\Course\LmsCatalog::getGlossary($currentCourseSlug));
+$searchCourseHasDocker = !isset($currentCourse['docker_enabled']) || !empty($currentCourse['docker_enabled']);
+$searchCourseDockerEnabled = $searchCourseHasDocker && (!isset($featureManager) || $featureManager->isEnabledForCourse('docker_labs', $currentCourseSlug));
 ?>
 
 <div class="hero-banner hero-banner-compact">
@@ -16,7 +18,7 @@ $searchGlossaryCount = count(\LightPath\LMS\Course\LmsCatalog::getGlossary());
         <span class="badge-code">MOTEUR DE RECHERCHE PLEIN-TEXTE INSTANTANÉ (CTRL+K)</span>
         <h1 class="hero-title-md mt-xs mb-xxs">🔍 Recherche Globale — <?= Security::e($currentCourse['short_title'] ?? 'Formation') ?></h1>
         <p class="hero-subtitle-sm mb-0">
-            Recherchez simultanément dans les <?= $searchModulesCount ?> modules de cours, les <?= $searchLabsCount ?> ateliers pratiques Docker, les <?= $searchCheatsheetsCount ?> fiches mémo et les <?= $searchGlossaryCount ?> définitions du glossaire DBA.
+            Recherchez simultanément dans les <?= $searchModulesCount ?> modules de cours, les <?= $searchLabsCount ?> <?= $searchCourseDockerEnabled ? 'ateliers pratiques Docker' : 'ateliers pratiques' ?>, les <?= $searchCheatsheetsCount ?> fiches mémo et les <?= $searchGlossaryCount ?> définitions du glossaire<?= $currentCourseSlug === 'postgresql-18' ? ' DBA' : '' ?>.
         </p>
     </div>
 </div>
@@ -25,7 +27,7 @@ $searchGlossaryCount = count(\LightPath\LMS\Course\LmsCatalog::getGlossary());
     <form method="GET" action="index.php" class="d-flex gap-sm flex-wrap">
         <input type="hidden" name="page" value="search"/>
         <input type="hidden" name="course" value="<?= Security::e($currentCourseSlug) ?>"/>
-        <input type="search" name="q" class="form-control flex-1 search-query-input" aria-label="Rechercher dans tout le cursus" placeholder="Ex: pg_stat_io, mvcc, patroni, pgbackrest, hugepages, uuidv7, scram..." value="<?= Security::e($searchQuery) ?>" autofocus/>
+        <input type="search" name="q" class="form-control flex-1 search-query-input" aria-label="Rechercher dans tout le cursus" placeholder="<?= $currentCourseSlug === 'postgresql-18' ? 'Ex: pg_stat_io, mvcc, patroni, pgbackrest, hugepages, uuidv7, scram...' : 'Ex: init, add, commit, switch, merge, remote, fetch, pull...' ?>" value="<?= Security::e($searchQuery) ?>" autofocus/>
         <button type="submit" class="btn btn-primary">🔍 Rechercher</button>
     </form>
 </div>
@@ -37,7 +39,11 @@ $searchGlossaryCount = count(\LightPath\LMS\Course\LmsCatalog::getGlossary());
 
     <?php if (empty($results)): ?>
         <div class="lms-card">
-            <p class="mb-0 text-secondary">Aucun résultat trouvé pour ce terme. Essayez un mot-clé SQL ou un concept PostgreSQL 18 (<code>VACUUM</code>, <code>BRIN</code>, <code>WAL</code>, <code>Patroni</code>, <code>sysctl</code>).</p>
+            <?php if ($currentCourseSlug === 'postgresql-18'): ?>
+                <p class="mb-0 text-secondary">Aucun résultat trouvé pour ce terme. Essayez un mot-clé SQL ou un concept PostgreSQL 18 (<code>VACUUM</code>, <code>BRIN</code>, <code>WAL</code>, <code>Patroni</code>, <code>sysctl</code>).</p>
+            <?php else: ?>
+                <p class="mb-0 text-secondary">Aucun résultat trouvé pour ce terme. Essayez un mot-clé issu du cursus <?= Security::e($currentCourse['short_title'] ?? 'Formation') ?> (<code>commit</code>, <code>branch</code>, <code>merge</code>, <code>remote</code>).</p>
+            <?php endif; ?>
         </div>
     <?php else: ?>
         <div class="card-grid">

@@ -137,8 +137,10 @@ class LearnerController
             }
         }
 
+        $safeCourse = preg_replace('/[^a-z0-9_\-]/i', '_', $currentCourseSlug);
+        $safeLearner = preg_replace('/[^a-z0-9]/i', '_', strtolower((string)$currentUser['name']));
         header('Content-Type: text/markdown; charset=UTF-8');
-        header('Content-Disposition: attachment; filename="notes_postgresql_18_' . preg_replace('/[^a-z0-9]/i', '_', strtolower((string)$currentUser['name'])) . '.md"');
+        header('Content-Disposition: attachment; filename="notes_' . $safeCourse . '_' . $safeLearner . '.md"');
         echo implode("\n", $mdLines);
         exit;
     }
@@ -369,7 +371,7 @@ class LearnerController
 
             case 'submit_diagnostic':
                 $answers = is_array($post['answers'] ?? null) ? $post['answers'] : [];
-                $eval = LmsCatalog::evaluateDiagnostic($answers);
+                $eval = LmsCatalog::evaluateDiagnostic($answers, $currentCourseSlug);
                 $this->storage->saveDiagnosticResult($userId, $currentCourseSlug, $eval);
                 $this->storage->logAuditEvent($currentUser['email'], 'DIAGNOSTIC_SUBMIT', "Positionnement Qualiopi : {$eval['percent']}% ({$eval['recommended_track']})");
                 $_SESSION['flash_success'] = "Positionnement Qualiopi enregistré ({$eval['percent']}%) — Parcours recommandé : {$eval['recommended_title']}.";
@@ -385,11 +387,14 @@ class LearnerController
                 }
                 $answers = is_array($post['answers'] ?? null) ? $post['answers'] : [];
                 $durationSec = (int)($post['duration_seconds'] ?? 0);
-                $eval = LmsCatalog::evaluateFinalExam($answers, $durationSec);
+                $eval = LmsCatalog::evaluateFinalExam($answers, $durationSec, $currentCourseSlug);
                 $savedAttempt = $this->storage->saveExamAttempt($userId, $currentCourseSlug, $eval);
                 $this->storage->logAuditEvent($currentUser['email'], 'FINAL_EXAM_SUBMIT', "Examen Final : {$eval['percent']}% ({$eval['mention']}) — Certificat {$savedAttempt['certificate_id']}");
                 if ($eval['passed']) {
-                    $_SESSION['flash_success'] = "Félicitations ! Vous avez réussi l'Examen Final de Certification PostgreSQL 18 avec {$eval['percent']}% ({$eval['mention']}).";
+                    $courseLabel = $currentCourseSlug === 'postgresql-18'
+                        ? 'PostgreSQL 18'
+                        : ($currentCourseSlug === 'git-basics' ? 'Git — Les Bases' : 'de la certification');
+                    $_SESSION['flash_success'] = "Félicitations ! Vous avez réussi l'Examen Final de Certification {$courseLabel} avec {$eval['percent']}% ({$eval['mention']}).";
                 } else {
                     $_SESSION['flash_error'] = "Score obtenu : {$eval['percent']}% (seuil requis : 75%). Consultez le détail de vos réponses ci-dessous et réessayez.";
                 }

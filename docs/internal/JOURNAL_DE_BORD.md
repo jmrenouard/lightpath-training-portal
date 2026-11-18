@@ -398,5 +398,27 @@
   - ✅ Mode B (`training_postgresql` monté via `LMS_COURSE_ROOT` & `LMS_PGSCRIPTS_ROOT`, `LMS_DOCKER_FORCE_SIMULATED=1`) : `php tests/run_tests.php` **`658/658`** (`34` modules/labs, `58` slides Studio M01, Section 25).
   - ✅ Dépôt compagnon `training_postgresql` : `pytest tests/test_rca_contracts.py -q` **`256/256`** passés (`0` régression).
 
+---
+
+### Correction RCA-172 — Pack Cours Test `git-basics` (3 Modules), Moteur Multi-Cours, Port Docker `LMS_PORT`, Remédiation Browser QA Wave 4C & Validation E2E (`RCA-LMS-42` / Issue #45)
+* **Date :** 2026-11-18 18:55
+* **Issue GitHub associée :** `lightpath-training-portal#45` (branche `feat/git-basics-course-and-e2e`)
+* **Fichiers modifiés et créés :**
+  - **Vague 2 — Pack Cours `git-basics` (`gitpack`) :** Création de `examples/git-basics-course/**` (`GUIDE_PARCOURS.md`, `programme_formation_git_bases.md`, 3 modules `.md`/`.html`, 3 ateliers `.md` avec `VALIDATION_OK`, 6 cheatsheets, `pgscripts/pg_git_repo_audit.py`, `pgexamples/python/check_commit_msg.py`, `pgexamples/README_git_examples.md`), création de `public/assets/img/git_branch_icon.svg` et déclaration dans `config/courses.php`.
+  - **Vague 2 — Moteur Multi-Cours & Paramétrage Docker (`lmsmulti`) :** `src/Course/{LmsCatalog,CourseRepository,MarkdownParser}.php`, `src/Core/{Auth,JsonStorage}.php`, `src/Http/LearnerController.php`, `templates/layout.php`, `templates/pages/{dashboard,module_view,lab_view,diagnostic,exam,flashcards,certificate,verify,search}.php`, `docker-compose.yml` (`${LMS_PORT:-8080}:8080`), `.env.example`.
+  - **Vague 3 — Tests Multi-Cours & Validation Conteneur (`funcqa`) :** `tests/run_tests.php` (Section 26), `tests/test_functional_http.php` (`[1/7]..[7/7]`), `docs/internal/{REGISTRE_RCA,JOURNAL_DE_BORD}.md`.
+  - **Vague 4C — Remédiation 5 Écarts Browser QA (`uipolish`) :**
+    1) `public/index.php` : résolution du cours actif (et auto-détection sur `?page=verify&code=...`) avant instanciation de `MarkdownParser($currentCourse['source_root'])`, ré-instanciation après `enforceCourseAccess()` et passage de `$currentCourseSlug` à `Gamification::computeUserBadgesAndXp()`.
+    2) `src/Course/MarkdownParser.php`, `examples/{git-basics-course,demo-course}/assets/mermaid_cache/*.svg`, `public/assets/{js/app.js,css/app.css}` : clés cache `mod_v9_rca173`/`lab_v10_rca173`, ancrage `(?:^|/)` avec priorité `cheatsheet_` avant `module_`/`lab_`, élargissement référentiel `programme_formation_[a-z0-9_]+|programme_demo_[a-z0-9_]+`, URLs `index.php?action=course_asset`, génération des 4 SVG vectoriels strict-CSP validés `DOMDocument` (`0` `<style>`, `0` `style=`, `0` `--` en commentaire XML), initialisation Mermaid sécurisée sur nœuds visibles (`startOnLoad: false` + `goToSlide()`) et style `.lms-mermaid-canvas .mermaid svg`.
+    3) `templates/pages/{attendance,satisfaction}.php` : préservation stricte du planning 10j/20 demi-journées pour `postgresql-18`, génération dynamique multi-cours (1 jour / 2 demi-journées / 7h pour `git-basics`) sans fuite DBA, et empilement vertical de l'en-tête `satisfaction.php` (`.hero-content-col` + `.w-100`) sans écrasement flex.
+    4) `src/Core/Gamification.php`, `src/Course/CourseRepository.php`, `templates/pages/{catalog,documents,notes,satisfaction,verify,login}.php`, `templates/layout.php` : 8 badges et rangs dédiés `git-basics` (zéro régression PG18), gating `docker_enabled` / `$currentCourseSlug` sur tous les libellés et métadonnées outils/exemples, préfixe `LP-GITBAS-`, et compteurs globaux multi-formations sur `login.php`.
+    5) `src/Course/LmsCatalog.php`, `templates/pages/flashcards.php`, `public/assets/js/app.js` : conversion des `'\n'` littéraux en vrais sauts de ligne et mise à jour en direct de `#fc-mastered-count`.
+* **Nature de la correction :** Ajout d'un second cours autonome complet (`git-basics`, 3 modules / 3 ateliers, sans Docker), généralisation multi-cours complète (parseur, caches SVG vectoriels, émargement, gamification, questionnaires, login, flashcards, routes `GUIDE_PARCOURS` et auto-détection `verify`), paramétrage du port Docker Compose via `LMS_PORT`, et couverture automatisée complète en modes A, B et conteneur live.
+* **Tests post-correction :**
+  - ✅ Syntaxe PHP (`php -l`) et JS (`node --check public/assets/js/app.js`) : **`0` erreur** ; `php tests/test_coverage_audit.php` : **`211 / 211` (`100.0%`, `0` violation, `AUDIT PASSED`)**.
+  - ✅ Mode A (autonome `examples/demo-course/` + `examples/git-basics-course/`, `LMS_DOCKER_FORCE_SIMULATED=1`) : `php tests/run_tests.php` **`727 / 727`**, `tests/test_adversarial_b1..b5.php` **`69/69`, `50/50`, `69/69`, `78/78`, `78/78`** (`344 / 344`, toutes `APPROVE`), `php tests/test_functional_http.php` **`405 / 405`**.
+  - ✅ Mode B (`training_postgresql` monté via `LMS_COURSE_ROOT` & `LMS_PGSCRIPTS_ROOT`, `LMS_DOCKER_FORCE_SIMULATED=1`) : `php tests/run_tests.php` **`741 / 741`** (`0` échec).
+  - ✅ Conteneur Docker Compose Live (`LMS_PORT=8098`, image reconstruite et statut `healthy`) avec nettoyage complet de `storage/data/` (`.gitkeep` uniquement) avant reconstruction.
+
 
 

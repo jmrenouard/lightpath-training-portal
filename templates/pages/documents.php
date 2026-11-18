@@ -48,7 +48,7 @@ if ($selectedDocId !== '') {
 <div class="lms-card mb-1-75 lms-card--accent-cyan">
     <div class="d-flex justify-between items-center flex-wrap gap-md mb-1 pb-sm border-bottom-hairline">
         <div>
-            <span class="badge-code">APERÇU CODE SOURCE DBA • <?= Security::e($selectedTool['category']) ?></span>
+            <span class="badge-code">APERÇU CODE SOURCE<?= $currentCourseSlug === 'postgresql-18' ? ' DBA' : '' ?> • <?= Security::e($selectedTool['category']) ?></span>
             <h2 class="text-xl mt-xs mb-0"><code><?= Security::e($selectedTool['filename']) ?></code></h2>
         </div>
         <div class="d-flex items-center gap-xs flex-wrap">
@@ -96,8 +96,12 @@ if ($selectedDocId !== '') {
         <span class="badge-code">CENTRE DOCUMENTAIRE EXHAUSTIF • TOUS FORMATS</span>
         <h1 class="text-hero-sm mt-xs mb-xxs">📥 Bibliothèque & Téléchargements Multi-Formats</h1>
         <p class="text-secondary mb-0 text-sm">
-            Téléchargez l'ensemble des livrables de la formation en haute définition :
-            Supports <code>.pdf</code>, Présentations Studio <code>.pptx</code> & <code>_slides.pdf</code>, Sources <code>.md</code>, Pages Web <code>.html</code>, Documents Word <code>.docx</code>, Scripts <code>.sql / .py</code> et Exemples <code>pgexamples</code>.
+            <?php if ($currentCourseSlug === 'postgresql-18'): ?>
+                Téléchargez l'ensemble des livrables de la formation en haute définition :
+                Supports <code>.pdf</code>, Présentations Studio <code>.pptx</code> &amp; <code>_slides.pdf</code>, Sources <code>.md</code>, Pages Web <code>.html</code>, Documents Word <code>.docx</code>, Scripts <code>.sql / .py</code> et Exemples <code>pgexamples</code>.
+            <?php else: ?>
+                Téléchargez ou consultez l'ensemble des supports de cours, ateliers pratiques, fiches mémo, outils d'audit et exemples de code compagnon de la formation.
+            <?php endif; ?>
         </p>
     </div>
 
@@ -107,7 +111,7 @@ if ($selectedDocId !== '') {
         <a href="index.php?page=documents&tab=modules&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $docTab === 'modules' ? 'btn-primary' : 'btn-outline' ?>">📚 Modules (<?= count($currentCourse['modules'] ?? []) ?>)</a>
         <a href="index.php?page=documents&tab=labs&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $docTab === 'labs' ? 'btn-primary' : 'btn-outline' ?>">🧪 Labs (<?= count($currentCourse['labs'] ?? []) ?>)</a>
         <a href="index.php?page=documents&tab=cheatsheets&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $docTab === 'cheatsheets' ? 'btn-primary' : 'btn-outline' ?>">📑 Cheatsheets (<?= count($currentCourse['cheatsheets'] ?? []) ?>)</a>
-        <a href="index.php?page=documents&tab=tools&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $docTab === 'tools' ? 'btn-primary' : 'btn-outline' ?>">🛠️ Scripts DBA (<?= count($currentCourse['tools'] ?? []) ?>)</a>
+        <a href="index.php?page=documents&tab=tools&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $docTab === 'tools' ? 'btn-primary' : 'btn-outline' ?>"><?= $currentCourseSlug === 'postgresql-18' ? '🛠️ Scripts DBA' : '🛠️ Outils & Scripts' ?> (<?= count($currentCourse['tools'] ?? []) ?>)</a>
         <a href="index.php?page=documents&tab=examples&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-sm <?= $docTab === 'examples' ? 'btn-primary' : 'btn-outline' ?>">💻 Exemples Code (<?= count($currentCourse['examples'] ?? []) ?>)</a>
     </div>
 </div>
@@ -232,9 +236,13 @@ if ($selectedDocId !== '') {
     </div>
 <?php endif; ?>
 
-<!-- 5. Production DBA toolbox pgscripts (Python & SQL) -->
+<!-- 5. Companion tools and scripts -->
 <?php if ($docTab === 'all' || $docTab === 'tools'): ?>
-    <h2 class="section-heading-md mb-sm">🛠️ Boîte à Outils Production DBA (<code>pgscripts</code> Python & 23 Scripts SQL)</h2>
+    <h2 class="section-heading-md mb-sm">
+        <?= $currentCourseSlug === 'postgresql-18'
+            ? '🛠️ Boîte à Outils Production DBA (<code>pgscripts</code> Python &amp; 23 Scripts SQL)'
+            : '🛠️ Outils &amp; Scripts Compagnons (' . count($currentCourse['tools'] ?? []) . ' Scripts)' ?>
+    </h2>
     <div class="lms-table-wrap mb-xl">
         <table class="lms-table">
             <thead>
@@ -274,9 +282,13 @@ if ($selectedDocId !== '') {
     </div>
 <?php endif; ?>
 
-<!-- 6. Companion code examples pgexamples (Python, Go, PHP) -->
+<!-- 6. Companion code examples -->
 <?php if ($docTab === 'all' || $docTab === 'examples'): ?>
-    <h2 class="section-heading-md mb-sm">💻 Exemples de Code Compagnon (<code>pgexamples</code> — Python <code>psycopg3</code>, Go <code>pgx/v5</code>, PHP <code>PDO</code>)</h2>
+    <h2 class="section-heading-md mb-sm">
+        <?= $currentCourseSlug === 'postgresql-18'
+            ? '💻 Exemples de Code Compagnon (<code>pgexamples</code> — Python <code>psycopg3</code>, Go <code>pgx/v5</code>, PHP <code>PDO</code>)'
+            : '💻 Exemples de Code Compagnon (' . count($currentCourse['examples'] ?? []) . ' Fichiers)' ?>
+    </h2>
     <div class="lms-table-wrap">
         <table class="lms-table">
             <thead>

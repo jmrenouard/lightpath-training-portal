@@ -34,21 +34,30 @@ $courseRepo = new CourseRepository($coursesConfig, $storage->getCustomCourses())
 $downloader = new DownloadController($courseRepo);
 $docker = new DockerManager($storage, $appConfig['docker']);
 $sqlRunner = new LabSqlRunner($docker);
-$mdParser = new MarkdownParser();
+$action = (string)($_GET['action'] ?? '');
+$page = (string)($_GET['page'] ?? 'dashboard');
+$requestedCourse = isset($_GET['course']) ? (string)$_GET['course'] : '';
+$currentCourseSlug = $requestedCourse !== '' ? $requestedCourse : 'postgresql-18';
+if ($page === 'verify' && $requestedCourse === '' && !empty($_GET['code'])) {
+    $rawVerifyCode = trim((string)$_GET['code']);
+    $verifyLookup = $storage->findCertificateByCode($rawVerifyCode);
+    if (is_array($verifyLookup) && !empty($verifyLookup['course_slug'])) {
+        $currentCourseSlug = (string)$verifyLookup['course_slug'];
+    } elseif (str_starts_with(strtoupper($rawVerifyCode), 'LP-GITBAS-')) {
+        $currentCourseSlug = 'git-basics';
+    }
+}
+$currentCourse = $courseRepo->getCourse($currentCourseSlug) ?? $courseRepo->getCourse('postgresql-18');
+if ($currentCourse !== null) {
+    $currentCourseSlug = (string)$currentCourse['slug'];
+}
+
+$mdParser = new MarkdownParser($currentCourse['source_root'] ?? null);
 
 $authCtrl = new AuthController($auth, $featureManager);
 $learnerCtrl = new LearnerController($storage, $auth, $featureManager, $courseRepo, $downloader, $mdParser);
 $labApiCtrl = new LabApiController($storage, $auth, $featureManager, $courseRepo, $docker, $sqlRunner);
 $adminCtrl = new AdminController($storage, $auth, $featureManager, $adminService, $courseRepo, $docker, $mdParser);
-
-$action = (string)($_GET['action'] ?? '');
-$page = (string)($_GET['page'] ?? 'dashboard');
-$requestedCourse = isset($_GET['course']) ? (string)$_GET['course'] : '';
-$currentCourseSlug = $requestedCourse !== '' ? $requestedCourse : 'postgresql-18';
-$currentCourse = $courseRepo->getCourse($currentCourseSlug) ?? $courseRepo->getCourse('postgresql-18');
-if ($currentCourse !== null) {
-    $currentCourseSlug = (string)$currentCourse['slug'];
-}
 
 $flashError = $_SESSION['flash_error'] ?? null;
 $flashSuccess = $_SESSION['flash_success'] ?? null;
@@ -72,7 +81,13 @@ if ($currentUser === null && $page !== 'verify') {
 }
 
 $userId = (int)($currentUser['id'] ?? 0);
+$preAccessSlug = $currentCourseSlug;
 $authCtrl->enforceCourseAccess($currentUser, $courseRepo, $currentCourseSlug, $currentCourse, $requestedCourse, $action);
+if ($currentCourseSlug !== $preAccessSlug) {
+    $mdParser = new MarkdownParser($currentCourse['source_root'] ?? null);
+    $learnerCtrl = new LearnerController($storage, $auth, $featureManager, $courseRepo, $downloader, $mdParser);
+    $adminCtrl = new AdminController($storage, $auth, $featureManager, $adminService, $courseRepo, $docker, $mdParser);
+}
 
 // Initialize session CSRF token, then release the session file lock on read/API traffic.
 Security::getCsrfToken();
@@ -333,7 +348,7 @@ $userProgress = $userId > 0 ? $storage->getUserProgress($userId, $currentCourseS
 $userDiagnostic = $userId > 0 ? $storage->getDiagnosticResult($userId, $currentCourseSlug) : null;
 $userBestExam = $userId > 0 ? $storage->getBestExamAttempt($userId, $currentCourseSlug) : null;
 $userAttendance = $userId > 0 ? $storage->getUserAttendance($userId, $currentCourseSlug) : [];
-$userGamification = Gamification::computeUserBadgesAndXp($userProgress, $userDiagnostic, $userBestExam, $userAttendance, $totalModules, $totalLabs);
+$userGamification = Gamification::computeUserBadgesAndXp($userProgress, $userDiagnostic, $userBestExam, $userAttendance, $totalModules, $totalLabs, $currentCourseSlug);
 
 $dockerStatus = $userId > 0 ? $docker->getCachedUserContainerStatus($userId) : ['running' => false, 'container_name' => 'aucun', 'port' => 0, 'connection_string' => ''];
 $classroomState = $storage->getClassroomState($currentCourseSlug);

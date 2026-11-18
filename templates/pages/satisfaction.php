@@ -12,10 +12,12 @@ $existingSurvey = $storage->getUserSatisfaction($userId, $currentCourseSlug);
 $r = $existingSurvey['ratings'] ?? [];
 $coldSurvey = $coldSatEnabled ? $storage->getUserColdSatisfaction($userId, $currentCourseSlug) : null;
 $coldRatings = $coldSurvey['ratings'] ?? [];
+$satIsPg18 = ($currentCourseSlug === 'postgresql-18');
+$satCourseLabel = (string)($currentCourse['short_title'] ?? $currentCourse['title'] ?? 'LightPath');
 ?>
 
-<div class="hero-banner hero-banner-compact">
-    <div class="flex-1 min-w-0">
+<div class="hero-banner hero-banner-compact d-flex flex-col items-start gap-md">
+    <div class="hero-content-col">
         <div class="d-flex items-center gap-xs flex-wrap mb-xs">
             <span class="badge-code">QUALIOPI INDICATEUR 30 & 32 • AMÉLIORATION CONTINUE</span>
             <?php if ($satTab === 'hot' && $existingSurvey !== null): ?>
@@ -26,11 +28,15 @@ $coldRatings = $coldSurvey['ratings'] ?? [];
         </div>
         <h1 class="hero-title-md mb-xxs">⭐ Questionnaires de Satisfaction Qualiopi<?= $coldSatEnabled ? ' (À Chaud & À Froid J+60)' : ' (À Chaud)' ?></h1>
         <p class="hero-subtitle-sm mb-0">
-            Votre retour d'expérience nous permet d'améliorer en continu la qualité pédagogique des supports, des diapositives Studio 16:9, des ateliers pratiques Docker PostgreSQL 18 et de mesurer le transfert des compétences en production.
+            <?php if ($satIsPg18): ?>
+                Votre retour d'expérience nous permet d'améliorer en continu la qualité pédagogique des supports, des diapositives Studio 16:9, des ateliers pratiques Docker PostgreSQL 18 et de mesurer le transfert des compétences en production.
+            <?php else: ?>
+                Votre retour d'expérience nous permet d'améliorer en continu la qualité pédagogique des supports, des diapositives 16:9, des ateliers pratiques <?= Security::e($satCourseLabel) ?> et de mesurer le transfert des compétences sur le terrain.
+            <?php endif; ?>
         </p>
     </div>
 
-    <div class="d-flex gap-xs flex-wrap">
+    <div class="d-flex gap-xs flex-wrap w-100">
         <a href="index.php?page=satisfaction&tab=hot&course=<?= urlencode($currentCourseSlug) ?>"
            class="btn btn-sm <?= $satTab === 'hot' ? 'btn-primary' : 'btn-outline' ?>">
             🔥 Évaluation à Chaud (Fin de Formation — Ind. 30)
@@ -51,12 +57,18 @@ $coldRatings = $coldSurvey['ratings'] ?? [];
     <h2 class="section-heading-md mb-1">❄️ Évaluation d'Impact Métier à Froid (J+60 — 1 = Faible impact à 5 = Impact majeur)</h2>
 
     <?php
-    $coldCriteria = [
+    $coldCriteria = $satIsPg18 ? [
         'prod_application' => '1. Mise en pratique effective des acquis PostgreSQL 18 sur vos environnements de production',
         'perf_gains' => '2. Gains mesurables de performance, de stabilité HA ou de sécurité observés',
         'autonomy_level' => '3. Progression de votre autonomie sur le diagnostic d\'incidents (MVCC, verrous, plans EXPLAIN, sauvegardes)',
         'tools_adoption' => '4. Utilisation des livrables, fiches mémo et scripts pgscripts au quotidien',
         'career_impact' => '5. Pertinence globale de la formation vis-à-vis de l\'évolution de votre poste DBA / SRE / Architecte',
+    ] : [
+        'prod_application' => '1. Mise en pratique effective des acquis ' . $satCourseLabel . ' dans vos projets quotidiens',
+        'perf_gains' => '2. Gains mesurables d\'efficacité, de qualité de livraison et de collaboration en équipe',
+        'autonomy_level' => '3. Progression de votre autonomie sur les workflows techniques et la résolution d\'incidents',
+        'tools_adoption' => '4. Utilisation des livrables, fiches mémo et outils compagnons au quotidien',
+        'career_impact' => '5. Pertinence globale de la formation vis-à-vis de l\'évolution de votre poste technique',
     ];
     foreach ($coldCriteria as $cKey => $cLabel):
         $curVal = (int)($coldRatings[$cKey] ?? ($coldSurvey[$cKey] ?? 5));
@@ -75,13 +87,13 @@ $coldRatings = $coldSurvey['ratings'] ?? [];
     <?php endforeach; ?>
 
     <div class="form-group">
-        <label for="cold-concrete-projects">🚀 Projets ou chantiers PostgreSQL réalisés depuis la formation</label>
-        <textarea id="cold-concrete-projects" name="concrete_projects" class="form-control" rows="3" placeholder="Ex: Migration PG 18 avec pgcopydb, mise en place de pgBackRest / pg_auto_failover, tuning work_mem et index couvrants..."><?= Security::e((string)($coldSurvey['concrete_projects'] ?? '')) ?></textarea>
+        <label for="cold-concrete-projects"><?= $satIsPg18 ? '🚀 Projets ou chantiers PostgreSQL réalisés depuis la formation' : '🚀 Projets ou chantiers techniques réalisés depuis la formation' ?></label>
+        <textarea id="cold-concrete-projects" name="concrete_projects" class="form-control" rows="3" placeholder="<?= $satIsPg18 ? 'Ex: Migration PG 18 avec pgcopydb, mise en place de pgBackRest / pg_auto_failover, tuning work_mem et index couvrants...' : 'Ex: Adoption de branches dédiées avec git switch, résolution structurée de conflits, revue systématique via Pull Requests...' ?>"><?= Security::e((string)($coldSurvey['concrete_projects'] ?? '')) ?></textarea>
     </div>
 
     <div class="form-group">
         <label for="cold-further-needs">🎯 Besoins d'accompagnement ou de perfectionnement complémentaires</label>
-        <textarea id="cold-further-needs" name="further_needs" class="form-control" rows="3" placeholder="Ex: Audit d'architecture, approfondissement CloudNativePG Kubernetes, coaching performance..."><?= Security::e((string)($coldSurvey['further_needs'] ?? '')) ?></textarea>
+        <textarea id="cold-further-needs" name="further_needs" class="form-control" rows="3" placeholder="<?= $satIsPg18 ? 'Ex: Audit d\'architecture, approfondissement CloudNativePG Kubernetes, coaching performance...' : 'Ex: Rebase interactif avancé, workflows CI/CD, protection de branches et hooks qualité...' ?>"><?= Security::e((string)($coldSurvey['further_needs'] ?? '')) ?></textarea>
     </div>
 
     <button type="submit" class="btn btn-emerald w-100 btn-submit-lg">
@@ -96,12 +108,18 @@ $coldRatings = $coldSurvey['ratings'] ?? [];
 
     <?php
     $satLabsCount = count($currentCourse['labs'] ?? []);
-    $criteria = [
+    $criteria = $satIsPg18 ? [
         'content_quality' => '1. Richesse technique et clarté des supports de cours & diapositives Studio 16:9',
         'labs_docker' => '2. Pertinence des ' . $satLabsCount . ' ateliers pratiques Docker, base Sakila, pgbench & corrigés testés',
         'trainer_pedagogy' => '3. Expertise opérationnelle, pédagogie et disponibilité du formateur (' . ($appConfig['trainer_name'] ?? 'Jean-Marie Renouard') . ')',
         'lms_ergonomics' => '4. Ergonomie, rapidité et fonctionnalités du portail LMS LightPath (Console SQL, Oracles)',
         'objectives_met' => '5. Atteinte des objectifs opérationnels (Taxonomie de Bloom) applicables en production',
+    ] : [
+        'content_quality' => '1. Richesse technique et clarté des supports de cours & diapositives 16:9',
+        'labs_docker' => '2. Pertinence des ' . $satLabsCount . ' ateliers pratiques guidés, scénarios réels & corrigés pas-à-pas',
+        'trainer_pedagogy' => '3. Expertise opérationnelle, pédagogie et disponibilité du formateur (' . ($appConfig['trainer_name'] ?? 'Jean-Marie Renouard') . ')',
+        'lms_ergonomics' => '4. Ergonomie, rapidité et fonctionnalités du portail LMS LightPath (Lecteur, Quiz QCM, Oracles)',
+        'objectives_met' => '5. Atteinte des objectifs opérationnels (Taxonomie de Bloom) applicables sur vos projets',
     ];
     foreach ($criteria as $cKey => $cLabel):
         $curVal = (int)($r[$cKey] ?? 5);
@@ -121,7 +139,7 @@ $coldRatings = $coldSurvey['ratings'] ?? [];
 
     <div class="quiz-question-box mb-1">
         <label for="sat-nps-score" class="d-block font-bold mb-xs">
-            6. Recommanderiez-vous cette formation à un confrère DBA, SRE ou Architecte ? (Score NPS de 0 à 10)
+            <?= $satIsPg18 ? '6. Recommanderiez-vous cette formation à un confrère DBA, SRE ou Architecte ? (Score NPS de 0 à 10)' : '6. Recommanderiez-vous cette formation à un confrère ou collègue Tech ? (Score NPS de 0 à 10)' ?>
         </label>
         <select id="sat-nps-score" name="nps_score" class="form-control tabular-nums select-nps">
             <?php
@@ -134,8 +152,8 @@ $coldRatings = $coldSurvey['ratings'] ?? [];
     </div>
 
     <div class="form-group">
-        <label for="sat-strengths">💪 Points forts de la formation et des ateliers Docker</label>
-        <textarea id="sat-strengths" name="strengths" class="form-control" rows="3" placeholder="Ex: Les labs sur MVCC/pageinspect, Patroni, pgBackRest et le Module 20 Kernel Linux..."><?= Security::e((string)($existingSurvey['strengths'] ?? '')) ?></textarea>
+        <label for="sat-strengths"><?= $satIsPg18 ? '💪 Points forts de la formation et des ateliers Docker' : '💪 Points forts de la formation et des ateliers pratiques' ?></label>
+        <textarea id="sat-strengths" name="strengths" class="form-control" rows="3" placeholder="<?= $satIsPg18 ? 'Ex: Les labs sur MVCC/pageinspect, Patroni, pgBackRest et le Module 20 Kernel Linux...' : 'Ex: Les mises en situation avec git switch, la résolution de conflits et le workflow Pull Request...' ?>"><?= Security::e((string)($existingSurvey['strengths'] ?? '')) ?></textarea>
     </div>
 
     <div class="form-group">

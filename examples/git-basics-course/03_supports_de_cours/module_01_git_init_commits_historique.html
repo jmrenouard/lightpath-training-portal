@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Module 01 — Initialisation, Index (Staging) &amp; Premiers Commits (LightPath)</title>
+  <style>
+    :root {
+      --bg: #0b1120;
+      --surface: #0f172a;
+      --border: rgba(56, 189, 248, 0.25);
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #00b0f0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 2rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 920px;
+      margin: 0 auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 0.78rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--accent);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.2rem 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    h1 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1.75rem;
+      letter-spacing: -0.02em;
+    }
+    h2 {
+      margin-top: 1.5rem;
+      color: var(--accent);
+      font-size: 1.15rem;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 0.92rem;
+      margin-bottom: 1.25rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.75rem;
+      font-variant-numeric: tabular-nums;
+    }
+    th, td {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 0.55rem 0.75rem;
+      text-align: left;
+    }
+    th {
+      background: rgba(0, 176, 240, 0.12);
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: #38bdf8;
+    }
+    footer {
+      margin-top: 2rem;
+      padding-top: 1rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <span class="badge">Git Fondamentaux • Pack Open-Source MIT</span>
+    <h1>Module 01 : Initialisation d'un Dépôt, Index (Staging) &amp; Premiers Commits</h1>
+    <p class="meta">Formateur : Jean-Marie Renouard (LightPath SARL) • Durée : 2h00 • Niveau Bloom C2</p>
+
+    <h2>Points Clés du Cycle de Vie Local</h2>
+    <ul>
+      <li>Les trois zones : Working Directory, Staging Area (<code>.git/index</code>) et Dépôt local (<code>.git/objects</code>).</li>
+      <li>Initialisation propre : <code>git init</code>, identité <code>git config</code> et protection <code>.gitignore</code> dès le démarrage.</li>
+      <li>Contrôle avant validation : <code>git status</code>, <code>git diff</code> et <code>git diff --staged</code>.</li>
+      <li>Correction locale : <code>git restore --staged</code> pour désindexer sans perte de travail.</li>
+    </ul>
+
+    <h2>Commandes de Référence</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Commande</th>
+          <th>Zone Ciblée</th>
+          <th>Rôle Opérationnel</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>git init</code></td>
+          <td>Dépôt <code>.git</code></td>
+          <td>Crée l'arborescence interne du nouveau dépôt local</td>
+        </tr>
+        <tr>
+          <td><code>git add &lt;fichier&gt;</code></td>
+          <td>Working Tree → Index</td>
+          <td>Prépare sélectivement les fichiers pour le prochain commit</td>
+        </tr>
+        <tr>
+          <td><code>git commit -m "..."</code></td>
+          <td>Index → Dépôt</td>
+          <td>Enregistre un instantané atomique dans l'historique</td>
+        </tr>
+        <tr>
+          <td><code>git log --oneline --graph</code></td>
+          <td>Historique</td>
+          <td>Affiche la chronologie compacte des commits validés</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <footer>
+      LightPath Academy — Pack de Formation Git Open-Source (Licence MIT) • contact@lightpath.fr
+    </footer>
+  </main>
+</body>
+</html>

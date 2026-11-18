@@ -73,7 +73,8 @@ class CourseRepository
         $root = rtrim((string)($cfg['source_root'] ?? ''), '/\\');
         $pgScriptsRoot = (string)($cfg['pgscripts_root'] ?? '');
 
-        $fingerprint = $this->computeCatalogFingerprint($root, $pgScriptsRoot, $cfg['tracks'] ?? []);
+        $isPgCourse = ($slug === 'postgresql-18');
+        $fingerprint = $this->computeCatalogFingerprint($root, $pgScriptsRoot, $cfg['tracks'] ?? [], $isPgCourse);
         $cacheFile = $this->cacheDir . '/catalog_cache_' . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $slug) . '.json';
 
         if (is_file($cacheFile)) {
@@ -92,8 +93,8 @@ class CourseRepository
         $labs = $this->discoverLabs($root);
         $cheatsheets = $this->discoverCheatsheets($root);
         $referentiel = $this->discoverReferentiel($root);
-        $tools = $this->discoverTools($pgScriptsRoot);
-        $examples = $this->discoverExamples($root);
+        $tools = $this->discoverTools($pgScriptsRoot, $isPgCourse);
+        $examples = $this->discoverExamples($root, $isPgCourse);
 
         // Link each module to its matching lab and cheatsheet and propagate track metadata to the lab
         foreach ($modules as $modId => &$mod) {
@@ -169,9 +170,9 @@ class CourseRepository
         return $course;
     }
 
-    private function computeCatalogFingerprint(string $root, string $pgScriptsRoot, array $tracks): string
+    private function computeCatalogFingerprint(string $root, string $pgScriptsRoot, array $tracks, bool $isPgCourse = true): string
     {
-        $cacheKey = $root . '|' . $pgScriptsRoot . '|' . md5(json_encode($tracks) ?: '');
+        $cacheKey = $root . '|' . $pgScriptsRoot . '|' . ($isPgCourse ? 'pg' : 'nonpg') . '|' . md5(json_encode($tracks) ?: '');
         if (isset(self::$fingerprintCache[$cacheKey])) {
             return self::$fingerprintCache[$cacheKey];
         }
@@ -187,7 +188,7 @@ class CourseRepository
             $root . '/video_engine/output',
             $pgScriptsRoot,
         ];
-        $parts = ['v8_rca164', md5(json_encode($tracks) ?: '')];
+        $parts = ['v8_rca164', 'v9_rca173', ($isPgCourse ? 'pg' : 'nonpg'), md5(json_encode($tracks) ?: '')];
         foreach ($dirs as $d) {
             $parts[] = is_dir($d) ? (string)@filemtime($d) : '0';
         }
@@ -383,13 +384,13 @@ class CourseRepository
         }
 
         if (class_exists(LmsCatalog::class)) {
-            foreach (LmsCatalog::getFlashcards() as $fc) {
+            foreach (LmsCatalog::getFlashcards($courseSlug) as $fc) {
                 $haystack = ($fc['front'] ?? '') . ' ' . ($fc['back'] ?? '') . ' ' . ($fc['category'] ?? '') . ' ' . ($fc['module'] ?? '');
                 $haystackLower = function_exists('mb_strtolower') ? mb_strtolower($haystack, 'UTF-8') : strtolower($haystack);
                 if (str_contains($haystackLower, $needle)) {
                     $results[] = [
                         'type' => 'flashcard',
-                        'badge' => 'FLASHCARD SRS • ' . ($fc['module'] ?? 'DBA'),
+                        'badge' => 'FLASHCARD SRS • ' . ($fc['module'] ?? 'LMS'),
                         'id' => $fc['id'],
                         'title' => $fc['front'],
                         'snippet' => $fc['back'],
@@ -398,13 +399,13 @@ class CourseRepository
                 }
             }
 
-            foreach (LmsCatalog::getGlossary() as $g) {
+            foreach (LmsCatalog::getGlossary($courseSlug) as $g) {
                 $haystack = ($g['term'] ?? '') . ' ' . ($g['category'] ?? '') . ' ' . ($g['definition'] ?? '');
                 $haystackLower = function_exists('mb_strtolower') ? mb_strtolower($haystack, 'UTF-8') : strtolower($haystack);
                 if (str_contains($haystackLower, $needle)) {
                     $results[] = [
                         'type' => 'glossary',
-                        'badge' => 'GLOSSAIRE DBA',
+                        'badge' => $courseSlug === 'postgresql-18' ? 'GLOSSAIRE DBA' : 'GLOSSAIRE TECHNIQUE',
                         'id' => $g['term'],
                         'title' => $g['term'] . ' (' . $g['category'] . ')',
                         'snippet' => $g['definition'],
@@ -736,7 +737,7 @@ class CourseRepository
         return $docs;
     }
 
-    private function discoverTools(string $pgScriptsRoot): array
+    private function discoverTools(string $pgScriptsRoot, bool $isPgCourse = true): array
     {
         if ($pgScriptsRoot === '' || !is_dir($pgScriptsRoot)) {
             return [];
@@ -761,9 +762,9 @@ class CourseRepository
                 default => 'SQL',
             };
             $cat = match ($ext) {
-                'py' => 'Script Python DBA',
-                'sh' => 'Script Bash Exploitation',
-                default => 'Diagnostic SQL Expert',
+                'py' => $isPgCourse ? 'Script Python DBA' : 'Script Python Compagnon',
+                'sh' => $isPgCourse ? 'Script Bash Exploitation' : 'Script Bash Compagnon',
+                default => $isPgCourse ? 'Diagnostic SQL Expert' : 'Script SQL Compagnon',
             };
 
             $tools[$id] = [
@@ -779,7 +780,7 @@ class CourseRepository
         return $tools;
     }
 
-    private function discoverExamples(string $root): array
+    private function discoverExamples(string $root, bool $isPgCourse = true): array
     {
         $exDir = $root . '/04_ateliers_et_tp/pgexamples';
         if (!is_dir($exDir)) {
@@ -807,18 +808,18 @@ class CourseRepository
             $id = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $subFolder . '_' . pathinfo($filePath, PATHINFO_FILENAME) . '_' . $ext);
 
             $lang = match ($ext) {
-                'py' => 'Python 3 (psycopg3)',
-                'go' => 'Go (pgx/v5)',
-                'php' => 'PHP 8.4 (PDO)',
+                'py' => $isPgCourse ? 'Python 3 (psycopg3)' : 'Python 3',
+                'go' => $isPgCourse ? 'Go (pgx/v5)' : 'Go',
+                'php' => $isPgCourse ? 'PHP 8.4 (PDO)' : 'PHP 8.4',
                 'sql' => 'SQL Schéma',
                 default => 'Documentation Markdown',
             };
             $cat = match ($ext) {
-                'py' => 'Module 15 • Connecteur Python psycopg3',
-                'go' => 'Module 17 • Microservices Golang pgx/v5',
-                'php' => 'Module 16 • Applications Web PHP PDO',
+                'py' => $isPgCourse ? 'Module 15 • Connecteur Python psycopg3' : 'Exemple Python Compagnon',
+                'go' => $isPgCourse ? 'Module 17 • Microservices Golang pgx/v5' : 'Exemple Go Compagnon',
+                'php' => $isPgCourse ? 'Module 16 • Applications Web PHP PDO' : 'Exemple PHP Compagnon',
                 'sql' => 'Schéma & Données Exemples',
-                default => 'Guide Exemples Multi-Langages',
+                default => $isPgCourse ? 'Guide Exemples Multi-Langages' : 'Documentation Exemples Compagnons',
             };
 
             $examples[$id] = [

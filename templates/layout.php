@@ -141,6 +141,14 @@ if ($page === 'module') {
     }
 }
 $completedModulesList = $userProgress['completed_modules'] ?? [];
+$courseHasDocker = !isset($currentCourse['docker_enabled']) || !empty($currentCourse['docker_enabled']);
+$courseDockerEnabled = $courseHasDocker && (!isset($featureManager) || $featureManager->isEnabledForCourse('docker_labs', $currentCourseSlug));
+$layoutDiagCount = count(\LightPath\LMS\Course\LmsCatalog::getDiagnosticQuestions($currentCourseSlug));
+$layoutExamCount = count(\LightPath\LMS\Course\LmsCatalog::getFinalExamQuestions($currentCourseSlug));
+$layoutFlashcardsCount = count(\LightPath\LMS\Course\LmsCatalog::getFlashcards($currentCourseSlug));
+$layoutXp = (int)($userGamification['xp'] ?? 0);
+$layoutCourseBadge = (string)($currentCourse['badge'] ?? 'LightPath LMS');
+$layoutRankLabel = (string)($userGamification['rank'] ?? ($currentCourseSlug === 'postgresql-18' ? 'DBA PostgreSQL 18' : ('Apprenant • ' . $layoutCourseBadge)));
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -175,11 +183,17 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
                      data-light-src="assets/img/lightpath_logo_dark_text.png"
                      alt="LightPath"
                      class="brand-logo theme-aware-logo"/>
-                <img src="assets/img/postgresql_elephant_dark.png"
-                     data-dark-src="assets/img/postgresql_elephant_dark.png"
-                     data-light-src="assets/img/postgresql_elephant_light.png"
-                     alt="PG18"
-                     class="pg-icon theme-aware-logo"/>
+                <?php if ($currentCourseSlug === 'postgresql-18'): ?>
+                    <img src="assets/img/postgresql_elephant_dark.png"
+                         data-dark-src="assets/img/postgresql_elephant_dark.png"
+                         data-light-src="assets/img/postgresql_elephant_light.png"
+                         alt="PG18"
+                         class="pg-icon theme-aware-logo"/>
+                <?php else: ?>
+                    <img src="<?= Security::e(ltrim((string)($currentCourse['icon'] ?? 'assets/img/postgresql_elephant.png'), '/')) ?>"
+                         alt="<?= Security::e((string)($currentCourse['short_title'] ?? 'Course')) ?>"
+                         class="pg-icon"/>
+                <?php endif; ?>
             </a>
             <button type="button"
                     id="btn-collapse-left-inline"
@@ -195,6 +209,7 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
             <label for="course-switcher">🎓 Formation Active</label>
             <select id="course-switcher" class="course-select">
                 <?php foreach ($allCourses as $cSlug => $cItem): ?>
+                    <?php if (isset($currentUser) && $currentUser !== null && !$auth->canAccessCourse($currentUser, (string)$cSlug)) { continue; } ?>
                     <option value="<?= Security::e((string)$cSlug) ?>" <?= $cSlug === $currentCourseSlug ? 'selected' : '' ?>>
                         <?= Security::e($cItem['short_title']) ?>
                     </option>
@@ -217,12 +232,12 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
                 <span class="nav-badge">Slides</span>
             </a>
             <a href="index.php?page=catalog&tab=labs&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= ($page === 'lab' || ($page === 'catalog' && ($_GET['tab'] ?? '') === 'labs')) ? 'active' : '' ?>">
-                <span>🧪 Ateliers & Labs Docker</span>
+                <span><?= $courseDockerEnabled ? '🧪 Ateliers & Labs Docker' : '🧪 Ateliers Pratiques' ?></span>
                 <span class="nav-badge tabular-nums"><?= $doneLabs ?>/<?= $totalLabs ?></span>
             </a>
             <a href="index.php?page=documents&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'documents' ? 'active' : '' ?>">
                 <span>📥 Téléchargements</span>
-                <span class="nav-badge">6 formats</span>
+                <span class="nav-badge"><?= $currentCourseSlug === 'postgresql-18' ? '6 formats' : 'Supports' ?></span>
             </a>
             <a href="index.php?page=certificate&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'certificate' ? 'active' : '' ?>">
                 <span>🎓 Certificat Qualiopi</span>
@@ -232,11 +247,11 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
             <div class="nav-section-title mt-sm">🎯 Évaluations & Outils Qualiopi</div>
             <a href="index.php?page=diagnostic&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'diagnostic' ? 'active' : '' ?>">
                 <span>🧭 Positionnement Initial</span>
-                <span class="nav-badge tabular-nums"><?= $userDiagnostic !== null ? ((int)$userDiagnostic['percent'] . '%') : '15 QCM' ?></span>
+                <span class="nav-badge tabular-nums"><?= $userDiagnostic !== null ? ((int)$userDiagnostic['percent'] . '%') : ($layoutDiagCount . ' QCM') ?></span>
             </a>
             <a href="index.php?page=exam&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'exam' ? 'active' : '' ?>">
                 <span>🏆 Examen Final Certifiant</span>
-                <span class="nav-badge tabular-nums"><?= $userBestExam !== null ? ((int)$userBestExam['percent'] . '%') : '40 QCM' ?></span>
+                <span class="nav-badge tabular-nums"><?= $userBestExam !== null ? ((int)$userBestExam['percent'] . '%') : ($layoutExamCount . ' QCM') ?></span>
             </a>
             <a href="index.php?page=attendance&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'attendance' ? 'active' : '' ?>">
                 <span>✍️ Émargement & Assiduité</span>
@@ -245,7 +260,7 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
             <?php if (!isset($featureManager) || $featureManager->isEnabledForCourse('flashcards_srs', $currentCourseSlug)): ?>
                 <a href="index.php?page=flashcards&course=<?= urlencode($currentCourseSlug) ?>" class="nav-item <?= $page === 'flashcards' ? 'active' : '' ?>">
                     <span>🧠 Cartes SRS & Glossaire</span>
-                    <span class="nav-badge tabular-nums"><?= count(\LightPath\LMS\Course\LmsCatalog::getFlashcards()) ?> SRS</span>
+                    <span class="nav-badge tabular-nums"><?= $layoutFlashcardsCount ?> SRS</span>
                 </a>
             <?php endif; ?>
             <?php if (!isset($featureManager) || $featureManager->isEnabledForCourse('personal_notes', $currentCourseSlug)): ?>
@@ -275,7 +290,7 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
                 <input type="search"
                        id="sidebar-module-filter"
                        class="sidebar-module-filter"
-                       placeholder="Filtrer un module (ex: M01, MVCC, SQL)..."
+                       placeholder="<?= $currentCourseSlug === 'postgresql-18' ? 'Filtrer un module (ex: M01, MVCC, SQL)...' : 'Filtrer un module (ex: M01, branch, merge)...' ?>"
                        autocomplete="off"
                        aria-label="Filtrer les modules dans la barre latérale"/>
             </div>
@@ -386,7 +401,7 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
                 </button>
                 <div class="topbar-search">
                     <span class="search-icon">🔍</span>
-                    <input type="search" id="global-search-input" aria-label="Rechercher un module, lab, commande SQL ou fiche mémo" placeholder="Filtrer un module, lab, commande SQL, cheatsheet... (Ctrl+K)"/>
+                    <input type="search" id="global-search-input" aria-label="Rechercher un module, atelier, commande ou fiche mémo" placeholder="<?= $currentCourseSlug === 'postgresql-18' ? 'Filtrer un module, lab, commande SQL, cheatsheet... (Ctrl+K)' : 'Filtrer un module, atelier, commande, mémo... (Ctrl+K)' ?>"/>
                 </div>
             </div>
 
@@ -403,7 +418,7 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
                 <?php endif; ?>
 
                 <?php if ($currentUser !== null): ?>
-                    <?php if (!isset($featureManager) || $featureManager->isEnabled('docker_labs')): ?>
+                    <?php if ($courseDockerEnabled): ?>
                         <!-- Personal Docker container status (refreshed asynchronously without blocking navigation) -->
                         <a href="index.php?page=dashboard&course=<?= urlencode($currentCourseSlug) ?>#docker-panel"
                            id="topbar-docker-pill"
@@ -417,8 +432,8 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
                         </a>
                     <?php endif; ?>
 
-                    <?php if (!isset($featureManager) || $featureManager->isEnabled('gamification')): ?>
-                        <span class="badge-code tabular-nums" title="<?= Security::e($userGamification['rank'] ?? 'DBA PostgreSQL 18') ?>">
+                    <?php if (!isset($featureManager) || $featureManager->isEnabledForCourse('gamification', $currentCourseSlug)): ?>
+                        <span class="badge-code tabular-nums" title="<?= Security::e($layoutRankLabel) ?>">
                             ⚡ <?= (int)($userGamification['xp'] ?? 0) ?> XP • 🏅 <?= (int)($userGamification['unlocked_count'] ?? 0) ?>/<?= (int)($userGamification['total_badges'] ?? 8) ?>
                         </span>
                     <?php endif; ?>
@@ -503,7 +518,7 @@ $completedModulesList = $userProgress['completed_modules'] ?? [];
     <div class="diagram-lightbox-backdrop"></div>
     <div class="diagram-lightbox-content">
         <div class="diagram-lightbox-toolbar">
-            <span id="diagram-lightbox-caption" class="diagram-lightbox-title">Schéma d'Architecture PostgreSQL 18</span>
+            <span id="diagram-lightbox-caption" class="diagram-lightbox-title"><?= Security::e($currentCourseSlug === 'postgresql-18' ? "Schéma d'Architecture PostgreSQL 18" : ('Schéma Technique — ' . $layoutCourseBadge)) ?></span>
             <button type="button" id="btn-close-lightbox" class="btn btn-sm btn-danger">✕ Fermer (Échap)</button>
         </div>
         <div class="diagram-lightbox-body">

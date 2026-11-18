@@ -4,7 +4,21 @@ declare(strict_types=1);
 use LightPath\LMS\Core\Security;
 use LightPath\LMS\Course\LmsCatalog;
 
-$questions = LmsCatalog::getDiagnosticQuestions();
+$questions = LmsCatalog::getDiagnosticQuestions($currentCourseSlug);
+$diagTotalCount = count($questions);
+$diagDomains = [];
+foreach ($questions as $dq) {
+    $diagDomains[(string)($dq['domain'] ?? '')] = true;
+}
+$diagDomainCount = max(1, count($diagDomains));
+$diagDomainLabels = array_map(
+    static fn(string $dk): string => LmsCatalog::DOMAINS[$dk] ?? $dk,
+    array_keys($diagDomains)
+);
+$diagCourseLabel = $currentCourseSlug === 'postgresql-18'
+    ? 'PostgreSQL 18'
+    : (string)($currentCourse['short_title'] ?? $currentCourse['title'] ?? 'Formation');
+$defaultDiagTrack = (string)(array_key_first($currentCourse['tracks'] ?? []) ?: 'cursus-complet');
 $existingDiag = $storage->getDiagnosticResult($userId, $currentCourseSlug);
 $showRetake = isset($_GET['retake']) && $_GET['retake'] === '1';
 ?>
@@ -13,11 +27,15 @@ $showRetake = isset($_GET['retake']) && $_GET['retake'] === '1';
     <div class="flex-1 min-w-0">
         <div class="d-flex items-center gap-xs flex-wrap mb-xs">
             <span class="badge-code">QUALIOPI INDICATEUR 8 • POSITIONNEMENT INITIAL</span>
-            <span class="badge-phase tabular-nums"><?= count($questions) ?> Questions QCM • 5 Domaines DBA</span>
+            <span class="badge-phase tabular-nums"><?= $diagTotalCount ?> Questions QCM • <?= $diagDomainCount ?> <?= $currentCourseSlug === 'postgresql-18' ? 'Domaines DBA' : 'Domaines' ?></span>
         </div>
         <h1 class="hero-title-md mb-xs">🧭 Évaluation Diagnostique & Positionnement Pré-Formation</h1>
         <p class="hero-subtitle-sm mb-0">
-            Évaluez votre niveau initial sur les 5 piliers de PostgreSQL 18 (Architecture MVCC, SQL Avancé, Sécurité SCRAM/RLS, Sauvegardes/HA, Optimisation CBO & Kernel Linux) afin d'obtenir une recommandation personnalisée de parcours.
+            <?php if ($currentCourseSlug === 'postgresql-18'): ?>
+                Évaluez votre niveau initial sur les 5 piliers de PostgreSQL 18 (Architecture MVCC, SQL Avancé, Sécurité SCRAM/RLS, Sauvegardes/HA, Optimisation CBO & Kernel Linux) afin d'obtenir une recommandation personnalisée de parcours.
+            <?php else: ?>
+                Évaluez votre niveau initial sur les <?= $diagDomainCount ?> piliers de <?= Security::e($diagCourseLabel) ?> (<?= Security::e(implode(', ', $diagDomainLabels)) ?>) afin d'obtenir une recommandation personnalisée de parcours.
+            <?php endif; ?>
         </p>
     </div>
     <?php if ($existingDiag !== null && !$showRetake): ?>
@@ -45,12 +63,12 @@ $showRetake = isset($_GET['retake']) && $_GET['retake'] === '1';
                 <div class="kpi-value tabular-nums text-cyan text-3xl">
                     <?= (int)($existingDiag['percent'] ?? 0) ?>%
                 </div>
-                <div class="kpi-sub tabular-nums"><?= (int)($existingDiag['score'] ?? 0) ?> / <?= (int)($existingDiag['total'] ?? 15) ?> réponses exactes</div>
+                <div class="kpi-sub tabular-nums"><?= (int)($existingDiag['score'] ?? 0) ?> / <?= (int)($existingDiag['total'] ?? $diagTotalCount) ?> réponses exactes</div>
             </div>
         </div>
 
-        <!-- Competency breakdown by DBA domain -->
-        <h3 class="section-heading-sm mb-sm">📊 Profil de Compétences par Domaine DBA</h3>
+        <!-- Competency breakdown by curriculum domain -->
+        <h3 class="section-heading-sm mb-sm">📊 Profil de Compétences par Domaine<?= $currentCourseSlug === 'postgresql-18' ? ' DBA' : '' ?></h3>
         <div class="card-grid mb-md">
             <?php foreach (($existingDiag['domains'] ?? []) as $dKey => $dInfo): ?>
                 <div class="domain-breakdown-card">
@@ -70,7 +88,7 @@ $showRetake = isset($_GET['retake']) && $_GET['retake'] === '1';
                 <strong>🎯 Parcours Recommandé :</strong>
                 <span class="text-cyan font-bold"><?= Security::e((string)($existingDiag['recommended_title'] ?? '')) ?></span>
             </div>
-            <a href="index.php?page=catalog&track=<?= urlencode((string)($existingDiag['recommended_track'] ?? 'cursus-complet')) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-primary">
+            <a href="index.php?page=catalog&track=<?= urlencode((string)($existingDiag['recommended_track'] ?? $defaultDiagTrack)) ?>&course=<?= urlencode($currentCourseSlug) ?>" class="btn btn-primary">
                 🚀 Accéder au Parcours Recommandé →
             </a>
         </div>

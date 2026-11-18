@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 220" width="880" height="220" role="img" aria-label="Cycle de vie local Git entre Working Directory, Staging Area et Dépôt Local">
+  <defs>
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38BDF8"/>
+    </marker>
+    <marker id="arrow-muted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#94A3B8"/>
+    </marker>
+    <marker id="arrow-emerald" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#10B981"/>
+    </marker>
+  </defs>
+
+  <!-- Obsidian studio canvas -->
+  <rect x="0" y="0" width="880" height="220" rx="12" fill="#0B1120"/>
+  <rect x="1" y="1" width="878" height="218" rx="11" fill="none" stroke="#1E293B" stroke-width="1.5"/>
+
+  <!-- Header badge and title -->
+  <rect x="24" y="16" width="166" height="22" rx="6" fill="#0F172A" stroke="#00B0F0" stroke-width="1"/>
+  <text x="107" y="31" fill="#38BDF8" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="10.5" font-weight="700" text-anchor="middle" letter-spacing="0.06em">WORKFLOW GIT LOCAL</text>
+  <text x="206" y="31" fill="#F8FAFC" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="12" font-weight="700">Cycle de Vie entre les 3 Zones Locales</text>
+
+  <!-- Node 1: Working Directory -->
+  <rect x="28" y="56" width="206" height="76" rx="10" fill="#0F172A" stroke="#38BDF8" stroke-width="1.75"/>
+  <text x="131" y="84" fill="#F8FAFC" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="14" font-weight="700" text-anchor="middle">Working Directory</text>
+  <text x="131" y="106" fill="#94A3B8" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="11.5" font-weight="500" text-anchor="middle">Fichiers édités</text>
+
+  <!-- Node 2: Staging Area -->
+  <rect x="337" y="56" width="206" height="76" rx="10" fill="#0F172A" stroke="#00B0F0" stroke-width="1.75"/>
+  <text x="440" y="84" fill="#F8FAFC" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="14" font-weight="700" text-anchor="middle">Staging Area</text>
+  <text x="440" y="106" fill="#38BDF8" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="11.5" font-weight="600" text-anchor="middle">Index (.git/index)</text>
+
+  <!-- Node 3: Local Repository -->
+  <rect x="646" y="56" width="206" height="76" rx="10" fill="#0F172A" stroke="#10B981" stroke-width="1.75"/>
+  <text x="749" y="84" fill="#F8FAFC" font-family="Plus Jakarta Sans, Open Sans, Segoe UI, sans-serif" font-size="14" font-weight="700" text-anchor="middle">Dépôt Local</text>
+  <text x="749" y="106" fill="#10B981" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="11.5" font-weight="600" text-anchor="middle">.git/objects</text>
+
+  <!-- Solid forward arrow: WD -> IDX -->
+  <line x1="234" y1="78" x2="333" y2="78" stroke="#38BDF8" stroke-width="2" marker-end="url(#arrow-cyan)"/>
+  <rect x="242" y="54" width="87" height="19" rx="5" fill="#0F172A" stroke="#1E293B" stroke-width="1"/>
+  <text x="285" y="67" fill="#38BDF8" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="10.5" font-weight="600" text-anchor="middle">git add</text>
+
+  <!-- Solid forward arrow: IDX -> REPO -->
+  <line x1="543" y1="78" x2="642" y2="78" stroke="#38BDF8" stroke-width="2" marker-end="url(#arrow-cyan)"/>
+  <rect x="550" y="54" width="89" height="19" rx="5" fill="#0F172A" stroke="#1E293B" stroke-width="1"/>
+  <text x="594" y="67" fill="#38BDF8" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="10.5" font-weight="600" text-anchor="middle">git commit</text>
+
+  <!-- Dashed diff arrow: WD -> IDX -->
+  <line x1="234" y1="112" x2="333" y2="112" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrow-muted)"/>
+  <text x="285" y="130" fill="#94A3B8" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="10.5" font-weight="600" text-anchor="middle">git diff</text>
+
+  <!-- Dashed diff staged arrow: IDX to REPO -->
+  <line x1="543" y1="112" x2="642" y2="112" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrow-muted)"/>
+  <text x="594" y="130" fill="#94A3B8" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="10.5" font-weight="600" text-anchor="middle">git diff --staged</text>
+
+  <!-- Return path: REPO -> WD -->
+  <path d="M 749 132 L 749 178 L 131 178 L 131 136" fill="none" stroke="#10B981" stroke-width="1.75" marker-end="url(#arrow-emerald)"/>
+  <rect x="342" y="166" width="196" height="24" rx="6" fill="#0F172A" stroke="#10B981" stroke-width="1"/>
+  <text x="440" y="182" fill="#F8FAFC" font-family="JetBrains Mono, Source Code Pro, monospace" font-size="11" font-weight="600" text-anchor="middle">git checkout / restore</text>
+</svg>

@@ -4,11 +4,11 @@ declare(strict_types=1);
 namespace LightPath\LMS\Course;
 
 /**
- * Enterprise LMS pedagogical catalog for PostgreSQL 18:
- * - Qualiopi Initial Positioning (Indicator 8 — 15 MCQs across 5 DBA domains)
- * - Summative Final Certification Exam (Indicator 11 — 40 weighted MCQs, 75% pass threshold)
- * - Spaced Repetition (SRS) Flashcards (PostgreSQL 18 & SQL:2023)
- * - Interactive Technical Glossary (PostgreSQL 18)
+ * Enterprise LMS pedagogical catalog (multi-course):
+ * - Qualiopi Initial Positioning (Indicator 8 — 15 PG18 MCQs / 6 Git Basics MCQs)
+ * - Summative Final Certification Exam (Indicator 11 — 40 PG18 MCQs / 10 Git Basics MCQs, 75% pass threshold)
+ * - Spaced Repetition (SRS) Flashcards
+ * - Interactive Technical Glossary
  * - SCORM 1.2 Manifest Generator (imsmanifest.xml)
  */
 class LmsCatalog
@@ -19,14 +19,35 @@ class LmsCatalog
         'security_admin' => 'Administration, Sécurité SCRAM & RLS',
         'ha_backup' => 'Sauvegardes PITR, pgBackRest & Haute Disponibilité',
         'perf_linux' => 'Optimisation CBO, Indexation & Kernel Linux (M20)',
+        'git_local' => 'Dépôt Local, Index & Commits',
+        'git_branches' => 'Branches, Switch & Fusion (Merge)',
+        'git_remotes' => 'Dépôts Distants & Collaboration',
     ];
 
     /**
-     * Returns the 15 Qualiopi pre-training diagnostic assessment questions (Indicator 8).
-     * Balanced distribution: 4 A, 4 B, 4 C, 3 D.
+     * Returns the domain map belonging to the requested course slug.
      */
-    public static function getDiagnosticQuestions(): array
+    private static function getDomainMapForCourse(string $courseSlug): array
     {
+        $keys = $courseSlug === 'git-basics'
+            ? ['git_local', 'git_branches', 'git_remotes']
+            : ['architecture', 'sql_dev', 'security_admin', 'ha_backup', 'perf_linux'];
+        $map = [];
+        foreach ($keys as $k) {
+            $map[$k] = self::DOMAINS[$k] ?? $k;
+        }
+        return $map;
+    }
+
+    /**
+     * Returns the Qualiopi pre-training diagnostic assessment questions (Indicator 8).
+     * Balanced distribution for PG18: 4 A, 4 B, 4 C, 3 D; for Git Basics: 6 MCQs (2 per domain).
+     */
+    public static function getDiagnosticQuestions(string $courseSlug = 'postgresql-18'): array
+    {
+        if ($courseSlug === 'git-basics') {
+            return self::getGitBasicsDiagnosticQuestions();
+        }
         return [
             [
                 'id' => 'diag_01',
@@ -244,13 +265,13 @@ class LmsCatalog
     /**
      * Evaluates Qualiopi initial diagnostic assessment answers and recommends an appropriate track.
      */
-    public static function evaluateDiagnostic(array $answers): array
+    public static function evaluateDiagnostic(array $answers, string $courseSlug = 'postgresql-18'): array
     {
-        $questions = self::getDiagnosticQuestions();
+        $questions = self::getDiagnosticQuestions($courseSlug);
         $total = count($questions);
         $score = 0;
         $byDomain = [];
-        foreach (self::DOMAINS as $dKey => $dLabel) {
+        foreach (self::getDomainMapForCourse($courseSlug) as $dKey => $dLabel) {
             $byDomain[$dKey] = ['label' => $dLabel, 'correct' => 0, 'total' => 0, 'percent' => 0];
         }
 
@@ -260,6 +281,9 @@ class LmsCatalog
             $dom = $q['domain'];
             $given = strtoupper(trim((string)($answers[$qid] ?? '')));
             $isOk = ($given === $q['correct']);
+            if (!isset($byDomain[$dom])) {
+                $byDomain[$dom] = ['label' => self::DOMAINS[$dom] ?? $dom, 'correct' => 0, 'total' => 0, 'percent' => 0];
+            }
             $byDomain[$dom]['total']++;
             if ($isOk) {
                 $score++;
@@ -280,7 +304,20 @@ class LmsCatalog
 
         $percent = $total > 0 ? (int)round(($score / $total) * 100) : 0;
 
-        if ($percent < 45) {
+        if ($courseSlug === 'git-basics') {
+            $recommendedTrack = 'fondamentaux-git';
+            $recommendedTitle = 'Parcours 1 : Fondamentaux Git (M01–M03)';
+            if ($percent < 45) {
+                $level = 'Débutant / Découverte de Git & Versionnement Local';
+                $recommendationText = 'Nous vous recommandons de suivre intégralement le Parcours 1 : Fondamentaux Git (M01–M03) en démarrant par le Module 01 (init, index, commits) et son atelier guidé.';
+            } elseif ($percent < 75) {
+                $level = 'Intermédiaire / Pratique Locale Acquise';
+                $recommendationText = 'Vous maîtrisez déjà plusieurs commandes de base. Le Parcours 1 : Fondamentaux Git (M01–M03) consolidera la gestion des branches (switch, merge, conflits) et la collaboration sur dépôts distants.';
+            } else {
+                $level = 'Opérationnel / Bon Socle Git & Collaboration';
+                $recommendationText = 'Très bon socle initial ! Parcourez rapidement les synthèses du Parcours 1 : Fondamentaux Git (M01–M03) et validez les ateliers de résolution de conflits et de synchronisation distante avant l\'examen final.';
+            }
+        } elseif ($percent < 45) {
             $level = 'Débutant / Initiation SQL & Fondamentaux';
             $recommendedTrack = 'fondamentaux-sql';
             $recommendedTitle = 'Parcours 4 : Fondamentaux & Pratique Approfondie du Langage SQL:2023 (Modules SQL 01 à 05)';
@@ -313,11 +350,14 @@ class LmsCatalog
     }
 
     /**
-     * Returns the 40 weighted questions for the PostgreSQL 18 Final Certification Exam (Qualiopi Indicator 11).
-     * Exact balanced distribution: 10 A, 10 B, 10 C, 10 D (2 per letter across each of the 5 domains).
+     * Returns the weighted questions for the Final Certification Exam (Qualiopi Indicator 11).
+     * Exact balanced distribution for PG18: 10 A, 10 B, 10 C, 10 D (2 per letter across each of the 5 domains).
      */
-    public static function getFinalExamQuestions(): array
+    public static function getFinalExamQuestions(string $courseSlug = 'postgresql-18'): array
     {
+        if ($courseSlug === 'git-basics') {
+            return self::getGitBasicsFinalExamQuestions();
+        }
         $base = [
             // Domain 1: Internal Architecture, Memory & MVCC (8 questions — B, D, A, C, B, D, C, A)
             ['architecture', 'Quelle est la taille standard par défaut d\'une page (bloc) de données dans PostgreSQL 18 ?', ['A' => '4 Ko', 'B' => '8 Ko', 'C' => '16 Ko', 'D' => '64 Ko'], 'B', 'Par défaut, BLCKSZ vaut 8 192 octets (8 Ko) dans PostgreSQL.'],
@@ -392,13 +432,13 @@ class LmsCatalog
     /**
      * Evaluates an attempt for the Summative Final Certification Exam (Qualiopi Indicator 11).
      */
-    public static function evaluateFinalExam(array $answers, int $durationSeconds = 0): array
+    public static function evaluateFinalExam(array $answers, int $durationSeconds = 0, string $courseSlug = 'postgresql-18'): array
     {
-        $questions = self::getFinalExamQuestions();
+        $questions = self::getFinalExamQuestions($courseSlug);
         $totalQuestions = count($questions);
         $correctCount = 0;
         $byDomain = [];
-        foreach (self::DOMAINS as $dKey => $dLabel) {
+        foreach (self::getDomainMapForCourse($courseSlug) as $dKey => $dLabel) {
             $byDomain[$dKey] = ['label' => $dLabel, 'correct' => 0, 'total' => 0, 'percent' => 0];
         }
 
@@ -408,6 +448,9 @@ class LmsCatalog
             $dom = $q['domain'];
             $given = strtoupper(trim((string)($answers[$qid] ?? '')));
             $isOk = ($given === $q['correct']);
+            if (!isset($byDomain[$dom])) {
+                $byDomain[$dom] = ['label' => self::DOMAINS[$dom] ?? $dom, 'correct' => 0, 'total' => 0, 'percent' => 0];
+            }
             $byDomain[$dom]['total']++;
             if ($isOk) {
                 $correctCount++;
@@ -429,7 +472,17 @@ class LmsCatalog
         $percent = $totalQuestions > 0 ? (int)round(($correctCount / $totalQuestions) * 100) : 0;
         $passed = $percent >= 75;
 
-        if ($percent >= 90) {
+        if ($courseSlug === 'git-basics') {
+            if ($percent >= 90) {
+                $mention = 'Mention Très Bien — Maîtrise Git Fondamentaux';
+            } elseif ($percent >= 80) {
+                $mention = 'Mention Bien — Praticien Git Certifié';
+            } elseif ($percent >= 75) {
+                $mention = 'Admis — Compétences Validées Git Fondamentaux';
+            } else {
+                $mention = 'Non validé (Seuil requis : 75% — ' . $correctCount . '/' . $totalQuestions . ')';
+            }
+        } elseif ($percent >= 90) {
             $mention = 'Mention Très Bien — Expert Certifié PostgreSQL 18';
         } elseif ($percent >= 80) {
             $mention = 'Mention Bien — DBA Certifié PostgreSQL 18';
@@ -452,14 +505,17 @@ class LmsCatalog
     }
 
     /**
-     * Returns Spaced Repetition System (SRS) flashcards for PostgreSQL 18 & SQL:2023.
+     * Returns Spaced Repetition System (SRS) flashcards for the requested course.
      */
-    public static function getFlashcards(): array
+    public static function getFlashcards(string $courseSlug = 'postgresql-18'): array
     {
+        if ($courseSlug === 'git-basics') {
+            return self::getGitBasicsFlashcards();
+        }
         return [
             ['id' => 'fc_01', 'module' => 'M04', 'category' => 'Architecture & MVCC', 'front' => 'Quels sont les 4 champs d\'en-tête MVCC clés d\'un tuple PostgreSQL ?', 'back' => '`t_xmin` (XID d\'insertion), `t_xmax` (XID de suppression/mise à jour ou 0), `t_cid` (Command ID interne), et `t_ctid` (TID courant ou nouvelle version).'],
-            ['id' => 'fc_02', 'module' => 'M22', 'category' => 'Architecture & MVCC', 'front' => 'Quelle est la condition exacte pour un HOT Update (Heap-Only Tuple) ?', 'back' => '1. Aucune colonne présente dans un index n\'est modifiée.\n2. Il reste suffisamment d\'espace libre dans la même page de 8 Ko (favorisé par `fillfactor = 80` ou `90`).'],
-            ['id' => 'fc_03', 'module' => 'M04', 'category' => 'Architecture & MVCC', 'front' => 'Que stockent les fichiers `_fsm` et `_vm` associés à chaque table ?', 'back' => '`_fsm` (Free Space Map) : octets disponibles par page.\n`_vm` (Visibility Map) : 2 bits par page (`all_visible` pour Index-Only Scan et `all_frozen` pour sauter les pages lors du VACUUM).'],
+            ['id' => 'fc_02', 'module' => 'M22', 'category' => 'Architecture & MVCC', 'front' => 'Quelle est la condition exacte pour un HOT Update (Heap-Only Tuple) ?', 'back' => "1. Aucune colonne présente dans un index n'est modifiée.\n2. Il reste suffisamment d'espace libre dans la même page de 8 Ko (favorisé par `fillfactor = 80` ou `90`)."],
+            ['id' => 'fc_03', 'module' => 'M04', 'category' => 'Architecture & MVCC', 'front' => 'Que stockent les fichiers `_fsm` et `_vm` associés à chaque table ?', 'back' => "`_fsm` (Free Space Map) : octets disponibles par page.\n`_vm` (Visibility Map) : 2 bits par page (`all_visible` pour Index-Only Scan et `all_frozen` pour sauter les pages lors du VACUUM)."],
             ['id' => 'fc_04', 'module' => 'M01', 'category' => 'Architecture & MVCC', 'front' => 'Qu\'est-ce que le sous-système AIO dans PostgreSQL 18 ?', 'back' => 'Un moteur d\'entrées/sorties asynchrones (`io_method`, `io_combine_limit`) couplé aux Read Streams qui précharge plusieurs blocs contigus ou non-contigus sans bloquer le CPU.'],
             ['id' => 'fc_05', 'module' => 'M03', 'category' => 'Architecture & MVCC', 'front' => 'Quelle est la règle de dimensionnement initiale de `shared_buffers` ?', 'back' => 'Typiquement **25% de la RAM totale** du serveur (ex: 16 Go sur un serveur de 64 Go), couplé à `huge_pages = on`.'],
             ['id' => 'fc_06', 'module' => 'M03', 'category' => 'Architecture & MVCC', 'front' => 'Pourquoi `work_mem` est-il dangereux s\'il est fixé trop haut globalement ?', 'back' => 'Car il est alloué **par nœud de tri ou de hachage** dans chaque requête parallèle et chaque connexion simultanée (`max_connections * opérations * work_mem`).'],
@@ -471,7 +527,7 @@ class LmsCatalog
             ['id' => 'fc_12', 'module' => 'M05', 'category' => 'SQL & Dev Avancé', 'front' => 'Comment accéder aux anciennes et nouvelles valeurs dans `RETURNING` sous PostgreSQL 18 ?', 'back' => 'Grâce aux alias virtuels `OLD` et `NEW` dans la clause `RETURNING` (ex: `UPDATE film SET rental_rate = 3.99 RETURNING OLD.rental_rate AS avant, NEW.rental_rate AS apres;`).'],
             ['id' => 'fc_13', 'module' => 'M05', 'category' => 'SQL & Dev Avancé', 'front' => 'Que fait la clause `FILTER (WHERE condition)` sur une fonction d\'agrégation ?', 'back' => 'Elle filtre les lignes envoyées à cet agrégat spécifique (ex: `COUNT(*) FILTER (WHERE status = \'PAID\')`), remplaçant avantageusement `SUM(CASE WHEN ...)` et permettant le pivot SQL propre.'],
             ['id' => 'fc_14', 'module' => 'M21', 'category' => 'SQL & Dev Avancé', 'front' => 'Quand une CTE (`WITH q AS (...)`) est-elle matérialisée par défaut depuis PostgreSQL 12+ ?', 'back' => 'Si elle est référencée **plus d\'une fois** ou contient des effets de bord. Si elle n\'est appelée qu\'une fois, le CBO l\'intègre (inlining) sauf si `WITH q AS MATERIALIZED (...)` est spécifié.'],
-            ['id' => 'fc_15', 'module' => 'M06', 'category' => 'SQL & Dev Avancé', 'front' => 'Quelle est la différence entre `IMMUTABLE`, `STABLE` et `VOLATILE` ?', 'back' => '- `IMMUTABLE` : pur calcul déterministe (indexable).\n- `STABLE` : résultat constant au sein d\'un même scan SQL (ex: `now()`, lecture table).\n- `VOLATILE` : peut changer à chaque appel ou modifier des données (`random()`, `INSERT`).'],
+            ['id' => 'fc_15', 'module' => 'M06', 'category' => 'SQL & Dev Avancé', 'front' => 'Quelle est la différence entre `IMMUTABLE`, `STABLE` et `VOLATILE` ?', 'back' => "- `IMMUTABLE` : pur calcul déterministe (indexable).\n- `STABLE` : résultat constant au sein d'un même scan SQL (ex: `now()`, lecture table).\n- `VOLATILE` : peut changer à chaque appel ou modifier des données (`random()`, `INSERT`)."],
             ['id' => 'fc_16', 'module' => 'M05', 'category' => 'SQL & Dev Avancé', 'front' => 'Comment éviter l\'erreur de blocage lors du rafraîchissement d\'une Vue Matérialisée en production ?', 'back' => 'Créer un index `UNIQUE` sur la vue matérialisée, puis exécuter `REFRESH MATERIALIZED VIEW CONCURRENTLY nom_vue;`.'],
             ['id' => 'fc_17', 'module' => 'M07', 'category' => 'Sécurité & Admin', 'front' => 'Comment vérifier si des mots de passe obsolètes MD5 subsistent encore dans le cluster ?', 'back' => '`SELECT rolname FROM pg_authid WHERE rolpassword LIKE \'md5%\';` (tous les comptes doivent commencer par `SCRAM-SHA-256$`).'],
             ['id' => 'fc_18', 'module' => 'M16', 'category' => 'Sécurité & Admin', 'front' => 'Comment passer un paramètre session côté application pour filtrer une politique RLS multi-tenant ?', 'back' => '`SET LOCAL app.current_tenant_id = \'42\';` dans la transaction, lu par la policy via `current_setting(\'app.current_tenant_id\', true)::int`.'],
@@ -489,9 +545,9 @@ class LmsCatalog
             ['id' => 'fc_30', 'module' => 'M13', 'category' => 'HA, Backup & PITR', 'front' => 'Dans Patroni, que fait le Watchdog matériel Linux (`/dev/watchdog`) ?', 'back' => 'Si le processus Patroni se fige ou ne peut plus renouveler son bail etcd à temps, le noyau Linux déclenche un reset matériel immédiat du serveur primaire pour garantir qu\'aucun Split-Brain ne survienne.'],
             ['id' => 'fc_31', 'module' => 'M09', 'category' => 'HA, Backup & PITR', 'front' => 'Comment protéger l\'espace disque `pg_wal` contre un slot de réplication abandonné ?', 'back' => 'Définir `max_slot_wal_keep_size` (ex: `20GB`) : si un slot dépasse ce retard, il est invalidé plutôt que de provoquer un arrêt complet du primaire par disque plein (`PANIC: could not write to file pg_wal/...`).'],
             ['id' => 'fc_32', 'module' => 'M15', 'category' => 'HA, Backup & PITR', 'front' => 'Qu\'est-ce que l\'Identité de Réplication (`REPLICA IDENTITY`) en réplication logique ?', 'back' => 'Elle définit quelles colonnes sont écrites dans le WAL pour identifier l\'ancienne ligne lors d\'un `UPDATE` ou `DELETE` (`DEFAULT` = clé primaire, `USING INDEX`, ou `FULL` = toute la ligne).'],
-            ['id' => 'fc_33', 'module' => 'M12', 'category' => 'Performance & Kernel Linux', 'front' => 'Dans `EXPLAIN (ANALYZE, BUFFERS)`, que signifient `shared hit` et `shared read` ?', 'back' => '- `shared hit` : nombre de blocs de 8 Ko trouvés directement dans `shared_buffers`.\n- `shared read` : blocs demandés à l\'OS (page cache Linux ou lecture disque physique).'],
+            ['id' => 'fc_33', 'module' => 'M12', 'category' => 'Performance & Kernel Linux', 'front' => 'Dans `EXPLAIN (ANALYZE, BUFFERS)`, que signifient `shared hit` et `shared read` ?', 'back' => "- `shared hit` : nombre de blocs de 8 Ko trouvés directement dans `shared_buffers`.\n- `shared read` : blocs demandés à l'OS (page cache Linux ou lecture disque physique)."],
             ['id' => 'fc_34', 'module' => 'M25', 'category' => 'Performance & Kernel Linux', 'front' => 'Comment mesurer le temps réellement passé en attente d\'entrées/sorties disque dans `EXPLAIN` ?', 'back' => 'Activer `track_io_timing = on` dans `postgresql.conf`, puis lancer `EXPLAIN (ANALYZE, BUFFERS)` qui affichera `I/O Timings: shared read=... ms`.'],
-            ['id' => 'fc_35', 'module' => 'M21', 'category' => 'Performance & Kernel Linux', 'front' => 'Quels sont les 3 algorithmes de jointure de PostgreSQL et leurs cas d\'usage ?', 'back' => '1. **Nested Loop** : petit nombre de lignes externes avec index sur la table interne.\n2. **Hash Join** : grands volumes non triés avec égalité (`=`) tenant dans `work_mem`.\n3. **Merge Join** : grands volumes déjà triés (ou via index B-Tree) sur la clé de jointure.'],
+            ['id' => 'fc_35', 'module' => 'M21', 'category' => 'Performance & Kernel Linux', 'front' => 'Quels sont les 3 algorithmes de jointure de PostgreSQL et leurs cas d\'usage ?', 'back' => "1. **Nested Loop** : petit nombre de lignes externes avec index sur la table interne.\n2. **Hash Join** : grands volumes non triés avec égalité (`=`) tenant dans `work_mem`.\n3. **Merge Join** : grands volumes déjà triés (ou via index B-Tree) sur la clé de jointure."],
             ['id' => 'fc_36', 'module' => 'M23', 'category' => 'Performance & Kernel Linux', 'front' => 'Qu\'est-ce qu\'un Index Partiel (`CREATE INDEX ... WHERE ...`) ?', 'back' => 'Un index qui n\'inclut que les lignes satisfaisant un prédicat constant (ex: `WHERE status = \'PENDING\'`), réduisant jusqu\'à 95% la taille de l\'index et le coût de maintenance DML.'],
             ['id' => 'fc_37', 'module' => 'M11', 'category' => 'Performance & Kernel Linux', 'front' => 'Pourquoi accélérer `autovacuum` sur une table ultra-sollicitée plutôt que globalement ?', 'back' => 'Via les paramètres de stockage par table : `ALTER TABLE orders SET (autovacuum_vacuum_scale_factor = 0.01, autovacuum_vacuum_cost_limit = 2000);`.'],
             ['id' => 'fc_38', 'module' => 'M20', 'category' => 'Performance & Kernel Linux', 'front' => 'Quelle formule calcule le nombre de Huge Pages statiques Linux (2 Mo) à réserver pour PostgreSQL ?', 'back' => 'Lire le `VmPeak` du processus postmaster dans `/proc/<pid>/status`, diviser par `2048 Ko` et ajouter ~5% de marge dans `vm.nr_hugepages`.'],
@@ -514,10 +570,13 @@ class LmsCatalog
     }
 
     /**
-     * Returns the PostgreSQL 18 Technical Glossary entries.
+     * Returns the Technical Glossary entries for the requested course.
      */
-    public static function getGlossary(): array
+    public static function getGlossary(string $courseSlug = 'postgresql-18'): array
     {
+        if ($courseSlug === 'git-basics') {
+            return self::getGitBasicsGlossary();
+        }
         return [
             ['term' => 'ACID', 'category' => 'Fondamentaux', 'definition' => 'Atomicité, Cohérence, Isolation, Durabilité : les 4 garanties transactionnelles assurées par le WAL et le moteur MVCC de PostgreSQL.'],
             ['term' => 'AIO (Asynchronous I/O)', 'category' => 'PostgreSQL 18', 'definition' => 'Nouveau sous-système PostgreSQL 18 permettant d\'émettre des requêtes de lecture disque asynchrones et combinées (io_method, io_combine_limit) sans bloquer le processus backend.'],
@@ -584,14 +643,26 @@ class LmsCatalog
      */
     public static function generateScormManifest(array $course, bool $standalonePackage = false): string
     {
+        $courseSlug = (string)($course['slug'] ?? 'postgresql-18');
+        $cleanSlug = trim((string)preg_replace('/[^A-Z0-9]+/i', '_', $courseSlug), '_');
+        $upperSlug = $cleanSlug !== '' ? strtoupper($cleanSlug) : 'COURSE';
+        $manifestId = $courseSlug === 'postgresql-18'
+            ? 'LIGHTPATH_PG18_LMS_SCORM12'
+            : ('LIGHTPATH_' . $upperSlug . '_LMS_SCORM12');
+        $orgId = $courseSlug === 'postgresql-18'
+            ? 'ORG_LIGHTPATH_PG18'
+            : ('ORG_LIGHTPATH_' . $upperSlug);
+        $courseQuery = '&amp;course=' . htmlspecialchars(urlencode($courseSlug), ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        $examCourseTitle = htmlspecialchars((string)($course['short_title'] ?? $course['title'] ?? 'Formation'), ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        $diagScopeLabel = $courseSlug === 'postgresql-18' ? 'Diagnostic DBA' : $examCourseTitle;
         $title = htmlspecialchars((string)($course['title'] ?? 'PostgreSQL 18 — Cursus Complet LightPath'), ENT_XML1 | ENT_QUOTES, 'UTF-8');
         $itemsXml = [];
         $resourcesXml = [];
 
         if (!$standalonePackage) {
             // 1. Initial diagnostic assessment
-            $itemsXml[] = '      <item identifier="ITEM_DIAGNOSTIC" identifierref="RES_DIAGNOSTIC"><title>00 — Positionnement Initial Qualiopi (Diagnostic DBA)</title></item>';
-            $resourcesXml[] = '    <resource identifier="RES_DIAGNOSTIC" type="webcontent" adlcp:scormtype="sco" href="index.php?page=diagnostic"><file href="index.php"/></resource>';
+            $itemsXml[] = '      <item identifier="ITEM_DIAGNOSTIC" identifierref="RES_DIAGNOSTIC"><title>00 — Positionnement Initial Qualiopi (' . $diagScopeLabel . ')</title></item>';
+            $resourcesXml[] = '    <resource identifier="RES_DIAGNOSTIC" type="webcontent" adlcp:scormtype="sco" href="index.php?page=diagnostic' . $courseQuery . '"><file href="index.php"/></resource>';
         }
 
         // 2. Course modules
@@ -602,7 +673,7 @@ class LmsCatalog
                 $href = 'index_scorm.html?module=' . urlencode((string)$modId);
                 $filesXml = '<file href="index_scorm.html"/><file href="scorm_api.js"/>';
             } else {
-                $href = 'index.php?page=module&amp;id=' . urlencode((string)$modId);
+                $href = 'index.php?page=module&amp;id=' . urlencode((string)$modId) . $courseQuery;
                 $filesXml = '<file href="index.php"/>';
             }
             $itemsXml[] = '      <item identifier="ITEM_MOD_' . $safeId . '" identifierref="RES_MOD_' . $safeId . '"><title>' . $modTitle . '</title></item>';
@@ -614,14 +685,14 @@ class LmsCatalog
             foreach ($course['labs'] ?? [] as $labId => $lab) {
                 $safeId = preg_replace('/[^a-zA-Z0-9_\-]/', '_', (string)$labId);
                 $labTitle = htmlspecialchars(($lab['badge_code'] ?? 'LAB') . ' — ' . ($lab['title'] ?? $labId), ENT_XML1 | ENT_QUOTES, 'UTF-8');
-                $href = 'index.php?page=lab&amp;id=' . urlencode((string)$labId);
+                $href = 'index.php?page=lab&amp;id=' . urlencode((string)$labId) . $courseQuery;
                 $itemsXml[] = '      <item identifier="ITEM_LAB_' . $safeId . '" identifierref="RES_LAB_' . $safeId . '"><title>' . $labTitle . '</title></item>';
                 $resourcesXml[] = '    <resource identifier="RES_LAB_' . $safeId . '" type="webcontent" adlcp:scormtype="sco" href="' . $href . '"><file href="index.php"/></resource>';
             }
 
             // 4. Final summative certification exam
-            $itemsXml[] = '      <item identifier="ITEM_FINAL_EXAM" identifierref="RES_FINAL_EXAM"><title>99 — Examen Final de Certification PostgreSQL 18 (Qualiopi Indicateur 11)</title></item>';
-            $resourcesXml[] = '    <resource identifier="RES_FINAL_EXAM" type="webcontent" adlcp:scormtype="sco" href="index.php?page=exam"><file href="index.php"/></resource>';
+            $itemsXml[] = '      <item identifier="ITEM_FINAL_EXAM" identifierref="RES_FINAL_EXAM"><title>99 — Examen Final de Certification ' . $examCourseTitle . ' (Qualiopi Indicateur 11)</title></item>';
+            $resourcesXml[] = '    <resource identifier="RES_FINAL_EXAM" type="webcontent" adlcp:scormtype="sco" href="index.php?page=exam' . $courseQuery . '"><file href="index.php"/></resource>';
         }
 
         $itemsStr = implode("\n", $itemsXml);
@@ -629,7 +700,7 @@ class LmsCatalog
 
         return <<<XML
 <?xml version="1.0" encoding="UTF-8"?>
-<manifest identifier="LIGHTPATH_PG18_LMS_SCORM12" version="1.2"
+<manifest identifier="{$manifestId}" version="1.2"
           xmlns="http://www.imsproject.org/xsd/imscp_rootv1p1p2"
           xmlns:adlcp="http://www.adlnet.org/xsd/adlcp_rootv1p2"
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -637,8 +708,8 @@ class LmsCatalog
     <schema>ADL SCORM</schema>
     <schemaversion>1.2</schemaversion>
   </metadata>
-  <organizations default="ORG_LIGHTPATH_PG18">
-    <organization identifier="ORG_LIGHTPATH_PG18">
+  <organizations default="{$orgId}">
+    <organization identifier="{$orgId}">
       <title>{$title}</title>
 {$itemsStr}
     </organization>
@@ -648,5 +719,182 @@ class LmsCatalog
   </resources>
 </manifest>
 XML;
+    }
+
+    /**
+     * Returns the 6 Git Basics diagnostic MCQs (2 per domain: git_local, git_branches, git_remotes).
+     */
+    private static function getGitBasicsDiagnosticQuestions(): array
+    {
+        return [
+            [
+                'id' => 'git_diag_01',
+                'domain' => 'git_local',
+                'question' => 'Quelle commande initialise un nouveau dépôt Git local dans le répertoire courant et crée le sous-dossier `.git` ?',
+                'options' => [
+                    'A' => 'git clone --local',
+                    'B' => 'git init',
+                    'C' => 'git create repo',
+                    'D' => 'git add .',
+                ],
+                'correct' => 'B',
+                'answer' => 'B',
+                'explanation' => '`git init` initialise la structure `.git` (objets, références, HEAD) dans le dossier courant sans nécessiter de serveur distant.',
+            ],
+            [
+                'id' => 'git_diag_02',
+                'domain' => 'git_local',
+                'question' => 'À quoi sert la zone d\'index (Staging Area) manipulée par `git add` avant `git commit` ?',
+                'options' => [
+                    'A' => 'À pousser automatiquement les fichiers sur le serveur distant.',
+                    'B' => 'À supprimer définitivement les fichiers non suivis.',
+                    'C' => 'À compresser les archives `.zip` de livraison.',
+                    'D' => 'À préparer avec précision l\'instantané (snapshot) des modifications qui formeront le prochain commit.',
+                ],
+                'correct' => 'D',
+                'answer' => 'D',
+                'explanation' => 'L\'index (Staging Area) permet de sélectionner finement les modifications à inclure dans le prochain commit atomique.',
+            ],
+            [
+                'id' => 'git_diag_03',
+                'domain' => 'git_branches',
+                'question' => 'Quelle commande moderne permet de créer une nouvelle branche `feat/login` et de basculer immédiatement dessus ?',
+                'options' => [
+                    'A' => 'git switch -c feat/login',
+                    'B' => 'git merge --new feat/login',
+                    'C' => 'git init feat/login',
+                    'D' => 'git push -b feat/login',
+                ],
+                'correct' => 'A',
+                'answer' => 'A',
+                'explanation' => '`git switch -c <branche>` (introduit en Git 2.23 pour clarifier `checkout -b`) crée la branche et met à jour `HEAD` et le répertoire de travail.',
+            ],
+            [
+                'id' => 'git_diag_04',
+                'domain' => 'git_branches',
+                'question' => 'Quand survient un conflit de fusion (`CONFLICT (content)`) lors d\'un `git merge` ?',
+                'options' => [
+                    'A' => 'Lorsque le dépôt contient plus de deux branches.',
+                    'B' => 'Uniquement lorsque le fichier `.gitignore` est absent.',
+                    'C' => 'Lorsque deux branches ont modifié différemment les mêmes lignes (ou supprimé/modifié le même fichier) depuis leur ancêtre commun.',
+                    'D' => 'Lorsque `git status` est exécuté trop souvent.',
+                ],
+                'correct' => 'C',
+                'answer' => 'C',
+                'explanation' => 'Git fusionne automatiquement les changements non chevauchants ; il demande un arbitrage humain uniquement si deux branches modifient les mêmes zones.',
+            ],
+            [
+                'id' => 'git_diag_05',
+                'domain' => 'git_remotes',
+                'question' => 'Quelle différence fondamentale distingue `git fetch` de `git pull` ?',
+                'options' => [
+                    'A' => '`git fetch` supprime la branche locale tandis que `git pull` la renomme.',
+                    'B' => '`git fetch` récupère les commits et références distantes (`origin/*`) sans modifier votre branche locale, alors que `git pull` enchaîne `fetch` + intégration (`merge` ou `rebase`).',
+                    'C' => '`git pull` fonctionne hors ligne contrairement à `git fetch`.',
+                    'D' => 'Il n\'y a aucune différence entre les deux commandes.',
+                ],
+                'correct' => 'B',
+                'answer' => 'B',
+                'explanation' => '`git fetch` est une opération sûre d\'observation qui met à jour les branches de suivi distantes sans toucher à votre travail local.',
+            ],
+            [
+                'id' => 'git_diag_06',
+                'domain' => 'git_remotes',
+                'question' => 'Que fait l\'option `-u` (`--set-upstream`) lors du premier `git push -u origin feat/api` ?',
+                'options' => [
+                    'A' => 'Elle associe la branche locale à la branche distante `origin/feat/api` pour simplifier les futurs `git push`, `git pull` et `git status`.',
+                    'B' => 'Elle fusionne directement la branche dans `main` sans revue de code.',
+                    'C' => 'Elle chiffre le mot de passe SSH en clair dans `.git/config`.',
+                    'D' => 'Elle force l\'écrasement de l\'historique distant.',
+                ],
+                'correct' => 'A',
+                'answer' => 'A',
+                'explanation' => '`-u` configure la branche de suivi (tracking branch), permettant ensuite d\'utiliser `git push` et `git pull` sans préciser `origin feat/api`.',
+            ],
+        ];
+    }
+
+    /**
+     * Returns the 10 weighted Git Basics questions for the Summative Final Certification Exam.
+     */
+    private static function getGitBasicsFinalExamQuestions(): array
+    {
+        $base = [
+            // Domain 1: Local Repository, Staging & Commits (4 questions — B, D, A, C)
+            ['git_local', 'Dans l\'architecture à 3 zones de Git, quel est l\'ordre exact du flux standard pour enregistrer une modification ?', ['A' => 'Repository -> Working Tree -> Staging Area', 'B' => 'Working Directory -> Staging Area (`git add`) -> Dépôt Local `.git` (`git commit`)', 'C' => 'Remote -> Staging Area -> Working Directory', 'D' => 'HEAD -> Index -> `.gitignore`'], 'B', 'On modifie les fichiers dans le Working Directory, on prépare l\'instantané dans la Staging Area (`git add`), puis on l\'enregistre durablement via `git commit`.'],
+            ['git_local', 'Vous ajoutez `*.log` dans `.gitignore`, mais `app.log` était déjà suivi par Git dans un commit précédent. Que se passe-t-il si `app.log` est modifié ?', ['A' => 'Git ignore automatiquement toute nouvelle modification de `app.log`.', 'B' => 'Git supprime immédiatement `app.log` du disque.', 'C' => 'Git refuse tout commit sur les autres fichiers.', 'D' => 'Git continue de suivre `app.log` tant qu\'il n\'est pas désindexé via `git rm --cached app.log`.'], 'D', '`.gitignore` ne s\'applique qu\'aux fichiers non suivis (untracked). Pour retirer un fichier déjà suivi sans le supprimer localement, il faut `git rm --cached`.'],
+            ['git_local', 'Quelle commande affiche uniquement les différences déjà placées dans l\'index (`git add`) par rapport au dernier commit (`HEAD`) ?', ['A' => 'git diff --staged (ou --cached)', 'B' => 'git log --stat', 'C' => 'git diff HEAD~5', 'D' => 'git status --ignored'], 'A', '`git diff` seul compare le Working Directory à l\'index ; `git diff --staged` inspecte exactement ce qui partira au prochain commit.'],
+            ['git_local', 'Quelle commande affiche un historique compact sur une ligne avec le graphe des branches et fusions ?', ['A' => 'git show --all-files', 'B' => 'git branch -a', 'C' => 'git log --oneline --graph --decorate', 'D' => 'git reflog --init'], 'C', '`git log --oneline --graph --decorate` visualise clairement la topologie des commits, branches et tags.'],
+
+            // Domain 2: Branches, Switch & Merge (3 questions — C, A, D)
+            ['git_branches', 'Lors d\'un `git merge feat/ui` sur `main`, si `main` n\'a reçu aucun nouveau commit depuis la création de `feat/ui`, quel type de fusion Git effectue-t-il par défaut ?', ['A' => 'Un conflit automatique sur tous les fichiers.', 'B' => 'Un écrasement destructif avec perte d\'historique.', 'C' => 'Un Fast-Forward : le pointeur `main` avance simplement vers le dernier commit de `feat/ui` sans créer de commit de fusion.', 'D' => 'Un `git reset --hard` sur l\'ancêtre commun.'], 'C', 'Lorsque les historiques n\'ont pas divergé, Git déplace simplement le pointeur de branche en Fast-Forward (sauf si `--no-ff` est demandé).'],
+            ['git_branches', 'Lors d\'un conflit dans un fichier, que délimitent respectivement `<<<<<<< HEAD`, `=======` et `>>>>>>> feat/api` ?', ['A' => 'Entre `HEAD` et `=======` figure la version de la branche courante ; entre `=======` et `>>>>>>>` figure la version de la branche entrante `feat/api`.', 'B' => 'Le début et la fin du fichier `.gitignore`.', 'C' => 'Des commentaires ignorés automatiquement par Git à la compilation.', 'D' => 'Uniquement les fichiers binaires supprimés.'], 'A', 'Les marqueurs de conflit encadrent côte à côte les deux variantes divergentes afin que le développeur conserve la synthèse correcte avant de retirer les marqueurs.'],
+            ['git_branches', 'Après avoir édité manuellement un fichier en conflit et supprimé les marqueurs `<<<<<<<` / `=======` / `>>>>>>>`, quelles commandes finalisent proprement la fusion ?', ['A' => '`git init` puis `git push --force`', 'B' => '`git merge --abort`', 'C' => '`git switch -c fix`', 'D' => '`git add <fichier>` puis `git commit`'], 'D', 'Marquer le fichier résolu avec `git add` met à jour l\'index, puis `git commit` finalise le commit de fusion (ou `git merge --continue`).'],
+
+            // Domain 3: Remote Repositories & Collaboration (3 questions — B, D, A)
+            ['git_remotes', 'Après `git clone https://.../projet.git`, quel nom Git attribue-t-il par défaut au dépôt distant d\'origine ?', ['A' => 'upstream', 'B' => 'origin', 'C' => 'master', 'D' => 'central'], 'B', 'Par convention, `git clone` configure automatiquement le remote nommé `origin` pointant vers l\'URL clonée.'],
+            ['git_remotes', 'Votre `git push` est rejeté avec `[rejected] (non-fast-forward)` parce qu\'un collègue a poussé des commits sur la même branche. Quelle est la réaction recommandée ?', ['A' => 'Exécuter `git push --force` immédiatement pour écraser son travail.', 'B' => 'Supprimer le dossier `.git` et tout recommencer.', 'C' => 'Créer un second fichier `.gitignore`.', 'D' => 'Exécuter `git fetch` puis intégrer ses commits (`git pull --rebase` ou `git pull`), tester, puis relancer `git push`.'], 'D', 'On ne force jamais l\'écrasement d\'une branche partagée : on récupère les commits distants, on intègre et on valide localement avant de pousser.'],
+            ['git_remotes', 'Quel est l\'objectif principal d\'une Pull Request (ou Merge Request) dans un flux de collaboration en équipe ?', ['A' => 'Proposer l\'intégration d\'une branche dédiée vers `main` en permettant la revue par les pairs et l\'exécution des tests CI avant le merge.', 'B' => 'Télécharger Git sur un nouveau poste Windows.', 'C' => 'Fusionner deux dépôts sans créer d\'historique ni de revue.', 'D' => 'Remplacer le fichier `README.md` par un binaire.'], 'A', 'La Pull Request centralise la revue de code, la traçabilité liée au ticket/issue et les contrôles automatisés (CI) avant l\'intégration dans `main`.'],
+        ];
+
+        $questions = [];
+        foreach ($base as $idx => $item) {
+            $num = $idx + 1;
+            $questions[] = [
+                'id' => sprintf('git_exam_%02d', $num),
+                'number' => $num,
+                'domain' => $item[0],
+                'domain_label' => self::DOMAINS[$item[0]] ?? $item[0],
+                'weight' => 10.0,
+                'question' => $item[1],
+                'options' => $item[2],
+                'correct' => $item[3],
+                'answer' => $item[3],
+                'explanation' => $item[4],
+            ];
+        }
+        return $questions;
+    }
+
+    /**
+     * Returns 12 Spaced Repetition System (SRS) flashcards for Git Basics (Modules M01-M03).
+     */
+    private static function getGitBasicsFlashcards(): array
+    {
+        return [
+            ['id' => 'git_fc_01', 'module' => 'M01', 'category' => 'Dépôt Local & Index', 'front' => 'Quelles sont les 3 zones locales fondamentales de Git ?', 'back' => "1. **Working Directory** (copie de travail modifiée sur disque).\n2. **Staging Area / Index** (`git add`, préparation du prochain snapshot).\n3. **Dépôt Local `.git`** (`git commit`, historique immuable des commits)."],
+            ['id' => 'git_fc_02', 'module' => 'M01', 'category' => 'Dépôt Local & Index', 'front' => 'Que vérifier avec `git status` avant de commiter ?', 'back' => 'La branche courante, les fichiers indexés prêts à être commités (`Changes to be committed`), les fichiers modifiés non indexés et les fichiers non suivis (`Untracked files`).'],
+            ['id' => 'git_fc_03', 'module' => 'M01', 'category' => 'Dépôt Local & Index', 'front' => 'Comment retirer un fichier de l\'index sans le supprimer du disque si on vient de l\'ajouter dans `.gitignore` ?', 'back' => 'Exécuter `git rm --cached <fichier>`, puis commiter ce retrait et l\'ajout dans `.gitignore`.'],
+            ['id' => 'git_fc_04', 'module' => 'M01', 'category' => 'Dépôt Local & Index', 'front' => 'Comment comparer uniquement ce qui est dans l\'index avec `HEAD` ?', 'back' => '`git diff --staged` (alias `git diff --cached`), alors que `git diff` sans option compare Working Directory vs Index.'],
+            ['id' => 'git_fc_05', 'module' => 'M02', 'category' => 'Branches & Merge', 'front' => 'Que représente le pointeur `HEAD` dans Git ?', 'back' => 'La référence vers la branche active courante (ou directement vers un commit en mode `detached HEAD`), servant de parent au prochain commit.'],
+            ['id' => 'git_fc_06', 'module' => 'M02', 'category' => 'Branches & Merge', 'front' => 'Comment créer et basculer sur une branche, puis revenir sur `main` ?', 'back' => '`git switch -c feat/ma-feature` pour créer et basculer ; `git switch main` pour revenir sur la branche principale.'],
+            ['id' => 'git_fc_07', 'module' => 'M02', 'category' => 'Branches & Merge', 'front' => 'Quelle différence entre un merge Fast-Forward et un merge 3-way ?', 'back' => "**Fast-Forward** : aucun commit divergent sur la cible, le pointeur avance en ligne droite.\n**3-way merge** : les branches ont divergé depuis leur ancêtre commun ; Git crée un nouveau commit de fusion à 2 parents."],
+            ['id' => 'git_fc_08', 'module' => 'M02', 'category' => 'Branches & Merge', 'front' => 'Quelle est la procédure complète pour résoudre un conflit de fusion ?', 'back' => "1. Repérer les fichiers avec `git status`.\n2. Éditer le fichier et retirer les marqueurs `<<<<<<<`, `=======`, `>>>>>>>`.\n3. Indexer via `git add <fichier>`.\n4. Valider par `git commit` (ou annuler avant avec `git merge --abort`)."],
+            ['id' => 'git_fc_09', 'module' => 'M03', 'category' => 'Dépôts Distants & PR', 'front' => 'Pourquoi exécuter `git fetch` avant `git merge` ou `git pull` ?', 'back' => '`git fetch origin` télécharge les nouveaux commits distants dans `origin/*` sans modifier la branche locale, permettant d\'inspecter `git log HEAD..origin/main` avant intégration.'],
+            ['id' => 'git_fc_10', 'module' => 'M03', 'category' => 'Dépôts Distants & PR', 'front' => 'Comment lier une nouvelle branche locale à son équivalent distant ?', 'back' => '`git push -u origin <nom-de-branche>` enregistre la branche amont (`upstream`) pour les futurs `git push` et `git pull`.'],
+            ['id' => 'git_fc_11', 'module' => 'M03', 'category' => 'Dépôts Distants & PR', 'front' => 'Pourquoi proscrire `git push --force` sur une branche partagée comme `main` ?', 'back' => 'Car `--force` réécrit et écrase les commits déjà récupérés par les autres membres de l\'équipe, provoquant des divergences et pertes de travail.'],
+            ['id' => 'git_fc_12', 'module' => 'M03', 'category' => 'Dépôts Distants & PR', 'front' => 'Comment garder une Pull Request propre et facile à relire ?', 'back' => 'Une branche dédiée par tâche, des commits atomiques au format Conventional Commits, des tests verts avant le push et une description claire liée à l\'issue.'],
+        ];
+    }
+
+    /**
+     * Returns 12 Technical Glossary entries for Git Basics.
+     */
+    private static function getGitBasicsGlossary(): array
+    {
+        return [
+            ['term' => 'Dépôt (Repository / .git)', 'category' => 'Dépôt Local', 'definition' => 'Base d\'objets et de références stockée dans le répertoire `.git` contenant l\'intégralité de l\'historique des commits, arbres et blobs du projet.'],
+            ['term' => 'Working Directory', 'category' => 'Dépôt Local', 'definition' => 'Répertoire de travail contenant les fichiers extraits du commit courant où vous éditez le code avant indexation.'],
+            ['term' => 'Staging Area (Index)', 'category' => 'Dépôt Local', 'definition' => 'Zone intermédiaire alimentée par `git add` préparant exactement le contenu du prochain commit atomique.'],
+            ['term' => 'Commit', 'category' => 'Historique', 'definition' => 'Instantané immuable identifié par un condensat cryptographique (SHA-1/SHA-256), référençant l\'auteur, l\'horodatage, le message et le(s) commit(s) parent(s).'],
+            ['term' => 'HEAD', 'category' => 'Références', 'definition' => 'Pointeur symbolique indiquant la branche active courante (ex: `ref: refs/heads/main`) ou un commit précis en mode détaché.'],
+            ['term' => '.gitignore', 'category' => 'Hygiène', 'definition' => 'Fichier listant les motifs de fichiers générés, caches ou secrets locaux que Git ne doit pas suivre ni indexer par erreur.'],
+            ['term' => 'Branche (Branch)', 'category' => 'Branches', 'definition' => 'Pointeur léger et mobile vers un commit permettant d\'isoler le développement d\'une fonctionnalité ou d\'un correctif sans perturber `main`.'],
+            ['term' => 'Fast-Forward Merge', 'category' => 'Fusion', 'definition' => 'Avance directe du pointeur de branche cible vers le sommet de la branche fusionnée lorsqu\'aucun commit divergent n\'existe entre les deux.'],
+            ['term' => 'Conflit de Fusion (Merge Conflict)', 'category' => 'Fusion', 'definition' => 'Situation où deux branches ont modifié différemment une même section de fichier, nécessitant un arbitrage explicite puis `git add` et `git commit`.'],
+            ['term' => 'Remote (origin)', 'category' => 'Collaboration', 'definition' => 'Alias local désignant un dépôt distant hébergé sur un serveur (ex: `origin`), inspectable via `git remote -v`.'],
+            ['term' => 'git fetch vs git pull', 'category' => 'Collaboration', 'definition' => '`git fetch` met à jour les références distantes (`origin/*`) en lecture seule, tandis que `git pull` télécharge puis fusionne ou rebase directement sur la branche locale.'],
+            ['term' => 'Pull Request (PR)', 'category' => 'Collaboration', 'definition' => 'Demande d\'intégration d\'une branche de travail vers `main` déclenchant revue de code par les pairs et validation CI avant fusion.'],
+        ];
     }
 }
