@@ -1,0 +1,170 @@
+site_name: LightPath Training Portal Documentation
+site_description: Zero-dependency PHP 8.3 LMS with isolated Docker PostgreSQL 18 sandboxes, Qualiopi/OPCO compliance, and strict zero-CDN CSP
+site_url: https://lms.lightpath.fr/
+repo_name: jmrenouard/lightpath-training-portal
+repo_url: https://github.com/jmrenouard/lightpath-training-portal
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; 2026 Jean-Marie Renouard &middot; LightPath SARL
+
+docs_dir: docs
+exclude_docs: |
+  internal/**
+  *.kdbx
+  *.keyx
+  *.pid
+  *.log
+  *.sqlite
+  *.db
+  .env
+  .env.*
+  initial_admin_credentials.txt
+
+hooks:
+  - scripts/mkdocs_hooks.py
+
+theme:
+  name: material
+  language: en
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.tracking
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: cyan
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search
+
+extra:
+  version:
+    provider: mike
+    default: latest
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/jmrenouard/lightpath-training-portal
+      name: LightPath Training Portal on GitHub
+    - icon: fontawesome/solid/globe
+      link: https://www.lightpath.fr
+      name: LightPath SARL
+
+extra_css:
+  - https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/katex.js
+  - https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js
+  - https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+nav:
+  - Home: index.md
+  - Tutorials:
+      - 01-tutorials/index.md
+      - Local Quickstart Sandbox: 01-tutorials/01-local-quickstart-sandbox.md
+      - First Docker PG18 Lab: 01-tutorials/02-first-docker-pg18-lab.md
+      - Author a Custom Course Pack: 01-tutorials/03-author-custom-course-pack.md
+      - Deep-Dive Guides:
+          - Course Pack Guide: COURSE_PACK_GUIDE.md
+          - Docker Labs Guide: DOCKER_LABS_GUIDE.md
+  - How-To Guides:
+      - 02-how-to-guides/index.md
+      - Deployment:
+          - Deploy Portal with Docker & PDO: 02-how-to-guides/deployment/deploy-portal-docker-and-pdo.md
+      - Operations:
+          - Manage Cohorts & Qualiopi Exports: 02-how-to-guides/operations/manage-cohorts-and-qualiopi-exports.md
+          - Configure Feature Flags & Courses: 02-how-to-guides/operations/configure-feature-flags-and-courses.md
+      - Incident Response:
+          - Remediate Docker Lab & Auth Incidents: 02-how-to-guides/incident-response/remediate-docker-lab-and-auth-incidents.md
+      - Security:
+          - Harden CSP, Credentials & Audit Chain: 02-how-to-guides/security/harden-csp-credentials-and-audit-chain.md
+      - Operations & Trainer Manuals:
+          - Deployment & Operations: DEPLOYMENT_AND_OPERATIONS.md
+          - Admin & Trainer Guide: ADMIN_AND_TRAINER_GUIDE.md
+  - Reference:
+      - 03-reference/index.md
+      - Configuration:
+          - Environment & Feature Flags: 03-reference/configuration/environment-and-feature-flags.md
+      - API & Routes:
+          - HTTP Routes & JSON API: 03-reference/api-and-routes/http-routes-and-json-api.md
+      - CLI & Scripts:
+          - CLI Utilities & Exit Codes: 03-reference/cli-and-scripts/cli-utilities-and-exit-codes.md
+      - Troubleshooting Codes:
+          - Error & Alert Matrix: 03-reference/troubleshooting-codes/error-and-alert-matrix.md
+      - Technical Manuals:
+          - HTTP & Action API Reference: API_REFERENCE.md
+          - Developer & Testing Guide: DEVELOPER_AND_TESTING_GUIDE.md
+  - Explanation:
+      - 04-explanation/index.md
+      - Architecture Overview:
+          - Zero-Dependency LMS Architecture: 04-explanation/architecture-overview/zero-dependency-lms-architecture.md
+      - Design Decisions:
+          - ADR-001 Zero-Dependency, Zero-CDN & Strict CSP: 04-explanation/design-decisions/adr-001-zero-dependency-zero-cdn-strict-csp.md
+          - ADR-002 Versioned Diataxis MkDocs Publishing: 04-explanation/design-decisions/adr-002-versioned-diataxis-mkdocs-publishing.md
+      - Deep Dives:
+          - SQL Sandbox & Qualiopi Integrity: 04-explanation/deep-dives/sql-sandbox-and-qualiopi-integrity.md
+      - Architecture & Security Manuals:
+          - System Architecture: ARCHITECTURE.md
+          - Security Architecture: SECURITY.md
+  - Releases & Governance:
+      - Platform Overview: overview.md
+      - Changelog: CHANGELOG.md
+      - Action Logbook: ACTION_LOGBOOK.md
+      - RCA Register: RCA_REGISTER.md
+      - Contributing Guide: CONTRIBUTING.md
+      - Project Context: PROJECT-CONTEXT.md
+      - Security Policy: SECURITY-POLICY.md
+      - Moodle Comparison: MOODLE_COMPARISON.md
+      - Ponytail Quality Audit: QUALITY_AUDIT_PONYTAIL.md

@@ -5,7 +5,8 @@
 > **Release Baseline:** `v2.0.0` (`main` @ `98f6c51` with multi-course `git-basics` PR `#46`)  
 > **Governance Standard:** In accordance with [PROJECT-CONTEXT.md](../PROJECT-CONTEXT.md) and [CONTRIBUTING.md](../CONTRIBUTING.md), every engineering initiative follows the mandatory **9-Step English-Only GitHub Workflow**:
 > `Issue (gh issue create)` -> `Dedicated Branch` -> `Pre-Commit Test Suite (100% Pass)` -> `Rigorous Staging (git add)` -> `Conventional Commit (git commit)` -> `Branch Push` -> `Pull Request (gh pr create)` -> `CI Validation` -> `PR Merge (gh pr merge)` -> `Close Issue with Comment (gh issue close --comment)`.  
-> **Living Register Policy:** Active tasks open under **Section 1 (`IN PROGRESS`)** as soon as a GitHub Issue is created and transition to **Section 2 (`COMPLETED`)** once all tests pass, CI turns green, the Pull Request merges into `main`, and the Issue closes cleanly. Strategic capabilities benchmarked against **Moodle LMS (4.5 LTS / 5.0)** are tracked in [docs/MOODLE_COMPARISON.md](MOODLE_COMPARISON.md) and materialized in the prioritized backlog below (`FEAT-01`..`FEAT-20`).
+> **Living Register Policy:** Active tasks open under **Section 1 (`IN PROGRESS`)** as soon as a GitHub Issue is created and transition to **Section 2 (`COMPLETED`)** once all tests pass, CI turns green, the Pull Request merges into `main`, and the Issue closes cleanly. Strategic capabilities benchmarked against **Moodle LMS (4.5 LTS / 5.0)** are tracked in [docs/MOODLE_COMPARISON.md](MOODLE_COMPARISON.md) and materialized in the prioritized backlog below (`FEAT-01`..`FEAT-20`).  
+> **Documentation Portal & RCA Register:** The versioned Diátaxis portal lives at [https://lms.lightpath.fr/](https://lms.lightpath.fr/) ([docs/index.md](index.md)); root cause analyses (`RCA`), technical dead-ends (`IMP`), approximations (`APP`), and roadmap items (`IDEA`) are tracked in [docs/RCA_REGISTER.md](RCA_REGISTER.md).
 
 ---
 
@@ -230,11 +231,28 @@ See [docs/MOODLE_COMPARISON.md](MOODLE_COMPARISON.md) for the complete 12-domain
 
 | Action ID | Date / Time (UTC) | Issue / Branch | Status | Request, Ongoing Changes & Expected Results |
 | :--- | :--- | :--- | :---: | :--- |
-| _None._ | — | — | — | All tracked actions (`ACT-001`..`ACT-004`) have transitioned to `COMPLETED`. |
+| _None._ | — | — | — | All tracked actions (`ACT-001`..`ACT-005`) have transitioned to `COMPLETED`. |
 
 ---
 
 ## 2. Completed Actions (`COMPLETED`)
+
+### `ACT-005` — Versioned Diátaxis MkDocs Material Portal, ASD-STE100 Guides, IONOS SFTP Publishing & Pre-Public Release Prep (Issue `#49`)
+- **Timestamp (UTC)**: `2026-11-23T20:09:17Z`
+- **Status**: `COMPLETED`
+- **GitHub Issue / Branch**: Issue [`#49`](https://github.com/jmrenouard/lightpath-training-portal/issues/49) | `feat/issue-49-mkdocs-diataxis-publish` -> `main`
+- **Request**:
+  - Publish a versioned 4-quadrant **Diátaxis MkDocs Material** documentation portal (`https://lms.lightpath.fr/`) with **ASD-STE100 Issue 9** procedural guides under `docs/02-how-to-guides/`, initialize an English living RCA register ([docs/RCA_REGISTER.md](RCA_REGISTER.md)), automate Docs-as-Code validation and IONOS SFTP publishing for `main` (`/main/`, `/dev/`) and immutable Git tags (`v2.0.0` / `latest` and future `v*`), enforce Python/PHP/JS verification suites, and prepare the repository for public open-source release.
+- **Changes**:
+  - **Phase 1 Bootstrap & IONOS Secrets**: Switched `origin` to SSH (`IMP-001`), created Issue `#49`, provisioned `IONOS_FTP_SERVER`, `IONOS_FTP_USERNAME`, `IONOS_FTP_PASSWORD`, `IONOS_FTP_PORT`, and `IONOS_REMOTE_PATH` in repository secrets via in-memory KeePass vault injection (zero plaintext output), and completed a pre-public working-tree and full Git history secret/privacy scan.
+  - **MkDocs Material Toolchain, Theme, Hooks & Versioned Publishing (`mkdocs.yml`, `requirements-docs.txt`, `.vale.ini`, `.markdownlint.json`, `.gitignore`, `docs/stylesheets/extra.css`, `docs/javascripts/katex.js`, `docs/assets/{logo,header-banner}.svg`, `scripts/mkdocs_hooks.py`, `scripts/build_versioned_docs.py`, `.github/workflows/{docs-ci,docs-publish}.yml`)**: Configured 6-tab Material navigation, Obsidian `#0B1120` / Cyan `#00B0F0` Studio theme (`tabular-nums`, `.lms-hero`, `.lms-metrics`, `.lms-actions`), `provider: mike` version switcher, dependency-free `mkdocs_hooks.py` (`VIRTUAL_DOCS`, `v2.0.0` historical quadrant/root fallbacks `APP-001`, `docs/internal/` GitHub `blob`/`tree` rewriting, sensitive target neutralization, GitHub alerts, `gfm_slugify`, nav pruning, `RELEASE_NOTES_*.md` discovery), multi-version `git archive` + `.htaccess` bundle builder (`versions.json`, HTTPS `301`, `/latest/` & `/dev/` `302`, protected-dir & post-build leak checks), and SHA-pinned least-privilege CI/IONOS SFTP workflows (`APP-002`).
+  - **Diátaxis 4-Quadrant Documentation, Portal & Living Governance (`docs/index.md`, `docs/01-tutorials/` [`4` files], `docs/02-how-to-guides/` [`6` files], `docs/03-reference/` [`5` files], `docs/04-explanation/` [`5` files], `docs/RCA_REGISTER.md`, `docs/MOODLE_COMPARISON.md`, `docs/ACTION_LOGBOOK.md`, `README.md`)**: Authored portal home, 3 tutorials, 5 ASD-STE100 Issue 9 guides (`deployment/`, `operations/`, `incident-response/`, `security/`), 4 reference matrices, 4 explanation/ADR/deep-dive docs, English living RCA register (`RCA-001`, `IMP-001`, `APP-001`, `APP-002`, `IDEA-001`..`IDEA-002`), repaired `docs/MOODLE_COMPARISON.md:53` non-index directory links, and exposed `https://lms.lightpath.fr/`, `docs/index.md`, all 4 quadrant indexes, and `docs/RCA_REGISTER.md` in `README.md`.
+  - **Automated Docs-as-Code & Publishing Tests (`tests/test_diataxis_documentation.py`, `tests/test_mkdocs_publishing.py`)**: Added `23` Python tests enforcing Diátaxis quadrant structure, relative link resolution, genre guardrails, cross-linking mesh, ASD-STE100 Issue 9 structural rules, toolchain config validity, zero-CDN compliance, `mkdocs_hooks.py` rewriting/fallbacks, multi-version `build_versioned_docs.py` (`WORKTREE` + `v2.0.0` E2E), `.htaccess`, and workflow security.
+- **Result**:
+  - **Diátaxis & ASD-STE100**: `diataxis_check.py docs --strict --check-ste --lang en` **`0 error(s), 0 warning(s)`** across `35` Markdown files; `ste_check.py --mode procedural --lang en` **`0 errors, 0 warnings`** across all `5` non-index `docs/02-how-to-guides/` files.
+  - **Python & Multi-Version MkDocs Publishing**: Bare Python `pytest tests/test_diataxis_documentation.py tests/test_mkdocs_publishing.py -v` **`23/23 passed`**; MkDocs venv `pytest` **`23/23 passed` (`0` skipped)**; `mkdocs build --strict` **exit `0` (`0` warnings)**; `scripts/build_versioned_docs.py --main-ref WORKTREE` **exit `0`** (`v2.0.0` [`latest`] + `main` [`dev`], `.htaccess`, `0` `internal/` or sensitive leaks).
+  - **PHP & JS Suites (`LMS_DOCKER_FORCE_SIMULATED=1`)**: `php -l` **`0` errors**; `node --check` **`3/3` (`exit 0`)**; `tests/run_tests.php` **`739/739 passed`** (incl. Sections `22` & `27`); `tests/test_adversarial_b1..b5.php` **`344/344` (`B1 69/69`, `B2 50/50`, `B3 69/69`, `B4 78/78`, `B5 78/78` — `APPROVE`)**; `tests/test_functional_http.php` **`405/405 passed`**; `tests/test_coverage_audit.php` **`211/211` (`100.0%`, `AUDIT PASSED`)**.
+  - **PR-Scoped `/ponytail-review`**: All `6` review findings resolved and signed off with **`Verdict: Ship.`** (`docs/ACTION_LOGBOOK.md` finalized under `ACT-005`).
 
 ### `ACT-004` — Moodle LMS (`4.5 LTS` / `5.0`) vs. LightPath Portal (`v2.0.0`) Benchmark, Action Logbook Backlog (`FEAT-01`..`FEAT-20`) & `README.md` Roadmap Integration (Issue `#47`)
 - **Timestamp (UTC)**: `2026-11-18T19:07:38Z`

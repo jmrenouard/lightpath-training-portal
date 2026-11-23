@@ -1,6 +1,6 @@
 # LightPath Training Portal — Technical Gateway
 
-[![CI](https://github.com/jmrenouard/lightpath-training-portal/actions/workflows/ci.yml/badge.svg)](https://github.com/jmrenouard/lightpath-training-portal/actions/workflows/ci.yml)
+[![CI](https://github.com/jmrenouard/lightpath-training-portal/actions/workflows/ci.yml/badge.svg)](https://github.com/jmrenouard/lightpath-training-portal/actions/workflows/ci.yml) [![Docs CI](https://github.com/jmrenouard/lightpath-training-portal/actions/workflows/docs-ci.yml/badge.svg)](https://github.com/jmrenouard/lightpath-training-portal/actions/workflows/docs-ci.yml) · [**Documentation Portal (`https://lms.lightpath.fr/`)**](https://lms.lightpath.fr/)
 
 > **Organization:** LightPath SARL (`https://www.lightpath.fr` | `contact@lightpath.fr`)  
 > **Lead Instructor & Author:** Jean-Marie Renouard (Database & DataOps Expert, Co-developer of MySQLTuner)  
@@ -218,6 +218,18 @@ git config core.hooksPath .githooks
 
 ## 9. Engineering Documentation Index
 
+### Diátaxis Documentation Portal (`https://lms.lightpath.fr/`)
+
+| Quadrant / Portal | Entrypoint | Focus & Audience |
+| :--- | :--- | :--- |
+| **Live Documentation Portal** | [**`https://lms.lightpath.fr/`**](https://lms.lightpath.fr/) · [**`docs/index.md`**](docs/index.md) | Versioned MkDocs Material portal (`latest` / `v2.0.0`, `dev` / `main`) deployed via IONOS SFTP |
+| **1. Tutorials (`docs/01-tutorials/`)** | [**`docs/01-tutorials/index.md`**](docs/01-tutorials/index.md) | Step-by-step isolated sandbox labs (local quickstart, first PG18 Docker lab, custom course pack) |
+| **2. How-To Guides (`docs/02-how-to-guides/`)** | [**`docs/02-how-to-guides/index.md`**](docs/02-how-to-guides/index.md) | Goal-oriented ASD-STE100 Issue 9 procedures (Docker/PDO deploy, cohorts/Qualiopi, flags, incidents, CSP/audit) |
+| **3. Reference (`docs/03-reference/`)** | [**`docs/03-reference/index.md`**](docs/03-reference/index.md) | Exhaustive tables for environment variables, 10 feature flags, HTTP/JSON routes, CLI exit codes, and error matrices |
+| **4. Explanation (`docs/04-explanation/`)** | [**`docs/04-explanation/index.md`**](docs/04-explanation/index.md) | Zero-dependency LMS architecture, SQL sandbox & Qualiopi integrity deep dive, and ADRs (`ADR-001`, `ADR-002`) |
+
+### Engineering Handbooks & Governance Registers
+
 | Document | Contents |
 | :--- | :--- |
 | [PROJECT-CONTEXT.md](PROJECT-CONTEXT.md) | Developer/agent onboarding baseline, storage & environment contracts, baseline test guardrails, 9-step GitHub workflow |
@@ -225,7 +237,8 @@ git config core.hooksPath .githooks
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines, PHP `>= 8.3` zero-dependency rules, strict CSP, English comment policy, PR checklist |
 | [CHANGELOG.md](CHANGELOG.md) | Release notes following Keep a Changelog (`2.0.0`) |
 | [docs/MOODLE_COMPARISON.md](docs/MOODLE_COMPARISON.md) | Strategic 12-domain architectural & feature benchmark vs. Moodle `4.5 LTS` / `5.0`, canonical `FEAT-01`..`FEAT-20` gap analysis, and YAGNI anti-goals |
-| [docs/ACTION_LOGBOOK.md](docs/ACTION_LOGBOOK.md) | Engineering Action Logbook (`ACT-001`..`ACT-004`), Phase 1–8 execution dashboard, and prioritized Moodle-gap backlog (`FEAT-01`..`FEAT-20`) |
+| [docs/ACTION_LOGBOOK.md](docs/ACTION_LOGBOOK.md) | Engineering Action Logbook (`ACT-001`..`ACT-005`), Phase 1–8 execution dashboard, and prioritized Moodle-gap backlog (`FEAT-01`..`FEAT-20`) |
+| [docs/RCA_REGISTER.md](docs/RCA_REGISTER.md) | Living English Root Cause Analysis (`RCA`), technical dead-ends (`IMP`), approximations (`APP`), and roadmap (`IDEA`) ledger |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Mermaid topology, `src/Http/*` controllers & admin partials, dual `JsonStorage`/`PdoStorage` concurrency, caching, strict zero-inline-style UI |
 | [docs/SECURITY.md](docs/SECURITY.md) | Threat model, `style-src 'self'` CSP + standalone doc CSP, `verifySameOriginRequest()`, `isUserActive()`, SHA-256 tamper-evident audit hash chain, SQL sandbox |
 | [docs/ADMIN_AND_TRAINER_GUIDE.md](docs/ADMIN_AND_TRAINER_GUIDE.md) | Role matrix, Trainer cockpit (at-risk learners, matrix, presets, Cohort/Qualiopi exports), Admin control plane (10 flags, 4 profiles, per-course overrides, `.admin-split-grid` health) |
