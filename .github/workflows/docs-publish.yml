@@ -95,7 +95,7 @@ jobs:
           fi
           python scripts/build_versioned_docs.py \
             --output site_dist \
-            --base-url https://lms.lightpath.fr \
+            --base-url https://lsm.lightpath.fr \
             --main-ref "$MAIN_REF"
 
       - name: Verify generated site files and privacy exclusions
@@ -175,12 +175,12 @@ jobs:
           remote_path: ${{ secrets.IONOS_REMOTE_PATH }}/
           sftpArgs: '-o ConnectTimeout=10'
 
-      - name: Run live HTTPS smoke checks on lms.lightpath.fr
+      - name: Run live HTTPS smoke checks on lsm.lightpath.fr
         run: |
-          if getent hosts lms.lightpath.fr >/dev/null 2>&1; then
-            curl -fsSL https://lms.lightpath.fr/versions.json | grep -q '"version"'
-            curl -fsSLI https://lms.lightpath.fr/latest/
-            curl -fsSLI https://lms.lightpath.fr/main/
+          if getent hosts lsm.lightpath.fr >/dev/null 2>&1; then
+            curl -fsSL https://lsm.lightpath.fr/versions.json | grep -q '"version"'
+            curl -fsSLI https://lsm.lightpath.fr/latest/
+            curl -fsSLI https://lsm.lightpath.fr/main/
           else
             echo "::warning::SFTP deployment succeeded; configure lms.lightpath.fr DNS/vhost in IONOS to enable live HTTPS checks."
           fi
