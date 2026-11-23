@@ -28,6 +28,22 @@
 
 ---
 
+### RCA-002 — Subdomain Mismatch Between `lms.lightpath.fr` and IONOS `lsm.lightpath.fr` After Direct `main` Commit `78829dc` (`Issue #51`)
+
+- **Date / Linked Action**: `2026-11-23` (`ACT-006` / Issue `#51`)
+- **Observed Symptom**:
+  - After commit `78829dc` updated `.github/workflows/docs-publish.yml` (`--base-url` and smoke checks) to `https://lsm.lightpath.fr`, both `Documentation CI` (run `45264089408`) and `Publish Documentation (MkDocs Material)` (run `45264089558`) failed in `tests/test_mkdocs_publishing.py::test_docs_publish_workflow_security_and_ionos_contract` expecting `https://lms.lightpath.fr`. Meanwhile, DNS resolved `lsm.lightpath.fr` (`A 217.160.0.252`, `AAAA 2001:8d8:100f:f000::243`) whereas `IONOS_REMOTE_PATH` still uploaded to `lms.lightpath.fr/`, returning HTTP `404` on `https://lsm.lightpath.fr/`.
+- **Root Cause Analysis (5 Whys)**:
+  1. *Why did `docs-publish.yml` fail CI and return HTTP `404` on `https://lsm.lightpath.fr/`?* Because commit `78829dc` changed only part of `.github/workflows/docs-publish.yml` directly on `main`, leaving line `185`, `mkdocs.yml`, `scripts/build_versioned_docs.py`, portal docs, `tests/test_diataxis_documentation.py`, `tests/test_mkdocs_publishing.py`, and GitHub secret `IONOS_REMOTE_PATH` pointing to `lms.lightpath.fr`.
+  2. *Why did the initial provisioning target `lms.lightpath.fr`?* Because the initial brief specified `lms.lightpath.fr` while the active DNS and IONOS hosting directory was provisioned as `lsm.lightpath.fr`.
+- **Applied Change / Fix**:
+  - Updated GitHub repository secret `IONOS_REMOTE_PATH` to `lsm.lightpath.fr`.
+  - Aligned `.github/workflows/docs-publish.yml`, `mkdocs.yml`, `scripts/build_versioned_docs.py`, `README.md`, `docs/index.md`, `docs/03-reference/*`, `docs/04-explanation/design-decisions/adr-002-versioned-diataxis-mkdocs-publishing.md`, `docs/ACTION_LOGBOOK.md`, `docs/RCA_REGISTER.md`, `tests/test_diataxis_documentation.py`, and `tests/test_mkdocs_publishing.py` consistently to `https://lsm.lightpath.fr`.
+- **Result & Non-Regression Test**:
+  - Verified locally (`diataxis_check.py`, `pytest`, `mkdocs build --strict`, `tests/run_tests.php`, `tests/test_coverage_audit.php`) and confirmed live HTTPS `200`/`302` responses on `https://lsm.lightpath.fr/` after `deploy-ionos`.
+
+---
+
 ## 2. Technical Dead-Ends & Abandoned Leads (`IMP`)
 
 ### IMP-001 — Pushing `.github/workflows/*.yml` Over HTTPS `gho_` OAuth Credentials
@@ -58,11 +74,11 @@
 
 - **Target Scope**: [`.github/workflows/docs-publish.yml`](../.github/workflows/docs-publish.yml) (`deploy-ionos` job).
 - **Nature of the Approximation**:
-  - After `wlixcc/SFTP-Deploy-Action` uploads the multi-version `site_dist/` bundle and `.htaccess` to IONOS (`IONOS_REMOTE_PATH = lms.lightpath.fr`), the post-deploy verification step tests `getent hosts lms.lightpath.fr` before running `curl` checks against `https://lms.lightpath.fr`. If DNS does not yet resolve, the step logs a `::warning::` annotation instructing operators to configure the `lms.lightpath.fr` DNS record and IONOS vhost instead of failing the SFTP upload job.
+  - After `wlixcc/SFTP-Deploy-Action` uploads the multi-version `site_dist/` bundle and `.htaccess` to IONOS (`IONOS_REMOTE_PATH = lsm.lightpath.fr`), the post-deploy verification step tests `getent hosts lsm.lightpath.fr` before running `curl` checks against `https://lsm.lightpath.fr`. If DNS does not yet resolve, the step logs a `::warning::` annotation instructing operators to configure the `lsm.lightpath.fr` DNS record and IONOS vhost instead of failing the SFTP upload job.
 - **Justification & Impact**:
-  - Enables reliable automated SFTP deployment to IONOS as soon as Issue `#49` merges to `main` or cuts a release tag, even if `lms.lightpath.fr` DNS/vhost binding in the IONOS control panel completes separately.
+  - Enables reliable automated SFTP deployment to IONOS as soon as updates merge to `main` or cut a release tag, while keeping strict HTTPS smoke checks active whenever DNS resolves `lsm.lightpath.fr`.
 - **Removal Condition**:
-  - Once `lms.lightpath.fr` DNS resolution and IONOS virtual-host TLS binding are verified active in production, remove the DNS skip branch so HTTPS `200`/`302` checks are mandatory on every publish run.
+  - Once `lsm.lightpath.fr` DNS resolution and IONOS virtual-host TLS binding are verified active in production, remove the DNS skip branch so HTTPS `200`/`302` checks are mandatory on every publish run.
 
 ---
 
@@ -81,5 +97,5 @@ Additional documentation-portal follow-ups linked to Issue `#49`:
 
 | ID | Target Release | Priority | Title | Target Area | Description & Expected Value |
 | :--- | :---: | :---: | :--- | :--- | :--- |
-| **IDEA-001** | `v2.1` | High | **Enforce Unconditional Live HTTPS Smoke Checks on `lms.lightpath.fr`** | [`.github/workflows/docs-publish.yml`](../.github/workflows/docs-publish.yml) | Retire `APP-002` DNS-skip fallback once IONOS `lms.lightpath.fr` DNS and TLS vhost binding are verified active in production. |
+| **IDEA-001** | `v2.1` | High | **Enforce Unconditional Live HTTPS Smoke Checks on `lsm.lightpath.fr`** | [`.github/workflows/docs-publish.yml`](../.github/workflows/docs-publish.yml) | Retire `APP-002` DNS-skip fallback once IONOS `lsm.lightpath.fr` DNS and TLS vhost binding are verified active in production. |
 | **IDEA-002** | `v2.1` | Medium | **Bilingual French Diátaxis Documentation Mirror (`01-tutoriels/`..`04-explications/`)** | `docs/` & [`mkdocs.yml`](../mkdocs.yml) | Pair with `FEAT-01` (`FR`/`EN` i18n) to expose an ASD-STF100-verified French documentation mirror alongside the English portal. |

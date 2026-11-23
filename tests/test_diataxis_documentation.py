@@ -19,7 +19,7 @@ VALE_CONFIG_PATH = REPO_ROOT / ".vale.ini"
 MARKDOWNLINT_CONFIG_PATH = REPO_ROOT / ".markdownlint.json"
 DOCS_CI_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "docs-ci.yml"
 
-DOCS_PORTAL_URL = "https://lms.lightpath.fr"
+DOCS_PORTAL_URL = "https://lsm.lightpath.fr"
 
 REQUIRED_QUADRANTS: tuple[str, ...] = (
     "01-tutorials",

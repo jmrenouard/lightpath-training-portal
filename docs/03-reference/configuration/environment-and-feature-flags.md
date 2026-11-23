@@ -34,7 +34,7 @@ Exact configuration parameters, runtime environment variables, course registry s
 | Variable | Type | Default | Allowed / Expected Values | Source Consumer | Purpose |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `LMS_DOCS_REF` | string | `main` | Git branch or tag name (`WORKTREE` and `HEAD` normalize to `main`) | `scripts/mkdocs_hooks.py`, `scripts/build_versioned_docs.py` | Controls the Git ref used when rewriting relative repository links to GitHub `blob/` or `tree/` URLs. |
-| `LMS_DOCS_SITE_URL` | URL | `https://lms.lightpath.fr/` | Absolute HTTP/HTTPS base URL | `scripts/mkdocs_hooks.py`, `scripts/build_versioned_docs.py` | Overrides `site_url` per built version directory (for example `/main/` or `/v2.0.0/`). |
+| `LMS_DOCS_SITE_URL` | URL | `https://lsm.lightpath.fr/` | Absolute HTTP/HTTPS base URL | `scripts/mkdocs_hooks.py`, `scripts/build_versioned_docs.py` | Overrides `site_url` per built version directory (for example `/main/` or `/v2.0.0/`). |
 | `PYTHONUTF8` | flag | unset | `1` | `scripts/build_versioned_docs.py` | Forces UTF-8 encoding in child `mkdocs build` Python processes across platforms. |
 
 ## 4. Application Configuration Defaults (`config/app.php`)

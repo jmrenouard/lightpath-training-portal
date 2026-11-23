@@ -9,7 +9,7 @@
 
 ## Context
 
-`lightpath-training-portal` previously shipped flat root Markdown files (`docs/*.md`) without separation between learning tutorials, operational runbooks, reference tables, and architectural rationale. Publishing those files as a public engineering portal on `https://lms.lightpath.fr/` introduced four distinct constraints:
+`lightpath-training-portal` previously shipped flat root Markdown files (`docs/*.md`) without separation between learning tutorials, operational runbooks, reference tables, and architectural rationale. Publishing those files as a public engineering portal on `https://lsm.lightpath.fr/` introduced four distinct constraints:
 
 1. **Genre Separation and Procedural Clarity:** Mixing architectural prose with incident commands slows operators under pressure. Operational guides require strict, unambiguous imperatives validated automatically.
 2. **Immutable Historical Release Tags:** Historical Git tags such as `v2.0.0` predate the 4-quadrant Diataxis tree. Rewriting signed or released tags breaks Git provenance, yet publishing broken navigation or dead links across version selector entries degrades user trust.
@@ -24,7 +24,7 @@ flowchart LR
     BLD -->|"Overlay Config, Hooks & Styles"| HOOKS["scripts/mkdocs_hooks.py"]
     HOOKS -->|"Prune Nav + Fallbacks + Rewrite Links"| MKDOCS["mkdocs build --strict"]
     MKDOCS -->|"assert_no_private_files()"| DIST["site_dist/ (/main/, /vX.Y.Z/, versions.json, .htaccess)"]
-    DIST -->|"SFTP Deploy (GitHub Actions)"| IONOS["IONOS Apache Hosting (lms.lightpath.fr)"]
+    DIST -->|"SFTP Deploy (GitHub Actions)"| IONOS["IONOS Apache Hosting (lsm.lightpath.fr)"]
 ```
 
 The publishing pipeline splits responsibilities cleanly between root toolchain config, build-time Python hooks, and multi-version static packaging:
@@ -61,7 +61,7 @@ Adopt Option A as the standard documentation architecture and publishing pipelin
 ### Negative and Operational Risks
 
 - Adding new files to `docs/` requires updating the explicit `nav:` contract in `mkdocs.yml` (though `prune_nav_for_existing_files()` handles historical tags safely).
-- Live HTTPS smoke checks in `docs-publish.yml` depend on `lms.lightpath.fr` DNS and IONOS Apache vhost binding; until DNS resolves, the workflow emits a warning while preserving SFTP deployment verification.
+- Live HTTPS smoke checks in `docs-publish.yml` depend on `lsm.lightpath.fr` DNS and IONOS Apache vhost binding; until DNS resolves, the workflow emits a warning while preserving SFTP deployment verification.
 
 ## Related Reference and Procedures
 
