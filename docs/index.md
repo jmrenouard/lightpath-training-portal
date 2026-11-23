@@ -12,7 +12,7 @@ hide:
 
 # LightPath Training Portal — Zero-Dependency PHP 8.3 Qualiopi LMS & Docker SQL Labs
 
-**LightPath Training Portal** (`LightPath Academy v2.0.0`, Ref. `LP-LMS-QUALIOPI-2026`) is a zero-dependency PHP `>= 8.3` Learning Management System built for hands-on technical certifications, isolated per-learner PostgreSQL 18 Docker sandboxes, Git-native Markdown Studio course packs, and turnkey Qualiopi / OPCO compliance. Published documentation lives at [https://lms.lightpath.fr/](https://lms.lightpath.fr/).
+**LightPath Training Portal** (`LightPath Academy v2.0.0`, Ref. `LP-LMS-QUALIOPI-2026`) is a zero-dependency PHP `>= 8.3` Learning Management System built for hands-on technical certifications, isolated per-learner PostgreSQL 18 Docker sandboxes, Git-native Markdown Studio course packs, and turnkey Qualiopi / OPCO compliance. Published documentation lives at [https://lsm.lightpath.fr/](https://lsm.lightpath.fr/).
 
 <div class="lms-metrics">
   <div class="lms-metric">
@@ -126,7 +126,7 @@ LightPath Training Portal organizes its documentation across the four Diátaxis 
 
     ---
 
-    Track versioned releases, contributor standards, living engineering actions, root-cause analyses, and the live documentation portal at [lms.lightpath.fr](https://lms.lightpath.fr/).
+    Track versioned releases, contributor standards, living engineering actions, root-cause analyses, and the live documentation portal at [lsm.lightpath.fr](https://lsm.lightpath.fr/).
 
     - [Technical Overview (`README.md`)](../README.md)
     - [Changelog (`CHANGELOG.md`)](../CHANGELOG.md)

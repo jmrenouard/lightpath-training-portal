@@ -1,6 +1,6 @@
 # LightPath Training Portal — Technical Gateway
 
-[![CI](https://github.com/jmrenouard/lightpath-training-portal/actions/workflows/ci.yml/badge.svg)](https://github.com/jmrenouard/lightpath-training-portal/actions/workflows/ci.yml) [![Docs CI](https://github.com/jmrenouard/lightpath-training-portal/actions/workflows/docs-ci.yml/badge.svg)](https://github.com/jmrenouard/lightpath-training-portal/actions/workflows/docs-ci.yml) · [**Documentation Portal (`https://lms.lightpath.fr/`)**](https://lms.lightpath.fr/)
+[![CI](https://github.com/jmrenouard/lightpath-training-portal/actions/workflows/ci.yml/badge.svg)](https://github.com/jmrenouard/lightpath-training-portal/actions/workflows/ci.yml) [![Docs CI](https://github.com/jmrenouard/lightpath-training-portal/actions/workflows/docs-ci.yml/badge.svg)](https://github.com/jmrenouard/lightpath-training-portal/actions/workflows/docs-ci.yml) · [**Documentation Portal (`https://lsm.lightpath.fr/`)**](https://lsm.lightpath.fr/)
 
 > **Organization:** LightPath SARL (`https://www.lightpath.fr` | `contact@lightpath.fr`)  
 > **Lead Instructor & Author:** Jean-Marie Renouard (Database & DataOps Expert, Co-developer of MySQLTuner)  
@@ -218,11 +218,11 @@ git config core.hooksPath .githooks
 
 ## 9. Engineering Documentation Index
 
-### Diátaxis Documentation Portal (`https://lms.lightpath.fr/`)
+### Diátaxis Documentation Portal (`https://lsm.lightpath.fr/`)
 
 | Quadrant / Portal | Entrypoint | Focus & Audience |
 | :--- | :--- | :--- |
-| **Live Documentation Portal** | [**`https://lms.lightpath.fr/`**](https://lms.lightpath.fr/) · [**`docs/index.md`**](docs/index.md) | Versioned MkDocs Material portal (`latest` / `v2.0.0`, `dev` / `main`) deployed via IONOS SFTP |
+| **Live Documentation Portal** | [**`https://lsm.lightpath.fr/`**](https://lsm.lightpath.fr/) · [**`docs/index.md`**](docs/index.md) | Versioned MkDocs Material portal (`latest` / `v2.0.0`, `dev` / `main`) deployed via IONOS SFTP |
 | **1. Tutorials (`docs/01-tutorials/`)** | [**`docs/01-tutorials/index.md`**](docs/01-tutorials/index.md) | Step-by-step isolated sandbox labs (local quickstart, first PG18 Docker lab, custom course pack) |
 | **2. How-To Guides (`docs/02-how-to-guides/`)** | [**`docs/02-how-to-guides/index.md`**](docs/02-how-to-guides/index.md) | Goal-oriented ASD-STE100 Issue 9 procedures (Docker/PDO deploy, cohorts/Qualiopi, flags, incidents, CSP/audit) |
 | **3. Reference (`docs/03-reference/`)** | [**`docs/03-reference/index.md`**](docs/03-reference/index.md) | Exhaustive tables for environment variables, 10 feature flags, HTTP/JSON routes, CLI exit codes, and error matrices |

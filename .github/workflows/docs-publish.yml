@@ -182,5 +182,5 @@ jobs:
             curl -fsSLI https://lsm.lightpath.fr/latest/
             curl -fsSLI https://lsm.lightpath.fr/main/
           else
-            echo "::warning::SFTP deployment succeeded; configure lms.lightpath.fr DNS/vhost in IONOS to enable live HTTPS checks."
+            echo "::warning::SFTP deployment succeeded; configure lsm.lightpath.fr DNS/vhost in IONOS to enable live HTTPS checks."
           fi

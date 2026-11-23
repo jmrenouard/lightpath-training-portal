@@ -1,6 +1,6 @@
 site_name: LightPath Training Portal Documentation
 site_description: Zero-dependency PHP 8.3 LMS with isolated Docker PostgreSQL 18 sandboxes, Qualiopi/OPCO compliance, and strict zero-CDN CSP
-site_url: https://lms.lightpath.fr/
+site_url: https://lsm.lightpath.fr/
 repo_name: jmrenouard/lightpath-training-portal
 repo_url: https://github.com/jmrenouard/lightpath-training-portal
 edit_uri: edit/main/docs/

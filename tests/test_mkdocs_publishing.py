@@ -127,7 +127,7 @@ def test_mkdocs_yml_configuration_and_security_exclusions() -> None:
     config = _load_mkdocs_config()
 
     assert config.get("site_name") == "LightPath Training Portal Documentation"
-    assert config.get("site_url") == "https://lms.lightpath.fr/"
+    assert config.get("site_url") == "https://lsm.lightpath.fr/"
     assert config.get("repo_name") == "jmrenouard/lightpath-training-portal"
     assert config.get("repo_url") == "https://github.com/jmrenouard/lightpath-training-portal"
     assert config.get("docs_dir") == "docs"
@@ -560,7 +560,7 @@ def test_mkdocs_hooks_on_config_edit_uri_and_virtual_edit_url(
     (docs_dir / "index.md").write_text("# Home\n", encoding="utf-8")
 
     monkeypatch.setenv("LMS_DOCS_REF", "WORKTREE")
-    monkeypatch.setenv("LMS_DOCS_SITE_URL", "https://lms.lightpath.fr/main")
+    monkeypatch.setenv("LMS_DOCS_SITE_URL", "https://lsm.lightpath.fr/main")
     cfg_main = _AttrDict(
         {
             "docs_dir": str(docs_dir),
@@ -573,7 +573,7 @@ def test_mkdocs_hooks_on_config_edit_uri_and_virtual_edit_url(
     )
     hooks.on_config(cfg_main)
     assert cfg_main["edit_uri"] == "edit/main/docs/"
-    assert cfg_main["site_url"] == "https://lms.lightpath.fr/main/"
+    assert cfg_main["site_url"] == "https://lsm.lightpath.fr/main/"
     assert cfg_main["mdx_configs"]["toc"]["slugify"] is hooks.gfm_slugify
 
     class _FakeFile:
@@ -786,7 +786,7 @@ def test_build_versioned_docs_end_to_end_worktree_and_v200(tmp_path: Path) -> No
             "--output",
             str(out_dir),
             "--base-url",
-            "https://lms.lightpath.fr",
+            "https://lsm.lightpath.fr",
             "--main-ref",
             "WORKTREE",
             "--tags",
@@ -1026,7 +1026,7 @@ def test_docs_publish_workflow_security_and_ionos_contract() -> None:
     deploy_run_script = "\n".join(str(s.get("run", "")) for s in deploy_steps)
     assert ".htaccess" in deploy_run_script
     assert "versions.json" in deploy_run_script
-    assert "https://lms.lightpath.fr" in deploy_run_script
+    assert "https://lsm.lightpath.fr" in deploy_run_script
 
     for unsafe_pattern in (
         "chmod 777",
@@ -1065,4 +1065,4 @@ def test_gitignore_excludes_mkdocs_build_artifacts() -> None:
     assert "mkdocs-material>=" in reqs
     assert "pymdown-extensions>=" in reqs
 
-    assert "https://lms.lightpath.fr" in (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    assert "https://lsm.lightpath.fr" in (REPO_ROOT / "README.md").read_text(encoding="utf-8")

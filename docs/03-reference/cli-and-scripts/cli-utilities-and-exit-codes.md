@@ -69,7 +69,7 @@ Builds multi-version MkDocs Material sites (`main` plus all semver Git tags `vX.
 | Flag | Argument Type | Default | Behavior |
 | :--- | :--- | :--- | :--- |
 | `--output` | path | `site_dist` | Target bundle directory; refuses repository root, ancestor directories, and protected roots (`.git`, `.github`, `.agents`, `bin`, `config`, `docs`, `examples`, `public`, `scripts`, `src`, `storage`, `templates`, `tests`). |
-| `--base-url` | URL | `https://lms.lightpath.fr` | Base URL injected via `LMS_DOCS_SITE_URL` as `<base_url>/<version>/`. |
+| `--base-url` | URL | `https://lsm.lightpath.fr` | Base URL injected via `LMS_DOCS_SITE_URL` as `<base_url>/<version>/`. |
 | `--main-ref` | Git ref | `WORKTREE` | Source ref for `/main/` (`WORKTREE` builds working tree; `origin/main` or tag builds via `git archive`). |
 | `--tags` | list | all semver tags | Explicit release tags (space- or comma-separated) sorted newest-first. |
 | `--skip-tags` | flag | `false` | Skips historical release tags and builds `/main/` only. |

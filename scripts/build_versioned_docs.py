@@ -320,7 +320,7 @@ def build_single_version(
 def build_versioned_site(
     repo_root: Path,
     output_dir: Path,
-    base_url: str = "https://lms.lightpath.fr",
+    base_url: str = "https://lsm.lightpath.fr",
     main_ref: str = "WORKTREE",
     tags: list[str] | None = None,
     skip_tags: bool = False,
@@ -442,8 +442,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--base-url",
-        default="https://lms.lightpath.fr",
-        help="Base public documentation URL (default: https://lms.lightpath.fr).",
+        default="https://lsm.lightpath.fr",
+        help="Base public documentation URL (default: https://lsm.lightpath.fr).",
     )
     parser.add_argument(
         "--main-ref",
