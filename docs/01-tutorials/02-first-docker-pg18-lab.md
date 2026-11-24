@@ -23,6 +23,16 @@ By the end of this tutorial, you will have:
 4. Verified Lab `01` readiness and executed its automated SQL oracle.
 5. Stopped and pruned the tutorial container cleanly.
 
+## Lab Lifecycle
+
+```mermaid
+flowchart LR
+    Fleet["1. fleet --json"] --> Start["2. start 3 & seed 3 all"]
+    Start --> Ops["3. diag, savepoint & bench"]
+    Ops --> Verify["4. readiness 3 01 & oracle 3 01"]
+    Verify --> Cleanup["5. stop 3 & prune"]
+```
+
 ## Step 1: Pre-Pull PostgreSQL 18 and Check Fleet Status
 
 Pull the official `postgres:18` fallback image and inspect current fleet telemetry in JSON format:

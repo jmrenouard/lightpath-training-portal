@@ -21,6 +21,15 @@ By the end of this tutorial, you will have:
 3. Signed in, opened a PostgreSQL 18 module, and inspected simulated PG18 diagnostics in `cloud_simulated` mode.
 4. Stopped the sandbox server and removed the temporary data directory cleanly.
 
+## Sandbox Flow
+
+```mermaid
+flowchart LR
+    Boot["1. Set LMS_DATA_DIR & Start php -S"] --> Init["2. First Request -> initial_admin_credentials.txt"]
+    Init --> UI["3. Sign In & Test Cloud Simulated Lab"]
+    UI --> Clean["4. Stop Server & Remove Temp Dir"]
+```
+
 ## Step 1: Start an Isolated Local Sandbox
 
 Create a temporary data directory outside production storage, enable deterministic simulated Docker labs, and launch the zero-dependency PHP server:

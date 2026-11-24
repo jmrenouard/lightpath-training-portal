@@ -40,7 +40,24 @@
   - Updated GitHub repository secret `IONOS_REMOTE_PATH` to `lsm.lightpath.fr`.
   - Aligned `.github/workflows/docs-publish.yml`, `mkdocs.yml`, `scripts/build_versioned_docs.py`, `README.md`, `docs/index.md`, `docs/03-reference/*`, `docs/04-explanation/design-decisions/adr-002-versioned-diataxis-mkdocs-publishing.md`, `docs/ACTION_LOGBOOK.md`, `docs/RCA_REGISTER.md`, `tests/test_diataxis_documentation.py`, and `tests/test_mkdocs_publishing.py` consistently to `https://lsm.lightpath.fr`.
 - **Result & Non-Regression Test**:
-  - Verified locally (`diataxis_check.py`, `pytest`, `mkdocs build --strict`, `tests/run_tests.php`, `tests/test_coverage_audit.php`) and confirmed live HTTPS `200`/`302` responses on `https://lsm.lightpath.fr/` after `deploy-ionos`.
+  - Verified locally (`diataxis_check.py`, `pytest`, `mkdocs build --strict`, `tests/run_tests.php`, `tests/test_coverage_audit.php`) and confirmed domain alignment (`lsm.lightpath.fr`), while live IONOS `deploy-ionos` verification requires `RCA-003` remediation.
+
+---
+
+### RCA-003 — Live `https://lsm.lightpath.fr/` HTTP 404 After PR `#52` (`Issue #53`)
+
+- **Date / Linked Action**: `2026-11-24` (`ACT-007` / Issue `#53`)
+- **Observed Symptom**: Live `curl -sI https://lsm.lightpath.fr/` returns `HTTP 404` (`Server: Apache`, `Content-Language: fr`) with zero `.htaccess` security headers, and `Publish Documentation` run `45266337246` failed `curl -fsSL https://lsm.lightpath.fr/versions.json` (`404`).
+- **Root Cause**: DNS resolves `lsm.lightpath.fr` (`217.160.0.252`, `2001:8d8:100f:f000::243`; `lms.lightpath.fr` is `NXDOMAIN`) and `scripts/build_versioned_docs.py` builds a valid bundle, yet `secrets.IONOS_REMOTE_PATH` does not map to the IONOS Apache `DocumentRoot` serving `lsm.lightpath.fr`.
+- **Applied Change / Fix**: Documented server/secret root cause (keeping `.github/workflows/*.yml` untouched per OAuth `workflow` scope limit); operator must bind `lsm.lightpath.fr` vhost `DocumentRoot` to `IONOS_REMOTE_PATH`.
+
+---
+
+### RCA-004 — Tutorial Fences & Tree, How-To STE & `sync-course.php --help` (`Issue #53`)
+
+- **Date / Linked Action**: `2026-11-24` (`ACT-007` / Issue `#53`)
+- **Observed Symptom**: `audit_helpers.py` failed on Tutorial 3 (`ascii_diagrams=1`), `ste_check.py` failed on `02-how-to-guides/index.md` (`5` errors), Tutorials `01`–`02` lacked Mermaid diagrams, and `bin/sync-course.php --help` wrote `storage/courses/--help/manifest.json`.
+- **Applied Fix**: Converted Tutorial 3 tree to column-0 `mermaid`, upgraded nested Markdown examples to 4-backtick fences, added Mermaid flowcharts to Tutorials `01`–`02`, fixed `02-how-to-guides/index.md` (`0` STE errors), and added `--help` exit in `bin/sync-course.php` (regression tests follow in PR 2).
 
 ---
 
