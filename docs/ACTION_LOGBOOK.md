@@ -231,7 +231,7 @@ See [docs/MOODLE_COMPARISON.md](MOODLE_COMPARISON.md) for the complete 12-domain
 
 | Action ID | Date / Time (UTC) | Issue / Branch | Status | Request, Ongoing Changes & Expected Results |
 | :--- | :--- | :--- | :---: | :--- |
-| _None._ | — | — | — | All tracked actions (`ACT-001`..`ACT-006`) have transitioned to `COMPLETED`. |
+| `ACT-007` | `2026-11-24` | Issue `#53` (`docs/issue-53-mermaid-ste-cli-tests`) | `IN PROGRESS` | Fix Tutorial 3 tree/nested fences, add Mermaid diagrams to Tutorials 1–2, resolve `02-how-to-guides/index.md` STE errors, handle `--help` in `bin/sync-course.php`, add Python/PHP doc/CLI regression tests, and document `lsm.lightpath.fr` 404 root cause (`RCA-003`). |
 
 ---
 

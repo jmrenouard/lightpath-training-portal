@@ -36,21 +36,21 @@ mkdir -p tmp-course-pack/05_cheatsheets/labs
 
 Expected directory structure:
 
-```text
-tmp-course-pack/
-├── 01_programme_et_referentiel/
-├── 03_supports_de_cours/
-├── 04_ateliers_et_tp/
-└── 05_cheatsheets/
-    ├── labs/
-    └── modules/
+```mermaid
+flowchart TD
+    Pack["tmp-course-pack/"] --> Ref["01_programme_et_referentiel/"]
+    Pack --> Mod["03_supports_de_cours/"]
+    Pack --> Lab["04_ateliers_et_tp/"]
+    Pack --> Cheat["05_cheatsheets/"]
+    Cheat --> CLabs["labs/"]
+    Cheat --> CMods["modules/"]
 ```
 
 ## Step 2: Author a Module With Mermaid and Quiz Blocks
 
 Create `tmp-course-pack/03_supports_de_cours/module_01_sandbox_basics.md`. Notice that Mermaid labels with parentheses must be quoted (`id["Node (Detail)"]`), and `MarkdownParser::extractQuizQuestions()` parses `<details><summary>...</summary>...</details>` blocks containing `* **A.**`..`* **D.**` choices:
 
-```markdown
+````markdown
 # Module 01: Sandbox Architecture Basics
 
 > **Module:** 01 — Course Pack Authoring Demo
@@ -60,16 +60,10 @@ Create `tmp-course-pack/03_supports_de_cours/module_01_sandbox_basics.md`. Notic
 
 ---
 
-## 1. Course Flow
+## 1. Course Overview
 
 > [!NOTE]
 > `MarkdownParser` caches compiled module HTML inside `storage/data/parsed_cache/`.
-
-```mermaid
-flowchart LR
-    Src["Course Pack (Markdown)"] -->|"CourseRepository"| Parser["MarkdownParser"]
-    Parser -->|"HTML + Quiz"| UI["Portal Reader"]
-```
 
 ```sql
 -- Inspect server timestamp in the SQL workbench
@@ -91,15 +85,23 @@ SELECT now() AS checked_at;
 **Justification:** `MarkdownParser` compiles module Markdown, extracts quizzes, and caches rendered output in `parsed_cache/`.
 
 </details>
-```
+````
 
 Expected behavior: `CourseRepository::discoverModules()` registers `module_01_sandbox_basics` with code `01` and exposes the embedded quiz to `api_submit_quiz`.
+
+Rendered Mermaid pipeline for a course-pack module:
+
+```mermaid
+flowchart LR
+    Src["Course Pack (Markdown)"] -->|"CourseRepository"| Parser["MarkdownParser"]
+    Parser -->|"HTML + Quiz"| UI["Portal Reader"]
+```
 
 ## Step 3: Author a 7-Pillar Practical Lab
 
 Create `tmp-course-pack/04_ateliers_et_tp/lab_01_sandbox_basics.md`. `MarkdownParser::splitLabEnonceAndCorrige()` splits the lab into prompt and solution tabs at a level-2 heading starting with `## Solution`:
 
-```markdown
+````markdown
 # Lab 01: Sandbox Verification Exercise
 
 > **Lab:** 01 — Verify Server Version
@@ -135,7 +137,7 @@ PostgreSQL 18.x
 -- Verify PostgreSQL 18 runtime availability
 SELECT current_setting('server_version');
 ```
-```
+````
 
 Expected behavior: When a trainer enables `lock_solutions`, learners see only Sections `1` and `2`, while the `## Solution and Automated Validation` section remains hidden until unlocked.
 

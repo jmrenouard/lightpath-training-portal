@@ -12,6 +12,10 @@ declare(strict_types=1);
 require_once __DIR__ . '/../src/bootstrap.php';
 
 $rawSlug = (string)($argv[1] ?? 'postgresql-18');
+if (in_array($rawSlug, ['-h', '--help', 'help'], true)) {
+    echo "Usage: php bin/sync-course.php [<course-slug>] [<source-directory>]\n";
+    exit(0);
+}
 $slug = (string)preg_replace('/[^a-zA-Z0-9_\-]/', '', $rawSlug);
 if ($slug === '') {
     $slug = 'postgresql-18';
