@@ -231,11 +231,19 @@ See [docs/MOODLE_COMPARISON.md](MOODLE_COMPARISON.md) for the complete 12-domain
 
 | Action ID | Date / Time (UTC) | Issue / Branch | Status | Request, Ongoing Changes & Expected Results |
 | :--- | :--- | :--- | :---: | :--- |
-| `ACT-007` | `2026-11-24` | Issue `#53` (`docs/issue-53-mermaid-ste-cli-tests`) | `IN PROGRESS` | Fix Tutorial 3 tree/nested fences, add Mermaid diagrams to Tutorials 1–2, resolve `02-how-to-guides/index.md` STE errors, handle `--help` in `bin/sync-course.php`, add Python/PHP doc/CLI regression tests, and document `lsm.lightpath.fr` 404 root cause (`RCA-003`). |
+| _None._ | — | — | — | All tracked actions (`ACT-001`..`ACT-007`) have transitioned to `COMPLETED`. |
 
 ---
 
 ## 2. Completed Actions (`COMPLETED`)
+
+### `ACT-007` — Fix Tutorial Mermaid/Fences, How-To Index STE, `sync-course --help` & `RCA-003` (Issue `#53` / PR `#54`)
+- **Timestamp (UTC)**: `2026-11-24T01:41:00Z`
+- **Status**: `COMPLETED`
+- **GitHub Issue / PR**: Issue [`#53`](https://github.com/jmrenouard/lightpath-training-portal/issues/53) | PR [`#54`](https://github.com/jmrenouard/lightpath-training-portal/pull/54) (`docs/issue-53-mermaid-ste-cli-tests` -> `main`)
+- **Request**: Fix Tutorial 3 nested fences/box tree, add Mermaid flowcharts to Tutorials 1–2, resolve `02-how-to-guides/index.md` STE violations, add `--help` to `bin/sync-course.php`, and record `lsm.lightpath.fr` 404 root cause (`RCA-003`).
+- **Changes**: Converted Tutorial 3 tree & upgraded nested examples to 4-backtick fences, added Mermaid diagrams to Tutorials 1–2, shortened `02-how-to-guides/index.md` summaries, guarded `--help`/`-h` in `bin/sync-course.php`, and logged `RCA-003`/`RCA-004` (Part 1 of 2; automated regression suite follows in Part 2).
+- **Result**: `run_tests.php` `739/739`, `B1..B5` `344/344` (`APPROVE`), `test_functional_http.php` `405/405`, `test_coverage_audit.php` `211/211`, `pytest` `23/23`, `diataxis_check.py` `0` err/`0` warn (`35` files), `ste_check.py` `0` err/`0` warn (`6` files), `audit_helpers.py` `PASS` (`21/21` `mmdc`), `mkdocs build --strict`, and Playwright (`76` pages, `34` diagrams, `0` failed) passed.
 
 ### `ACT-006` — Align Portal Domain, Tests, and IONOS Remote Path to `lsm.lightpath.fr` (Issue `#51`)
 - **Timestamp (UTC)**: `2026-11-23T21:03:20Z`
