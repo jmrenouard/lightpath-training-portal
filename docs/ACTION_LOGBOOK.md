@@ -231,11 +231,19 @@ See [docs/MOODLE_COMPARISON.md](MOODLE_COMPARISON.md) for the complete 12-domain
 
 | Action ID | Date / Time (UTC) | Issue / Branch | Status | Request, Ongoing Changes & Expected Results |
 | :--- | :--- | :--- | :---: | :--- |
-| _None._ | — | — | — | All tracked actions (`ACT-001`..`ACT-007`) have transitioned to `COMPLETED`. |
+| _None._ | — | — | — | All tracked actions (`ACT-001`..`ACT-008`) have transitioned to `COMPLETED`. |
 
 ---
 
 ## 2. Completed Actions (`COMPLETED`)
+
+### `ACT-008` — Add Tutorial, How-To, Mermaid, i18n & CLI Regression Checks (Issue `#55` / PR `#56`)
+- **Timestamp (UTC)**: `2026-11-24T01:55:00Z`
+- **Status**: `COMPLETED`
+- **GitHub Issue / PR**: Issue [`#55`](https://github.com/jmrenouard/lightpath-training-portal/issues/55) | PR [`#56`](https://github.com/jmrenouard/lightpath-training-portal/pull/56) (`test/issue-55-tutorial-howto-suite` -> `main`)
+- **Request**: Enforce `02-how-to-guides/index.md` STE compliance, EN-only MkDocs/Diátaxis isolation, Mermaid/ASCII hygiene, tutorial/how-to file/script validity, and executable PHP CLI/course-pack checks across CI (`PR #56`).
+- **Changes**: Extended `tests/test_diataxis_documentation.py` (`25/25`), added Section 28 in `tests/run_tests.php` (`745/745`), and documented `bin/sync-course.php -h/--help/help` in `cli-utilities-and-exit-codes.md`.
+- **Result**: `run_tests.php` `745/745`, `B1..B5` `344/344` (`APPROVE`), `test_functional_http.php` `405/405`, `test_coverage_audit.php` `211/211`, `pytest` `25/25`, `diataxis_check.py` `0` err/`0` warn (`35` files), `audit_helpers.py` `PASS`, `mkdocs build --strict`, and Playwright (`76` pages, `34` diagrams, `0` failed) passed.
 
 ### `ACT-007` — Fix Tutorial Mermaid/Fences, How-To Index STE, `sync-course --help` & `RCA-003` (Issue `#53` / PR `#54`)
 - **Timestamp (UTC)**: `2026-11-24T01:41:00Z`
