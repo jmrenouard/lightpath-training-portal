@@ -607,11 +607,11 @@ def test_quadrant_cross_linking_mesh() -> None:
 
 
 def test_howto_guides_asd_ste100_structural_compliance() -> None:
-    """Verify non-index files under docs/02-how-to-guides/ pass ASD-STE100 Issue 9 structural rules."""
+    """Verify all files under docs/02-how-to-guides/ pass ASD-STE100 Issue 9 structural rules."""
     howto_dir = DOCS_DIR / "02-how-to-guides"
     assert howto_dir.is_dir(), "Missing docs/02-how-to-guides/"
-    howto_files = sorted(p for p in howto_dir.rglob("*.md") if p.name.lower() != "index.md")
-    assert howto_files, "Expected non-index procedures under docs/02-how-to-guides/"
+    howto_files = sorted(howto_dir.rglob("*.md"))
+    assert howto_files, "Expected procedures under docs/02-how-to-guides/"
 
     all_violations: list[str] = []
     for md_file in howto_files:
@@ -804,3 +804,88 @@ def test_zero_external_cdn_references_in_docs_and_readmes() -> None:
                 hits.append(f"{rel_path}: matched prohibited CDN pattern '{pattern}'")
 
     assert not hits, "External CDN references detected:\n" + "\n".join(hits)
+
+
+def test_english_only_i18n_isolation_and_mermaid_hygiene() -> None:
+    """Enforce EN-only mkdocs/Diataxis separation, column-0 Mermaid blocks, and zero ASCII trees."""
+    loader = _MkDocsYamlLoader(MKDOCS_CONFIG_PATH.read_text(encoding="utf-8"))
+    try:
+        cfg = loader.get_single_data()
+    finally:
+        loader.dispose()
+    assert cfg.get("theme", {}).get("language") == "en"
+    nav_paths = _flatten_nav_paths(cfg.get("nav", []))
+    assert not any(
+        p.startswith(("01-tutoriels/", "02-guides-pratiques/", "03-reference-fr/", "04-explications/"))
+        or p.endswith(("_fr.md", "-fr.md"))
+        for p in nav_paths
+    ), f"French path leaked into mkdocs.yml nav: {nav_paths}"
+
+    en_quadrant_files = [
+        DOCS_DIR / "index.md",
+        *(p for q in REQUIRED_QUADRANTS for p in sorted((DOCS_DIR / q).rglob("*.md"))),
+    ]
+    accent_re = re.compile(r"[àâäéèêëîïôöùûüç]", re.IGNORECASE)
+    for md_file in en_quadrant_files:
+        for lineno, line in _extract_non_code_lines(md_file.read_text(encoding="utf-8")):
+            assert not accent_re.search(line), (
+                f"{md_file.relative_to(REPO_ROOT)}:{lineno}: unexpected non-EN text '{line}'"
+            )
+
+    box_re = re.compile(r"[┌┐└┘├┤┬┴┼═║╔╗╚╝╠╣╦╩╬]|\+[=-]{3,}\+")
+    indented_mermaid_re = re.compile(r"^[ \t]+```mermaid\b", re.MULTILINE)
+    col0_mermaid_re = re.compile(r"^```mermaid\b", re.MULTILINE)
+    for tut in sorted((DOCS_DIR / "01-tutorials").glob("0[0-9]-*.md")):
+        assert col0_mermaid_re.search(tut.read_text(encoding="utf-8")), (
+            f"{tut.relative_to(REPO_ROOT)}: tutorial must include a column-0 ```mermaid diagram"
+        )
+
+    doc_targets = [
+        REPO_ROOT / "README.md",
+        *(p for p in sorted(DOCS_DIR.rglob("*.md")) if "internal" not in p.relative_to(DOCS_DIR).parts),
+    ]
+    for md_file in doc_targets:
+        rel = md_file.relative_to(REPO_ROOT).as_posix()
+        text = md_file.read_text(encoding="utf-8")
+        assert not indented_mermaid_re.search(text), f"{rel}: indented ```mermaid fence"
+        assert not box_re.search(text), f"{rel}: ASCII box/tree diagram must be converted to Mermaid"
+        in_mermaid = False
+        for line in text.splitlines():
+            s = line.rstrip()
+            if not in_mermaid and s.startswith("```mermaid"):
+                in_mermaid = True
+            elif in_mermaid and s == "```":
+                in_mermaid = False
+        assert not in_mermaid, f"{rel}: unclosed ```mermaid fence"
+
+
+def test_tutorials_and_howtos_assets_and_python_scripts_valid() -> None:
+    """Validate file references, Composer/npm scripts, and Python AST syntax from tutorials/how-tos."""
+    import ast
+    import py_compile
+
+    cited_re = re.compile(
+        r"(?<![A-Za-z0-9_-])(?:bin|config|src|public|scripts|templates|examples)/[A-Za-z0-9_./-]+\.(?:php|py|yml|yaml|json|js|css|md)\b"
+    )
+    composer_scripts = json.loads((REPO_ROOT / "composer.json").read_text(encoding="utf-8")).get("scripts", {})
+    pkg_scripts = json.loads((REPO_ROOT / "package.json").read_text(encoding="utf-8")).get("scripts", {})
+    composer_cmd_re = re.compile(r"\bcomposer\s+([a-zA-Z0-9:_-]+)")
+    npm_cmd_re = re.compile(r"\bnpm\s+run\s+([a-zA-Z0-9:_-]+)")
+
+    cited_paths: set[str] = set()
+    for md_file in sorted([*(DOCS_DIR / "01-tutorials").rglob("*.md"), *(DOCS_DIR / "02-how-to-guides").rglob("*.md")]):
+        text = md_file.read_text(encoding="utf-8")
+        cited_paths.update(cited_re.findall(text))
+        for script_name in composer_cmd_re.findall(text):
+            if script_name not in {"install", "update", "dump-autoload"}:
+                assert script_name in composer_scripts, f"{md_file.name}: unknown composer script '{script_name}'"
+        for script_name in npm_cmd_re.findall(text):
+            assert script_name in pkg_scripts, f"{md_file.name}: unknown npm script '{script_name}'"
+
+    assert len(cited_paths) >= 5
+    for rel in sorted(cited_paths):
+        assert (REPO_ROOT / rel).is_file(), f"Documented repository file missing: {rel}"
+
+    for py_file in [REPO_ROOT / "bin" / "export_slides_cache.py", *sorted((REPO_ROOT / "scripts").glob("*.py"))]:
+        ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+        py_compile.compile(str(py_file), doraise=True)

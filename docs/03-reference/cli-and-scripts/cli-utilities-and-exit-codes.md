@@ -49,7 +49,8 @@ Synchronizes a course source directory into `storage/courses/<slug>/manifest.jso
 | :--- | :--- | :--- |
 | `argv[1]` (`<course-slug>`) | `postgresql-18` | Sanitized with `[^a-zA-Z0-9_\-]` removal; falls back to `postgresql-18` if empty. |
 | `argv[2]` (`<source-directory>`) | `LMS_COURSE_ROOT` -> `../training_postgresql` -> `examples/demo-course` | Verified via `is_dir()`; writes `{ slug, synced_at, source_dir }` atomically with `LOCK_EX`. |
-| Exit `0` | - | Manifest written successfully. |
+| `-h` / `--help` / `help` | - | Prints command usage and exits `0` without writing a manifest directory. |
+| Exit `0` | - | Usage printed or manifest written successfully. |
 | Exit `1` | - | Source directory missing, target directory creation failed, or JSON write failed. |
 
 ### `bin/export_slides_cache.py`

@@ -231,7 +231,7 @@ See [docs/MOODLE_COMPARISON.md](MOODLE_COMPARISON.md) for the complete 12-domain
 
 | Action ID | Date / Time (UTC) | Issue / Branch | Status | Request, Ongoing Changes & Expected Results |
 | :--- | :--- | :--- | :---: | :--- |
-| _None._ | — | — | — | All tracked actions (`ACT-001`..`ACT-007`) have transitioned to `COMPLETED`. |
+| `ACT-008` | `2026-11-24` | Issue `#55` (`test/issue-55-tutorial-howto-suite`) | `IN PROGRESS` | Add tutorial/how-to/Mermaid/i18n/STE-index tests in `tests/test_diataxis_documentation.py`, Section 28 executable CLI/course-pack tests in `tests/run_tests.php`, and `sync-course.php --help` reference docs. |
 
 ---
 

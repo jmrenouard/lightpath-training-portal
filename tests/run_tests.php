@@ -3387,6 +3387,75 @@ foreach ([
     );
 }
 
+// =========================================================================
+// 28. Tutorial & How-To Executable CLI, Course Pack & Script Validation
+// =========================================================================
+echo "\n--- 28. Tutorial & How-To CLI, Course Pack, and Script Validation ---\n";
+
+$s28RunCli = static function (array $args) use ($s27RepoRoot): array {
+    $cmd = array_merge([PHP_BINARY], $args);
+    $desc = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+    $env = getenv();
+    $env['LMS_DOCKER_FORCE_SIMULATED'] = '1';
+    $proc = proc_open($cmd, $desc, $pipes, $s27RepoRoot, $env);
+    $tOut = '';
+    $tErr = '';
+    $rc = 1;
+    if (is_resource($proc)) {
+        fclose($pipes[0]);
+        $tOut = (string)stream_get_contents($pipes[1]);
+        $tErr = (string)stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $rc = proc_close($proc);
+    }
+    return ['rc' => $rc, 'stdout' => $tOut, 'stderr' => $tErr];
+};
+
+// Verify bin/lab-runner.php tutorial CLI commands (--help, fleet, readiness, oracle)
+$helpLab = $s28RunCli(['bin/lab-runner.php', '--help']);
+$t->assertTrue(
+    $helpLab['rc'] === 0 && str_contains($helpLab['stdout'], 'Commands:'),
+    "Section 28: bin/lab-runner.php --help exits 0 and prints command usage"
+);
+
+$fleetLab = $s28RunCli(['bin/lab-runner.php', 'fleet', '--json']);
+$fleetJson = json_decode($fleetLab['stdout'], true);
+$t->assertTrue(
+    $fleetLab['rc'] === 0 && is_array($fleetJson) && ($fleetJson['runtime_mode'] ?? '') === 'cloud_simulated',
+    "Section 28: bin/lab-runner.php fleet --json returns cloud_simulated JSON contract"
+);
+
+$readyLab = $s28RunCli(['bin/lab-runner.php', 'readiness', '3', '01', '--json']);
+$readyJson = json_decode($readyLab['stdout'], true);
+$t->assertTrue(
+    $readyLab['rc'] === 0 && is_array($readyJson) && array_key_exists('ready', $readyJson),
+    "Section 28: bin/lab-runner.php readiness 3 01 --json emits structured JSON"
+);
+
+// Verify bin/sync-course.php --help does not write storage/courses/--help/
+$strayHelpDir = $s27RepoRoot . '/storage/courses/--help';
+$syncHelp = $s28RunCli(['bin/sync-course.php', '--help']);
+$t->assertTrue(
+    $syncHelp['rc'] === 0 && str_contains($syncHelp['stdout'], 'Usage:') && !is_dir($strayHelpDir),
+    "Section 28: bin/sync-course.php --help prints usage without creating storage/courses/--help"
+);
+
+// Verify Tutorial 3 Markdown course-pack quiz extraction and 7-pillar solution split
+$s28Parser = new \LightPath\LMS\Course\MarkdownParser();
+$s28ModuleSample = "# Module 01: Sandbox Architecture Basics\n\n<details>\n<summary>Question 1: Parser component?</summary>\n\n"
+    . "* **A.** `MarkdownParser`\n* **B.** `DockerManager`\n* **C.** `SakilaSeeder`\n* **D.** `FeatureManager`\n\n</details>\n";
+$s28QuizCount = count($s28Parser->extractQuizQuestions($s28ModuleSample));
+$t->assertEquals(1, $s28QuizCount, "Section 28: Tutorial 3 quiz template extracts 1 formative question");
+
+$s28LabSample = "# Lab 01\n\n## 1. Prerequisites and Business Scenario\n\nBody\n\n## Solution and Automated Validation\n\n```sql\nSELECT 1;\n```\n";
+$s28Split = $s28Parser->splitLabEnonceAndCorrige($s28LabSample);
+$t->assertTrue(
+    str_contains((string)($s28Split['enonce_md'] ?? ''), 'Prerequisites')
+    && str_contains((string)($s28Split['corrige_md'] ?? ''), 'SELECT 1'),
+    "Section 28: Tutorial 3 lab template splits cleanly into enonce_md and corrige_md"
+);
+
 exit($t->summary());
 
 
